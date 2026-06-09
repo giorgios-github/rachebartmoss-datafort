@@ -1,0 +1,31 @@
+{
+  "name": "bartmoss-gm-hub",
+  "productName": "Bartmoss GM Hub",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local GM hub for Rache Bartmoss' Datafort — serves the app on your LAN and syncs player sheets.",
+  "main": "main.js",
+  "scripts": {
+    "build:hub": "esbuild ../hub/createHub.mjs --bundle --platform=node --format=cjs --outfile=hub.bundle.cjs",
+    "build:site": "node ../scripts/build-site.mjs",
+    "start": "npm run build:hub && electron .",
+    "dist": "npm run build:hub && (cd .. && npm run build:sync) && npm run build:site && electron-builder",
+    "dist:dir": "npm run build:hub && (cd .. && npm run build:sync) && npm run build:site && electron-builder --dir"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.24.0"
+  },
+  "build": {
+    "appId": "com.bartmoss.datafort.hub",
+    "productName": "Bartmoss GM Hub",
+    "files": ["main.js", "hub.bundle.cjs"],
+    "extraResources": [{ "from": "site", "to": "site" }],
+    "directories": { "output": "release" },
+    "mac": { "target": ["dmg"], "category": "public.app-category.games" },
+    "win": { "target": ["nsis"] },
+    "linux": { "target": ["AppImage", "deb"], "category": "Game" },
+    "publish": [{ "provider": "github" }]
+  }
+}

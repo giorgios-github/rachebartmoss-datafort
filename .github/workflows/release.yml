@@ -1,0 +1,37 @@
+name: Build GM Hub (Electron)
+
+# Push a tag like v0.1.0 to build mac/win/linux installers and publish them
+# to a GitHub Release. The site's Download buttons point to /releases/latest.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Build the browser sync bundle (vite) at the repo root.
+      - run: npm install
+      - run: npm run build:sync
+
+      # Build + package the Electron app.
+      - working-directory: desktop
+        run: npm install
+      - name: Package & publish
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run dist -- --publish always

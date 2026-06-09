@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rache Bartmoss' Datafort — NPC Sheet</title>
+<link rel="icon" href="img/favicon.ico">
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/npc-sheet.css">
+<!-- <link rel="stylesheet" href="css/themes.css"> -->
+</head>
+<body>
+<div id="topnav" style="justify-content:space-between;">
+  <h1 class="title" style="margin:0;padding:0;font-size:17px;letter-spacing:4px;">NPC SHEET</h1>
+  <div style="display:flex;gap:6px;align-items:center;">
+    <button id="npc-back-btn" class="btn btn-sm" onclick="window.location.href='index.html'">← Back</button>
+    <button class="btn btn-sm" onclick="npcNew()">New</button>
+    <span class="npc-seg">
+      <button id="npc-btn-edit" class="btn-seg active" onclick="npcSetEdit()">✎ Edit</button>
+      <button id="npc-btn-view" class="btn-seg" onclick="npcSetView()">👁 View</button>
+    </span>
+    <span id="npc-view-controls" style="display:none;gap:6px;align-items:center;">
+      <select id="npc-view-mode" class="npc-viewmode-sel" onchange="setViewMode(this.value)" title="Document type">
+        <optgroup label="Cards">
+          <option value="netwatch">NetWatch card</option>
+          <option value="corpo">Corporate card</option>
+          <option value="admin">Admin card</option>
+          <!-- <option value="wanted">Wanted poster</option> --> <!-- masqué pour l'instant, à retravailler -->
+          <option value="medical">Trauma medical</option>
+          <option value="fixer">Fixer contact</option>
+          <!-- <option value="card">Collectible card</option> --> <!-- masqué pour l'instant, à retravailler -->
+          <option value="badge">ID badge</option>
+        </optgroup>
+        <optgroup label="Files (A4, multi-page)">
+          <option value="cp2020">CP2020 sheet</option>
+          <option value="netwatch_file">NetWatch file</option>
+          <option value="corpo_file">Corporate file</option>
+          <option value="admin_file">Admin file</option>
+        </optgroup>
+      </select>
+      <select id="npc-page-size" class="npc-viewmode-sel" onchange="setPageSize(this.value)" title="Page format">
+        <option value="a4">A4</option>
+        <option value="a5v">A5 Portrait</option>
+        <option value="a5h">A5 Landscape</option>
+        <option value="a6">A6</option>
+        <option value="a7">A7</option>
+      </select>
+      <button class="btn btn-sm" onclick="npcDownloadPdf()" title="Download this document as PDF">⬇ PDF</button>
+    </span>
+    <button class="btn btn-sm btn-cy" onclick="npcSave()">Export JSON</button>
+    <button class="btn btn-sm" onclick="document.getElementById('npc-load-input').click()">Import JSON</button>
+    <input type="file" id="npc-load-input" accept=".json" style="display:none" onchange="npcLoad(event)">
+  </div>
+</div>
+
+<div id="npc-tabs"></div>
+
+<div id="npc-view" style="display:none"></div>
+
+<div class="npc-wrap">
+
+  <!-- IDENTITY -->
+  <div class="npc-section">
+    <div class="npc-section-head" onclick="npcToggleSec(this)">
+      <span>Identity</span><span class="toggle">▼</span>
+    </div>
+    <div class="npc-section-body">
+      <div class="npc-id-grid">
+        <div class="npc-id-photo" onclick="document.getElementById('npc-photo-input').click()" title="Click to upload photo">
+          <span class="ph-text" id="npc-photo-placeholder">PHOTO</span>
+          <img id="npc-photo-img" style="display:none">
+          <span class="img-clear" id="npc-photo-clear" style="display:none" onclick="event.stopPropagation();npcClearPhoto()" title="Remove photo">✕</span>
+          <input type="file" id="npc-photo-input" accept="image/*" style="display:none" onchange="npcLoadPhoto(event)">
+        </div>
+        <div class="npc-id-fields">
+          <div class="npc-field">
+            <label>Name</label>
+            <input id="npc-name" placeholder="name / handle...">
+          </div>
+          <div class="npc-field">
+            <label>Type</label>
+            <input id="npc-type" placeholder="e.g. Guard, Bounceur, Fixer...">
+          </div>
+          <div class="npc-field">
+            <label>Role</label>
+            <select id="npc-role">
+              <option value="">— Select Role —</option>
+            </select>
+          </div>
+          <div class="npc-sa-box" style="margin-top:4px">
+            <div class="sa-label">Special Ability</div>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+              <span class="sa-name" id="npc-sa-name">—</span>
+              <input class="npc-skill-val" id="npc-sa-val" type="number" min="0" max="10" value="0" title="SA value">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATS + SKILLS -->
+  <div class="npc-section">
+    <div class="npc-section-head" onclick="npcToggleSec(this)">
+      <span>Stats &amp; Skills</span><span class="toggle">▼</span>
+    </div>
+    <div class="npc-section-body">
+      <div class="npc-ss-layout">
+        <!-- Stats column -->
+        <div class="npc-stats-col">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+            <span style="font-family:var(--head);font-size:10px;letter-spacing:1px;color:var(--text2);text-transform:uppercase;">Base Stats</span>
+            <button class="npc-roll-btn" onclick="npcRollStats()" title="Roll: distribute 40 points (1-10 each)">⚄</button>
+          </div>
+          <div class="npc-stats-grid" id="npc-stats-grid"></div>
+        </div>
+        <!-- Skills column -->
+        <div class="npc-skills-col">
+          <div class="npc-skills-header">
+            <span style="font-family:var(--head);font-size:10px;letter-spacing:1px;color:var(--text2);text-transform:uppercase;">Skills</span>
+            <button class="npc-roll-btn" onclick="npcRollSkills()" title="Roll: distribute 40 points across skills (1-10 each)">⚄</button>
+            <input type="text" id="npc-skill-filter" placeholder="filter..." oninput="renderSkills()">
+          </div>
+          <div id="npc-skills-list"></div>
+          <div class="npc-add-skill-wrap" id="npc-add-skill-wrap" style="margin-top:8px;position:relative;">
+            <div style="display:flex;gap:6px;align-items:center;">
+              <input class="npc-add-skill-input" id="npc-add-skill-input" placeholder="add skill..." oninput="npcSkillSearch(this.value)" autocomplete="off">
+              <button class="btn btn-sm" onclick="npcAddCustomSkill()">+ Custom</button>
+            </div>
+            <div class="npc-add-skill-results" id="npc-add-skill-results" style="display:none"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CYBERWARE -->
+  <div class="npc-section">
+    <div class="npc-section-head" onclick="npcToggleSec(this)">
+      <span>Cyberware</span>
+      <span style="font-family:var(--mono);font-size:11px;color:#888;margin-left:8px;">HC: <span id="npc-hc-total" class="npc-hc-total">0</span></span>
+      <span class="toggle">▼</span>
+    </div>
+    <div class="npc-section-body">
+      <div class="npc-cyber-search-wrap">
+        <input class="npc-cyber-search" id="npc-cyber-search-input" placeholder="search cyberware database..." oninput="npcCyberSearch(this.value)" autocomplete="off">
+        <button class="btn btn-sm" onclick="npcAddCyberCustom()">+ Custom</button>
+        <div class="npc-cyber-results" id="npc-cyber-results" style="display:none"></div>
+      </div>
+      <div id="npc-cyber-list" class="npc-cyber-simple"></div>
+    </div>
+  </div>
+
+  <!-- WEAPONS -->
+  <div class="npc-section">
+    <div class="npc-section-head" onclick="npcToggleSec(this)">
+      <span>Weapons</span><span class="toggle">▼</span>
+    </div>
+    <div class="npc-section-body">
+      <div class="npc-weap-search-wrap">
+        <input class="npc-weap-search" id="npc-weap-search-input" placeholder="search weapons..." oninput="npcWeapSearch(this.value)" autocomplete="off">
+        <button class="btn btn-sm" onclick="npcAddWeaponCustom()">+ Custom</button>
+        <div class="npc-weap-results" id="npc-weap-results" style="display:none"></div>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="npc-weap-table">
+          <thead><tr><th>Name</th><th>Type</th><th>Damage</th><th>Ammo</th><th>ROF</th><th>Range</th><th></th></tr></thead>
+          <tbody id="npc-weap-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- FASHION & ARMOR -->
+  <div class="npc-section">
+    <div class="npc-section-head" onclick="npcToggleSec(this)">
+      <span>Fashion &amp; Armor</span><span class="toggle">▼</span>
+    </div>
+    <div class="npc-section-body">
+      <div class="npc-armor-layout">
+        <!-- Body silhouette -->
+        <div class="npc-armor-body" id="npc-armor-body-wrap">
+          <img src="img/body2.png" alt="body">
+        </div>
+        <!-- Armor items list -->
+        <div class="npc-armor-items">
+          <div class="npc-armor-search-wrap">
+            <input class="npc-armor-search" id="npc-armor-search-input" placeholder="search armor/clothing..." oninput="npcArmorSearch(this.value)" autocomplete="off">
+            <button class="btn btn-sm" onclick="document.getElementById('npc-outfit-import').click()" title="Import an outfit exported from the Outfit Designer">↓ Outfit</button>
+            <button class="btn btn-sm" onclick="npcAddArmorCustom()">+ Custom</button>
+            <input type="file" id="npc-outfit-import" accept=".json" style="display:none" onchange="npcImportOutfit(event)">
+            <div class="npc-armor-results" id="npc-armor-results" style="display:none"></div>
+          </div>
+          <div id="npc-armor-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INVENTORY -->
+  <div class="npc-section">
+    <div class="npc-section-head" onclick="npcToggleSec(this)">
+      <span>Inventory</span><span class="toggle">▼</span>
+    </div>
+    <div class="npc-section-body">
+      <div class="npc-gear-search-wrap">
+        <input class="npc-gear-search" id="npc-gear-search-input" placeholder="search gear database..." oninput="npcGearSearch(this.value)" autocomplete="off">
+        <button class="btn btn-sm" onclick="npcAddInv()">+ Custom</button>
+        <div class="npc-gear-results" id="npc-gear-results" style="display:none"></div>
+      </div>
+      <div id="npc-inv-list"></div>
+    </div>
+  </div>
+
+  <!-- VEHICLES -->
+  <div class="npc-section">
+    <div class="npc-section-head" onclick="npcToggleSec(this)">
+      <span>Vehicles</span><span class="toggle">▼</span>
+    </div>
+    <div class="npc-section-body">
+      <div class="npc-veh-search-wrap">
+        <input class="npc-veh-search" id="npc-veh-search-input" placeholder="search vehicles..." oninput="npcVehSearch(this.value)" autocomplete="off">
+        <button class="btn btn-sm" onclick="npcAddVehCustom()">+ Custom</button>
+        <div class="npc-veh-results" id="npc-veh-results" style="display:none"></div>
+      </div>
+      <div id="npc-veh-list"></div>
+    </div>
+  </div>
+
+  <!-- NOTES -->
+  <div class="npc-section">
+    <div class="npc-section-head" onclick="npcToggleSec(this)">
+      <span>Notes</span><span class="toggle">▼</span>
+    </div>
+    <div class="npc-section-body">
+      <textarea class="npc-notes" id="npc-notes" placeholder="Background, contacts, tactics, special abilities..."></textarea>
+    </div>
+  </div>
+
+</div>
+
+<!-- <script src="js/theme.js"></script> -->
+<script src="js/vendor/html2canvas.min.js"></script>
+<script src="js/vendor/jspdf.umd.min.js"></script>
+<script src="js/npc-sheet.js"></script>
+<script>if (window.self !== window.top) { var b = document.getElementById('npc-back-btn'); if (b) b.style.display = 'none'; }</script>
+</body>
+</html>

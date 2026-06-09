@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rache Bartmoss' Datafort</title>
+<link rel="icon" href="img/favicon.ico">
+<link rel="stylesheet" href="css/main.css">
+</head>
+<body class="shell">
+<div id="app">
+  <!-- ════ SIDEBAR : titre + catégories + sous-menu contextuel ════ -->
+  <aside id="sidebar">
+    <div id="brand">
+      <img id="brand-logo" src="img/RacheBartmoss.png" alt="Rache Bartmoss">
+      <div id="brand-sub">datafort</div>
+    </div>
+    <nav id="cat-nav">
+      <button class="cat active" data-panel="home">home</button>
+      <button class="cat" data-panel="tools">tools</button>
+      <button class="cat" data-panel="database">data</button>
+      <button class="cat" data-panel="pdfs">files</button>
+      <button class="cat" data-panel="multiplayer">multi</button>
+    </nav>
+    <div id="sub-nav"></div>
+    <div id="sidebar-foot">
+      <button id="sidebar-collapse" class="side-btn" onclick="toggleSidebar()" title="Collapse">«</button>
+    </div>
+  </aside>
+
+  <!-- ════ CONTENU ════ -->
+  <div id="content">
+    <div id="main">
+      <div id="home" class="panel active">
+        <div class="home-wrap">
+          <p>Rache Bartmoss' Datafort was created as an unofficial ressource for R. Talsorian's tabletop roleplaying game Cyberpunk 2020, first published in 1990.</p>
+          <p>As most of the communities does, this website focuses on the 1993 v2.01 edition.</p>
+          <p>This website features three sections : <br> - TOOLS, where you'll find tools for GMs and players <br> - DATA, where you'll find lists of most cyberpunk things (corporations, cyberware, vehicles, weapons) and their corresponding references in the official books <br> - FILES, where you'll find necessary books to get started as well as homebrews I have designed</p>
+          <p>This website was built for my friends on the scraps of what fans had previously gathered and evolved. For the sake of the tools, some homebrew elements appear in most databases (storages containers for instance).<br> -> For a serious, quality Cyberpunk 2020 webtool, please consult <a target="_blank" href="https://cybersmily.net">Cybersmily's website</a></p>
+          <p>NEW — <a href="#" onclick="setCategory('multiplayer');return false;">Multiplayer (beta)</a> : the GM runs a small free local app, players sync their sheets live on the same Wi-Fi. No cloud, no account. <a href="join.html">Joining a campaign? →</a></p>
+          <p>Legal mention : Rache Bartmoss' Datafort is unofficial content provided under the Homebrew Content Policy of R. Talsorian Games and is not approved or endorsed by RTG. This content references materials that are the property of R. Talsorian Games and its licensees.</p>
+          <br>
+          <p>Changelog :</p>
+          <p> - 06.06 v0.6 : New LOGOTYPE (poor legibility but I care very little for now) (maybe a global graphic rework coming soon, just trying to get the systems right first)!! Reworked navigation into a sidebar system with a horizontal category menu. Added a custom sheet builder on the Character Sheet (see Settings/Customize mode) : you can now add your own categories, sub-categories, panels, typed fields, collections, remove the stuff you don't like, edit some default fields to fit the setting, reorganize the sheet, etc, and export all that into a shareable json template. Paving the way for a greater level of distinction betwenn GM and player experience.</p>
+          <p> - 02.06 v0.5 : Changes coming to the NPC sheet to get ready for diversified PDF exports (which will then be ported to the PC sheet). Added NPC tab system. Added View/Edit infrastructure for NPC sheets, with varied, though barebones for now, and somewhat lore friendly views for the content of the sheets.</p>
+          <p> - 30.05 v0.45 : Added Netrunner identity sheet with some fun features and a frutiger aero look. Added stuff I forgot: picture removal and Special Ability. Added a settings tab.</p>
+          <p> - 25.05 v0.4 : Added complete banking system : multiple banks and websites, multiple accounts, deposits, transfers, financial products, loans, loan sharks, monthly evolution and basic insurance. Added full lifepath system, relying on a new roll system (that I'd just never implemented), with basic categories from the rulebook and life events. Added basic tutorials, explaining what each section can do, providing examples and highlighting interconnections. Cool use of the popup menu system. Added Network and Gigs section with contacts (and in particular, fixers), their description and details, and gigs, linked either to Corporations jobs or fixers. Pretty cool link with the banking system for cashout. Added basic quihacking, allowing to choose a cyberdeck and install software. Far from satisfactory, a lot can be done here.</p>
+        </div>
+      </div>
+
+      <!-- TOOLS -->
+      <div id="tools" class="panel" style="flex-direction:row;">
+        <div id="tools-content">
+          <div id="tool-menu" class="cs" style="display:block;padding:0;height:100%;overflow-y:auto;">
+            <div class="tool-menu-grid">
+              <div class="tool-card" onclick="showTool('charsheet')"><div class="tool-card-icon">⒜</div><div class="tool-card-title">Character Sheet</div><div class="tool-card-desc">Full PC sheet: stats, skills, gear, lifepath, cyberdeck, lifestyle &amp; banking.</div></div>
+              <div class="tool-card" onclick="showTool('npcsheet')"><div class="tool-card-icon">⒝</div><div class="tool-card-title">NPC Sheet</div><div class="tool-card-desc">Quick stat block for NPCs, contacts and adversaries.</div></div>
+              <div class="tool-card" onclick="showTool('orgs')"><div class="tool-card-icon">⒞</div><div class="tool-card-title">Organisations</div><div class="tool-card-desc">Build corps, gangs &amp; agencies: hierarchy, market, jobs.</div></div>
+              <div class="tool-card" onclick="showTool('ncmap')"><div class="tool-card-icon">⒟</div><div class="tool-card-title">Night City Map</div><div class="tool-card-desc">Interactive district map of Night City.</div></div>
+              <div class="tool-card" onclick="showTool('galmap')"><div class="tool-card-icon">⒠</div><div class="tool-card-title">Galactic Map</div><div class="tool-card-desc">Procedural galactic flashmap for deep-space campaigns.</div></div>
+              <div class="tool-card" onclick="showTool('outfit')"><div class="tool-card-icon">⒡</div><div class="tool-card-title">Outfit Designer</div><div class="tool-card-desc">Design armor &amp; clothing loadouts to import into sheets.</div></div>
+            </div>
+          </div>
+          <div id="tool-charsheet" class="cs toolframe" style="display:none;"><iframe data-src="cs.html" style="width:100%;height:100%;border:none;display:block;"></iframe></div>
+          <div id="tool-galmap" class="cs toolframe" style="display:none;"><iframe data-src="galmap.html" style="width:100%;height:100%;border:none;display:block;"></iframe></div>
+          <div id="tool-ncmap" class="cs toolframe" style="display:none;"><iframe data-src="nightcity.html" style="width:100%;height:100%;border:none;display:block;"></iframe></div>
+          <div id="tool-orgs" class="cs toolframe" style="display:none;"><iframe data-src="organisations.html" style="width:100%;height:100%;border:none;display:block;"></iframe></div>
+          <div id="tool-npcsheet" class="cs toolframe" style="display:none;"><iframe data-src="npc-sheet.html" style="width:100%;height:100%;border:none;display:block;"></iframe></div>
+          <div id="tool-outfit" class="cs toolframe" style="display:none;"><iframe data-src="outfit-designer.html" style="width:100%;height:100%;border:none;display:block;"></iframe></div>
+        </div>
+      </div>
+
+      <!-- DATABASE -->
+      <div id="database" class="panel">
+        <div id="db-bar">
+          <span id="db-title"></span>
+          <input id="db-search" placeholder="search..." autocomplete="off">
+          <span id="db-count"></span>
+        </div>
+        <div id="db-table-wrap"><table><thead id="db-thead"></thead><tbody id="db-tbody"></tbody></table></div>
+      </div>
+
+      <!-- PDFs -->
+      <div id="pdfs" class="panel">
+        <div id="pdf-frame"><div class="pdf-empty">select a file in the sidebar →</div></div>
+      </div>
+
+      <!-- MULTIPLAYER -->
+      <div id="multiplayer" class="panel">
+        <div class="home-wrap mp-section">
+          <h2 class="mp-h">PLAY TOGETHER — LOCAL, FREE, NO CLOUD</h2>
+          <p>Multiplayer is <b>local-first</b>: the GM runs a small free app on their computer (the <b>GM Hub</b>). Everyone on the same Wi-Fi connects to it. No account, no cloud, no server fees. Player sheets sync live to the GM's screen, and the GM can edit any sheet in real time.</p>
+
+          <div class="mp-who">
+            <div>
+              <h3 class="mp-h3">If you're the GM</h3>
+              <ol><li>Download &amp; open the <b>GM Hub</b> (below).</li><li>It opens your dashboard and shows links to share.</li><li>Send each player their sheet link.</li></ol>
+            </div>
+            <div>
+              <h3 class="mp-h3">If you're a player</h3>
+              <ol><li>Nothing to install.</li><li>Open the link your GM sends, on the same Wi-Fi.</li><li>Edit your sheet — it syncs to the GM.</li></ol>
+              <p><a class="mp-link" href="join.html">Open the Join page →</a></p>
+            </div>
+          </div>
+
+          <h3 class="mp-h3">Download the GM Hub</h3>
+          <div class="mp-dl">
+            <a class="mp-btn" id="dl-mac" target="_blank" rel="noopener" href="https://github.com/OWNER/REPO/releases/latest">macOS <small>.dmg</small></a>
+            <a class="mp-btn" id="dl-win" target="_blank" rel="noopener" href="https://github.com/OWNER/REPO/releases/latest">Windows <small>.exe</small></a>
+            <a class="mp-btn" id="dl-linux" target="_blank" rel="noopener" href="https://github.com/OWNER/REPO/releases/latest">Linux <small>.AppImage/.deb</small></a>
+          </div>
+          <p class="mp-note">Not yet code-signed: macOS → right-click ▸ <i>Open</i> · Windows → <i>More info ▸ Run anyway</i>. On first launch, allow it through the firewall so players can connect.</p>
+
+          <h3 class="mp-h3">How a session works</h3>
+          <ol>
+            <li>The GM opens the Hub → a folder of editable sheet files (<code>.json</code>) is created.</li>
+            <li>The GM shares a player link like <code>http://192.168.1.42:8787/cs.html?campaign=main&amp;sheet=Player_1</code>.</li>
+            <li>Players open it; the page is served by the GM's machine, so live sync just works (plain <code>http://</code> on the LAN — no padlock, that's normal).</li>
+            <li>Offline edits merge automatically once reconnected.</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PDF link source (cloned into #sub-nav for the Files category) -->
+<div id="pdf-src" hidden>
+  <h3>.mod</h3><p class="pdesc">My homebrews</p>
+  <ul>
+    <li data-pdf="pdfs/MOD/QUICKHACKING.pdf">QUICKHACKING</li>
+    <li data-pdf="pdfs/MOD/QUICKHACKINGPRINT.pdf">QUICKHACKING (Zine Format)</li>
+  </ul>
+</div>
+
+<script src="js/main.js"></script>
+</body>
+</html>

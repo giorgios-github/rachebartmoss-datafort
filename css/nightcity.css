@@ -1,0 +1,144 @@
+/* ═══ Night City Map — Player Log & GM Planner UI ═══
+   Self-contained; layered over the existing inline styles of nightcity.html. */
+
+/* ── Mode bar (in #nav) ── */
+#nc-modebar { display:flex; gap:0; margin-left:auto; }
+.nc-mode { font-family:var(--head, 'Eurostile', sans-serif); font-size:11px; letter-spacing:1px; padding:5px 14px; border:2px solid #111; border-left:none; background:#fff; color:#111; cursor:pointer; text-transform:uppercase; }
+.nc-mode:first-child { border-left:2px solid #111; }
+.nc-mode.active { background:#111; color:#fff; }
+
+/* ── Context bar (under #nav) ── */
+#nc-ctxbar { display:none; align-items:center; flex-wrap:wrap; gap:8px; padding:7px 14px; background:#f3f3f3; border-bottom:2px solid #111; }
+.nc-ctx-title { font-family:var(--head, sans-serif); font-size:12px; letter-spacing:2px; }
+.nc-ctx-hint { font-family:var(--mono, monospace); font-size:11px; color:#666; margin-left:auto; }
+
+/* Buttons */
+.nc-btn { font-family:var(--mono, monospace); font-size:12px; padding:4px 9px; border:1px solid #111; background:#fff; color:#111; cursor:pointer; display:inline-flex; align-items:center; gap:4px; }
+.nc-btn:hover { background:#111; color:#fff; }
+.nc-btn-sm { font-size:11px; padding:3px 7px; }
+.nc-btn-cy { background:#111; color:#fff; }
+.nc-btn-cy:hover { background:#333; }
+.nc-btn-danger { border-color:#c0392b; color:#c0392b; }
+.nc-btn-danger:hover { background:#c0392b; color:#fff; }
+.nc-file { position:relative; overflow:hidden; }
+.nc-file input { position:absolute; inset:0; opacity:0; cursor:pointer; font-size:0; }
+
+/* ── GM notebook tabs ── */
+.nc-gm-tabs { display:flex; align-items:stretch; gap:0; }
+.nc-gm-tab { position:relative; display:flex; align-items:center; gap:6px; padding:4px 24px 4px 10px; background:#fff; border:1px solid #111; border-right:none; font-family:var(--mono, monospace); font-size:12px; color:#555; cursor:pointer; max-width:160px; }
+.nc-gm-tab:last-of-type { border-right:1px solid #111; }
+.nc-gm-tab.active { background:#111; color:#fff; font-weight:bold; }
+.nc-gm-tab-label { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.nc-gm-tab-close { position:absolute; right:6px; font-size:10px; opacity:.6; }
+.nc-gm-tab-close:hover { opacity:1; color:#c0392b; }
+.nc-gm-tab-add { display:flex; align-items:center; justify-content:center; width:30px; background:#111; color:#fff; border:1px solid #111; cursor:pointer; font-size:14px; }
+.nc-gm-tab-add:hover { background:#fff; color:#111; }
+
+/* ── Sidebar mode panel ── */
+#nc-side-panel { display:none; padding:10px 12px; border-top:2px solid #111; }
+.nc-side-title { font-family:var(--head, sans-serif); font-size:11px; letter-spacing:2px; margin-bottom:6px; }
+.nc-side-note { font-family:var(--mono, monospace); font-size:11px; color:#666; line-height:1.5; margin-bottom:6px; }
+.nc-layer-row { display:flex; align-items:center; gap:6px; font-family:var(--mono, monospace); font-size:12px; padding:3px 0; }
+.nc-layer-row label { flex:1; display:flex; align-items:center; gap:6px; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.nc-layer-count { color:#888; font-size:11px; }
+.nc-layer-rm { color:#c0392b; cursor:pointer; opacity:.6; }
+.nc-layer-rm:hover { opacity:1; }
+
+/* ── Legend augmentation ── */
+#nc-legend-extra { margin-top:8px; }
+.nc-legend-bar { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:10px 0 4px; padding-bottom:3px; border-bottom:2px solid #111; font-family:var(--head, sans-serif); font-size:11px; letter-spacing:2px; }
+.nc-legend-bar-gm { border-bottom-color:#888; color:#555; }
+.nc-empty { font-family:var(--mono, monospace); font-size:11px; color:#999; font-style:italic; padding:4px 0; }
+
+.nc-entry { border:1px solid #ddd; border-left:3px solid #111; padding:6px 8px; margin-bottom:5px; background:#fafafa; }
+.nc-entry.nc-visited { background:#f0fff2; }
+.nc-entry-head { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+.nc-type-pill { color:#fff; font-family:var(--head, sans-serif); font-size:9px; letter-spacing:.5px; padding:2px 6px; border-radius:2px; text-transform:uppercase; }
+.nc-entry-addr { font-family:var(--mono, monospace); font-size:12px; font-weight:bold; color:#111; }
+.nc-entry-name { font-family:var(--mono, monospace); font-size:12px; color:#222; }
+.nc-entry-sec { font-family:var(--mono, monospace); font-size:10px; color:#c0392b; }
+.nc-entry-act-wrap { margin-left:auto; }
+.nc-entry-act { font-family:var(--mono, monospace); font-size:11px; color:#2980b9; cursor:pointer; }
+.nc-entry-act:hover { text-decoration:underline; }
+.nc-entry-notes { font-family:var(--mono, monospace); font-size:11px; color:#555; line-height:1.5; margin-top:4px; white-space:pre-wrap; }
+.nc-thumbs { display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; }
+.nc-thumb { width:46px; height:46px; object-fit:cover; border:1px solid #aaa; cursor:pointer; }
+.nc-thumb-map { border-color:#2980b9; }
+
+/* ── Entry modal ── */
+.nc-modal-ov { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:1000; display:flex; align-items:flex-start; justify-content:center; overflow:auto; padding:30px 12px; }
+.nc-modal-card { background:#fff; width:100%; max-width:460px; border:3px solid #111; box-shadow:0 8px 30px rgba(0,0,0,.4); }
+.nc-modal-head { background:#111; color:#fff; font-family:var(--head, sans-serif); font-size:14px; letter-spacing:2px; padding:9px 14px; text-transform:uppercase; }
+.nc-modal-body { padding:14px; }
+.nc-modal-row { font-family:var(--mono, monospace); font-size:12px; margin-bottom:10px; }
+.nc-modal-grid { display:flex; gap:10px; }
+.nc-modal-grid .nc-modal-lbl { flex:1; }
+.nc-modal-lbl { display:block; font-family:var(--mono, monospace); font-size:11px; color:#555; margin-bottom:10px; }
+.nc-modal-lbl input, .nc-modal-lbl select, .nc-modal-lbl textarea { display:block; width:100%; margin-top:3px; padding:5px 7px; border:1px solid #111; font-family:var(--mono, monospace); font-size:13px; box-sizing:border-box; }
+.nc-modal-lbl textarea { resize:vertical; }
+.nc-modal-check { display:flex; align-items:center; gap:7px; font-family:var(--mono, monospace); font-size:12px; margin-bottom:8px; cursor:pointer; }
+.nc-modal-imgs { border-top:1px solid #ddd; padding-top:10px; margin-top:4px; }
+.nc-modal-imgs-row { display:flex; gap:8px; margin-bottom:8px; }
+.nc-mthumbs { display:flex; flex-wrap:wrap; gap:6px; }
+.nc-mthumb { position:relative; }
+.nc-mthumb img { width:60px; height:60px; object-fit:cover; border:1px solid #aaa; display:block; }
+.nc-mthumb span { position:absolute; top:-6px; right:-6px; background:#c0392b; color:#fff; width:16px; height:16px; border-radius:50%; font-size:10px; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+.nc-modal-actions { display:flex; align-items:center; gap:8px; margin-top:14px; border-top:1px solid #ddd; padding-top:12px; }
+
+/* ── Lightbox ── */
+.nc-lightbox { position:fixed; inset:0; background:rgba(0,0,0,.85); z-index:1100; display:flex; align-items:center; justify-content:center; cursor:zoom-out; padding:20px; }
+.nc-lightbox img { max-width:95%; max-height:95%; object-fit:contain; border:2px solid #fff; }
+
+/* ── In Player/GM mode: strip the reference content, keep map + empty legend ── */
+body[data-nc-mode="player"] #loc-list,
+body[data-nc-mode="gm"] #loc-list,
+body[data-nc-mode="player"] #tab-map .map-legend-title,
+body[data-nc-mode="gm"] #tab-map .map-legend-title,
+body[data-nc-mode="player"] #dv-intro,
+body[data-nc-mode="gm"] #dv-intro,
+body[data-nc-mode="player"] #dv-sec,
+body[data-nc-mode="gm"] #dv-sec { display:none; }
+
+/* ── "Other" tab (district notes + contacts/personalities) ── */
+#tab-other { padding:10px 0; }
+.nc-other-sec { margin-bottom:16px; }
+.nc-other-title { font-family:var(--head, sans-serif); font-size:12px; letter-spacing:2px; border-bottom:2px solid #111; padding-bottom:3px; margin-bottom:8px; display:flex; align-items:center; gap:10px; }
+.nc-other-notes { width:100%; box-sizing:border-box; padding:7px 9px; border:1px solid #111; font-family:var(--mono, monospace); font-size:13px; resize:vertical; }
+.nc-people { display:flex; flex-direction:column; gap:6px; }
+.nc-person { border:1px solid #ddd; border-left:3px solid #2c3e50; padding:6px 8px; background:#fafafa; }
+.nc-person-head { display:flex; align-items:center; gap:8px; }
+.nc-person-name { font-family:var(--mono, monospace); font-size:13px; font-weight:bold; }
+.nc-person-act { margin-left:auto; font-family:var(--mono, monospace); font-size:11px; color:#2980b9; cursor:pointer; }
+.nc-person-act:hover { text-decoration:underline; }
+.nc-person-rm { font-family:var(--mono, monospace); font-size:11px; color:#c0392b; cursor:pointer; opacity:.7; }
+.nc-person-rm:hover { opacity:1; }
+.nc-person-desc { font-family:var(--mono, monospace); font-size:11px; color:#555; line-height:1.5; margin-top:3px; white-space:pre-wrap; }
+
+/* ── CITY view (full continuous map + clickable pin overlay + legend by type) ── */
+#view-atlas { padding-top:4px; }
+.nc-atlas-wrap { display:flex; gap:14px; align-items:flex-start; }
+.nc-atlas-maps { flex:1; min-width:0; }
+.nc-city-hint { font-family:var(--mono, monospace); font-size:11px; color:#666; margin-bottom:5px; }
+.nc-city-hint.nc-city-arm { color:#c0392b; font-weight:bold; }
+.nc-city-mapwrap { position:relative; line-height:0; cursor:crosshair; }
+.nc-city-mapwrap:not(.nc-arming) { cursor:crosshair; }
+#nc-city-img { width:100%; height:auto; display:block; }
+.nc-city-pins { position:absolute; inset:0; pointer-events:none; }
+.nc-pin { position:absolute; width:14px; height:14px; margin:-7px 0 0 -7px; border:2px solid #fff; border-radius:50%; box-shadow:0 0 0 1px rgba(0,0,0,.5), 0 1px 3px rgba(0,0,0,.5); cursor:pointer; pointer-events:auto; transition:transform .1s; }
+.nc-pin:hover { transform:scale(1.35); z-index:5; }
+.nc-pin-ro { border-style:dashed; }
+/* legend (shared with city view) */
+.nc-atlas-legend { width:260px; flex-shrink:0; border:1px solid #111; padding:8px 10px; max-height:78vh; overflow:auto; }
+.nc-atlas-legend-title { font-family:var(--head, sans-serif); font-size:12px; letter-spacing:2px; border-bottom:2px solid #111; padding-bottom:4px; margin-bottom:8px; }
+.nc-atlas-leg-group { margin-bottom:10px; }
+.nc-atlas-leg-head { display:flex; align-items:center; gap:6px; margin-bottom:3px; }
+.nc-atlas-leg-count { font-family:var(--mono, monospace); font-size:10px; color:#888; }
+.nc-atlas-leg-item { display:flex; align-items:baseline; gap:6px; font-family:var(--mono, monospace); font-size:11px; padding:2px 0 2px 4px; line-height:1.4; }
+.nc-atlas-leg-item > span:first-child { cursor:pointer; flex:1; }
+.nc-atlas-leg-item > span:first-child:hover { text-decoration:underline; }
+.nc-atlas-leg-dist { font-weight:bold; color:#111; }
+.nc-leg-place { color:#2980b9; cursor:pointer; font-size:10px; flex-shrink:0; }
+.nc-leg-place:hover { text-decoration:underline; }
+.nc-modal-pin { font-family:var(--mono, monospace); font-size:11px; color:#555; background:#f3f3f3; border:1px solid #ddd; padding:5px 8px; margin-bottom:10px; display:flex; align-items:center; gap:10px; }
+
+@media (max-width:760px) { .nc-atlas-wrap { flex-direction:column; } .nc-atlas-legend { width:100%; } }

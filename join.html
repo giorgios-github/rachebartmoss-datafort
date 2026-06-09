@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rache Bartmoss' Datafort — Join a Campaign</title>
+<link rel="icon" href="img/favicon.ico">
+<link rel="stylesheet" href="css/main.css">
+<style>
+  body { background:var(--bg); color:var(--text); font-family:var(--mono); min-height:100vh; }
+  .join-nav { background:#111; color:#fff; display:flex; align-items:center; gap:14px; padding:0 16px; height:44px; }
+  .join-nav h1 { font-family:var(--head); font-size:18px; letter-spacing:4px; margin:0; }
+  .join-wrap { max-width:560px; margin:0 auto; padding:28px 18px; }
+  .join-wrap h2 { font-family:var(--head); font-size:16px; letter-spacing:2px; border-bottom:2px solid #111; padding-bottom:6px; }
+  .join-wrap p { font-size:13px; line-height:1.6; color:#333; }
+  label { display:block; font-size:12px; color:#555; margin:12px 0 3px; }
+  input { width:100%; box-sizing:border-box; padding:7px 9px; border:1px solid #111; font-family:var(--mono); font-size:14px; }
+  .row { display:flex; gap:10px; }
+  .row > div { flex:1; }
+  .btn { margin-top:16px; font-family:var(--head); letter-spacing:1px; font-size:13px; padding:8px 16px; border:2px solid #111; background:#111; color:#fff; cursor:pointer; }
+  .btn:hover { background:#fff; color:#111; }
+  .hint { font-size:11px; color:#888; margin-top:6px; }
+  .sep { text-align:center; color:#aaa; margin:22px 0 6px; font-size:11px; letter-spacing:2px; }
+  .err { color:#c0392b; font-size:12px; margin-top:8px; min-height:1em; }
+</style>
+</head>
+<body>
+<div class="join-nav"><h1>JOIN A CAMPAIGN</h1></div>
+<div class="join-wrap">
+  <h2>Open the sheet your GM shared</h2>
+  <p>Your GM runs the <b>Bartmoss GM Hub</b> on your local network and gives each player a link.
+     Easiest: paste that full link below. You don't install anything.</p>
+
+  <label for="j-link">Paste the link your GM gave you</label>
+  <input id="j-link" placeholder="http://192.168.1.42:8787/cs.html?campaign=main&amp;sheet=Player_1">
+  <button class="btn" onclick="openLink()">Open my sheet</button>
+
+  <div class="sep">— OR BUILD IT —</div>
+  <label for="j-addr">GM hub address</label>
+  <input id="j-addr" placeholder="http://192.168.1.42:8787">
+  <div class="row">
+    <div><label for="j-camp">Campaign code</label><input id="j-camp" value="main"></div>
+    <div><label for="j-sheet">Your sheet id</label><input id="j-sheet" placeholder="Player_1"></div>
+  </div>
+  <button class="btn" onclick="buildAndGo()">Join</button>
+  <div class="err" id="j-err"></div>
+  <p class="hint">Note: the hub uses a plain <code>http://</code> address on your Wi-Fi (no padlock) — that's expected for local play.</p>
+</div>
+<script>
+  function go(url) {
+    try { var u = new URL(url); if (!/^https?:$/.test(u.protocol)) throw 0; window.location.href = u.href; }
+    catch (e) { document.getElementById('j-err').textContent = 'That does not look like a valid hub URL.'; }
+  }
+  function openLink() {
+    var v = (document.getElementById('j-link').value || '').trim();
+    if (!v) { document.getElementById('j-err').textContent = 'Paste the link first.'; return; }
+    go(v);
+  }
+  function buildAndGo() {
+    var addr = (document.getElementById('j-addr').value || '').trim().replace(/\/+$/, '');
+    var camp = (document.getElementById('j-camp').value || 'main').trim();
+    var sheet = (document.getElementById('j-sheet').value || '').trim();
+    if (!addr || !sheet) { document.getElementById('j-err').textContent = 'Enter the hub address and your sheet id.'; return; }
+    if (!/^https?:\/\//.test(addr)) addr = 'http://' + addr;
+    go(addr + '/cs.html?campaign=' + encodeURIComponent(camp) + '&sheet=' + encodeURIComponent(sheet));
+  }
+</script>
+</body>
+</html>

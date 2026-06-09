@@ -1,0 +1,619 @@
+/* ═══════════════════════════════════════════════════════════════════
+   themes.css — Typewriter theme (sourcebook removed)
+   Loaded after main.css on all pages and iframes.
+   Activated via [data-theme="typewriter"] on <html>.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Éléments ASCII cachés par défaut ── */
+#ascii-nav       { display: none; }
+#home-ascii-art  { display: none; }
+#db-ascii-header { display: none; }
+
+/* ── Bouton theme — classe séparée pour éviter l'écrasement par main.js ── */
+.theme-toggle {
+  background: none;
+  border: none;
+  color: #666;
+  font-family: 'Eurostile', monospace;
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 10px 14px;
+  cursor: pointer;
+  text-transform: uppercase;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.theme-toggle:hover { color: #fff; }
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   TYPEWRITER — encre bleue sur papier blanc
+   Tout doit pouvoir avoir été imprimé.
+   ═══════════════════════════════════════════════════════════════════ */
+
+[data-theme="typewriter"] {
+  --bg:      #ffffff;
+  --bg1:     #f3f5fb;
+  --bg2:     #e6eaf6;
+  --bg3:     #d8dff0;
+  --border:  #1a3a8a;
+  --border2: #6b8dcc;
+  --text:    #0a1020;
+  --text2:   #2a4a9a;
+  --accent:  #1a3a8a;
+  --red:     #8a1a2a;
+  --yellow:  #5a4a00;
+  --green:   #0a4a1a;
+  --head:    'Space Mono', monospace;
+  --mono:    'Space Mono', monospace;
+}
+
+[data-theme="typewriter"] body {
+  background: #ffffff;
+  color: var(--text);
+  font-family: 'Space Mono', monospace;
+}
+
+/* ── Texture papier — JPG sombre inversé → grain sur blanc ── */
+[data-theme="typewriter"] body::before {
+  content: '';
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 9999;
+  background-image: url("../img/paper-texture.jpg");
+  background-size: cover;
+  background-repeat: no-repeat;
+  filter: invert(1);
+  opacity: 0.22;
+  mix-blend-mode: multiply;
+}
+
+
+/* ── ASCII NAV — remplace le topnav, look texte ── */
+[data-theme="typewriter"] #topnav { display: none; }
+
+/* Fond blanc garanti sur tous les panels actifs */
+[data-theme="typewriter"] .panel.active { background: #ffffff; }
+
+[data-theme="typewriter"] #ascii-nav {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border-bottom: none;
+  flex-shrink: 0;
+  padding: 5px 10px 2px;
+}
+
+/* Séparateur textuel sous le nav */
+[data-theme="typewriter"] #ascii-nav::after {
+  content: '. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .';
+  display: block;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  color: var(--border2);
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 0.45;
+  padding: 2px 0;
+}
+
+/* Bannière — une seule ligne compacte */
+[data-theme="typewriter"] #ascii-banner {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  color: var(--border);
+  margin: 0 0 2px 0;
+  white-space: pre;
+  font-weight: bold;
+  line-height: 1.3;
+  overflow: hidden;
+}
+
+/* Menu de navigation — texte avec crochets, pas de boîtes */
+[data-theme="typewriter"] #ascii-menu {
+  display: flex;
+  align-items: center;
+  padding: 0;
+  gap: 0;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+}
+
+[data-theme="typewriter"] .ascii-item {
+  padding: 1px 6px 1px 0;
+  cursor: pointer;
+  color: var(--text2);
+  font-family: 'Space Mono', monospace;
+  user-select: none;
+}
+[data-theme="typewriter"] .ascii-item::before { content: '[ '; }
+[data-theme="typewriter"] .ascii-item::after  { content: ' ]'; }
+[data-theme="typewriter"] .ascii-item + .ascii-item { padding-left: 4px; }
+[data-theme="typewriter"] .ascii-item:hover { color: var(--border); }
+[data-theme="typewriter"] .ascii-item.active {
+  background: var(--border);
+  color: #ffffff;
+}
+[data-theme="typewriter"] .ascii-item.active::before,
+[data-theme="typewriter"] .ascii-item.active::after { color: #ffffff; }
+
+[data-theme="typewriter"] .ascii-status {
+  font-size: 9px;
+  color: var(--border2);
+  font-family: 'Space Mono', monospace;
+  margin-left: 8px;
+  opacity: 0.6;
+}
+
+[data-theme="typewriter"] .theme-toggle { display: none; }
+[data-theme="typewriter"] .ascii-theme-btn {
+  display: inline;
+  background: transparent;
+  border: none;
+  color: var(--border2);
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  padding: 0 0 0 8px;
+  cursor: pointer;
+  margin-left: auto;
+  opacity: 0.7;
+}
+[data-theme="typewriter"] .ascii-theme-btn:hover { opacity: 1; color: var(--border); }
+
+
+/* ── HOME ── */
+[data-theme="typewriter"] #home {
+  display: block;
+  max-width: 76ch;
+  padding: 2ch 3ch 3ch;
+  font-family: 'Space Mono', monospace;
+  line-height: 1.8;
+}
+
+[data-theme="typewriter"] #home-ascii-art {
+  display: block;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--border);
+  white-space: pre;
+  margin-bottom: 2ch;
+  overflow-x: auto;
+}
+
+[data-theme="typewriter"] #home p {
+  font-size: 12px;
+  margin-bottom: 1.4em;
+  color: var(--text);
+}
+[data-theme="typewriter"] #home a {
+  color: var(--border);
+  text-decoration-style: dotted;
+}
+
+
+/* ── TOOLS — barre horizontale de texte ── */
+[data-theme="typewriter"] #tools { flex-direction: column !important; }
+
+[data-theme="typewriter"] #tools-side {
+  width: 100%;
+  min-width: unset;
+  height: auto;
+  flex-direction: row;
+  border-right: none;
+  border-bottom: none;
+  flex-shrink: 0;
+  padding: 4px 10px 18px;
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  gap: 0;
+  position: relative;
+}
+
+/* Séparateur textuel sous la barre tools */
+[data-theme="typewriter"] #tools-side::after {
+  content: '. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .';
+  position: absolute;
+  bottom: 4px;
+  left: 0; right: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  color: var(--border2);
+  opacity: 0.4;
+  padding: 0 10px;
+}
+
+/* Suppression border-left parasite (main.css #tools-side .tool-link) */
+[data-theme="typewriter"] #tools-side .tool-link { border-left: none !important; }
+
+/* Label "tools :" — texte simple, pas une boîte */
+[data-theme="typewriter"] #tools-side::before {
+  content: "tools :";
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  color: var(--border2);
+  padding-right: 10px;
+  flex-shrink: 0;
+  letter-spacing: 1px;
+}
+
+[data-theme="typewriter"] .tools-side-toggle { display: none; }
+
+[data-theme="typewriter"] .tool-link {
+  color: var(--text2);
+  font-family: 'Space Mono', monospace;
+  border: none;
+  background: transparent;
+  font-size: 11px;
+  padding: 2px 4px;
+  white-space: nowrap;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+[data-theme="typewriter"] .tool-link .tool-icon { display: none; }
+[data-theme="typewriter"] .tool-link::before { content: '[ '; }
+[data-theme="typewriter"] .tool-link::after  { content: ' ]'; }
+[data-theme="typewriter"] .tool-link:hover { color: var(--border); }
+[data-theme="typewriter"] .tool-link.active {
+  background: var(--border);
+  color: #ffffff;
+}
+[data-theme="typewriter"] .tool-link.active::before,
+[data-theme="typewriter"] .tool-link.active::after { color: #ffffff; }
+
+[data-theme="typewriter"] #tools-content { background: #fff; }
+
+
+/* ── DATABASE ── */
+[data-theme="typewriter"] #db-ascii-header {
+  display: block;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--text2);
+  white-space: pre;
+  padding: 5px 10px 0;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+[data-theme="typewriter"] #db-bar {
+  background: #ffffff;
+  border-bottom: none;
+  padding: 4px 10px 18px;
+  position: relative;
+}
+
+/* Séparateur textuel sous la barre db */
+[data-theme="typewriter"] #db-bar::after {
+  content: '. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .';
+  position: absolute;
+  bottom: 4px;
+  left: 0; right: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  color: var(--border2);
+  opacity: 0.4;
+  padding: 0 10px;
+}
+
+[data-theme="typewriter"] .db-tab {
+  background: transparent;
+  border: none;
+  color: var(--text2);
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+[data-theme="typewriter"] .db-tab::before { content: '[ '; }
+[data-theme="typewriter"] .db-tab::after  { content: ' ]'; }
+[data-theme="typewriter"] .db-tab:hover { color: var(--border); }
+[data-theme="typewriter"] .db-tab.active {
+  background: var(--border);
+  color: #ffffff;
+}
+[data-theme="typewriter"] .db-tab.active::before,
+[data-theme="typewriter"] .db-tab.active::after { color: #ffffff; }
+
+[data-theme="typewriter"] #db-search {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border2);
+  color: var(--text);
+  font-family: 'Space Mono', monospace;
+  outline: none;
+  padding: 2px 4px;
+}
+[data-theme="typewriter"] #db-search:focus { border-bottom-color: var(--border); }
+[data-theme="typewriter"] #db-count {
+  color: var(--text2);
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+}
+
+/* Table ASCII */
+[data-theme="typewriter"] #db-table-wrap { background: #fff; }
+[data-theme="typewriter"] #db-table-wrap table {
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--border);
+}
+[data-theme="typewriter"] #db-table-wrap th {
+  background: var(--border);
+  color: #ffffff;
+  font-family: 'Space Mono', monospace;
+  letter-spacing: 1px;
+  border-right: 1px solid rgba(255,255,255,0.15);
+  border-bottom: 1px solid var(--border);
+  padding: 4px 8px;
+}
+[data-theme="typewriter"] #db-table-wrap th:last-child { border-right: none; }
+[data-theme="typewriter"] #db-table-wrap td {
+  color: var(--text);
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  border-right: 1px solid var(--border2);
+  border-bottom: 1px solid var(--bg2);
+  padding: 3px 8px;
+}
+[data-theme="typewriter"] #db-table-wrap td:last-child { border-right: none; }
+[data-theme="typewriter"] #db-table-wrap tr:nth-child(even) td { background: var(--bg1); }
+[data-theme="typewriter"] #db-table-wrap tr:hover td { background: var(--bg2); }
+
+
+/* ── SECTIONS dans cs/npc — headers texte ── */
+[data-theme="typewriter"] .cs-section,
+[data-theme="typewriter"] .npc-section,
+[data-theme="typewriter"] .org-section {
+  border: none;
+  border-left: 2px solid var(--border2);
+  margin-left: 4px;
+  margin-bottom: 8px;
+  background: #fff;
+}
+
+[data-theme="typewriter"] .cs-section-head,
+[data-theme="typewriter"] .npc-section-head {
+  background: transparent;
+  color: var(--border);
+  font-family: 'Space Mono', monospace;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-top: none;
+  border-bottom: 1px solid var(--border2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+[data-theme="typewriter"] .cs-section-head h2 {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  color: var(--border);
+}
+/* Lignes --- qui encadrent le titre */
+[data-theme="typewriter"] .cs-section-head::before,
+[data-theme="typewriter"] .cs-section-head::after {
+  content: '------------------------------------------------------------------------';
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  opacity: 0.2;
+  color: var(--border);
+}
+
+[data-theme="typewriter"] .stat-group-head {
+  font-family: 'Space Mono', monospace;
+  color: var(--text2);
+  overflow: hidden;
+  white-space: nowrap;
+}
+[data-theme="typewriter"] .stat-group-head::after {
+  content: ' ....................................................';
+  opacity: 0.25;
+  font-family: 'Space Mono', monospace;
+}
+
+
+/* ── PDF SIDEBAR — bibliographie texte ── */
+[data-theme="typewriter"] #pdf-side {
+  background: #ffffff;
+  border-right: 1px dotted var(--border2);
+  counter-reset: pdf-item;
+  padding: 8px 0;
+}
+[data-theme="typewriter"] #pdf-side::before {
+  content: "library :";
+  display: block;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  color: var(--border2);
+  padding: 2px 10px 8px;
+  letter-spacing: 1px;
+}
+[data-theme="typewriter"] #pdf-side h3 {
+  font-family: 'Space Mono', monospace;
+  color: var(--text2);
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  border-top: 1px dotted var(--border2);
+  padding: 5px 10px 2px;
+  margin-top: 4px;
+  background: transparent;
+}
+[data-theme="typewriter"] #pdf-side h3::before { content: "-- "; opacity: 0.5; }
+[data-theme="typewriter"] #pdf-side .pdesc {
+  color: var(--text2);
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  padding: 0 10px;
+}
+[data-theme="typewriter"] #pdf-side li {
+  color: var(--text2);
+  font-family: 'Space Mono', monospace;
+  counter-increment: pdf-item;
+  font-size: 11px;
+  padding: 3px 10px;
+}
+[data-theme="typewriter"] #pdf-side li::before {
+  content: counter(pdf-item, decimal-leading-zero) '. ';
+  opacity: 0.4;
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+}
+[data-theme="typewriter"] #pdf-side li:hover { color: var(--border); }
+[data-theme="typewriter"] #pdf-side li.active {
+  background: var(--border);
+  color: #ffffff;
+  border-left-color: var(--border);
+}
+[data-theme="typewriter"] #pdf-side li.active::before { opacity: 1; color: #ffffff; }
+[data-theme="typewriter"] #pdf-side li .psub { color: var(--border2); font-size: 9px; }
+[data-theme="typewriter"] #pdf-frame { background: #fff; }
+
+
+/* ── INPUTS ── */
+[data-theme="typewriter"] .field input,
+[data-theme="typewriter"] .field textarea,
+[data-theme="typewriter"] .field select {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border2);
+  color: var(--text);
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+}
+[data-theme="typewriter"] .field input:focus,
+[data-theme="typewriter"] .field textarea:focus,
+[data-theme="typewriter"] .field select:focus {
+  border-bottom-color: var(--border);
+  outline: none;
+}
+[data-theme="typewriter"] .field input::placeholder,
+[data-theme="typewriter"] .field textarea::placeholder { color: var(--border2); opacity: 0.5; }
+[data-theme="typewriter"] .field label {
+  color: var(--text2);
+  letter-spacing: 2px;
+  font-family: 'Space Mono', monospace;
+}
+[data-theme="typewriter"] .field select option { background: #fff; color: var(--text); }
+
+/* ── STAT BOXES ── */
+[data-theme="typewriter"] .stat-box { border: 1px solid var(--border2); background: #fff; }
+[data-theme="typewriter"] .stat-box:last-child { border-right: 1px solid var(--border2); }
+[data-theme="typewriter"] .stat-box .slabel {
+  color: var(--text2);
+  font-family: 'Space Mono', monospace;
+  border-bottom-color: var(--border2);
+}
+[data-theme="typewriter"] .stat-box input[type=number] {
+  color: var(--text);
+  font-family: 'Space Mono', monospace;
+  background: transparent;
+}
+[data-theme="typewriter"] .stat-cyber { color: var(--red); }
+[data-theme="typewriter"] .stat-effective { color: var(--red); }
+
+/* ── DERIVED ── */
+[data-theme="typewriter"] .derived-box { border-color: var(--border2); background: #fff; }
+[data-theme="typewriter"] .derived-box .dlabel { color: var(--text2); }
+
+/* ── BOUTONS ── */
+[data-theme="typewriter"] .btn {
+  background: #fff; border: 1px solid var(--border2);
+  color: var(--text); font-family: 'Space Mono', monospace; border-radius: 0;
+}
+[data-theme="typewriter"] .btn:hover { background: var(--border); color: #fff; border-color: var(--border); }
+[data-theme="typewriter"] .btn-cy { background: var(--border); color: #fff; border-color: var(--border); }
+[data-theme="typewriter"] .btn-cy:hover { background: #0a2060; }
+[data-theme="typewriter"] .btn-red { border-color: var(--red); color: var(--red); background: transparent; }
+[data-theme="typewriter"] .btn-red:hover { background: var(--red); color: #fff; }
+[data-theme="typewriter"] .btn-green { border-color: var(--green); color: var(--green); background: transparent; }
+[data-theme="typewriter"] .btn-green:hover { background: var(--green); color: #fff; }
+
+/* ── SKILLS ── */
+[data-theme="typewriter"] .skills-header input[type=text] {
+  background: transparent; border: none;
+  border-bottom: 1px solid var(--border2);
+  color: var(--text); font-family: 'Space Mono', monospace;
+}
+[data-theme="typewriter"] .skills-header input[type=number] {
+  background: #fff; border: 1px solid var(--border2);
+  color: var(--text); font-family: 'Space Mono', monospace;
+}
+
+/* ── NOTES ── */
+[data-theme="typewriter"] .notes-area {
+  background: var(--bg1); border: 1px solid var(--border2);
+  color: var(--text); font-family: 'Space Mono', monospace;
+}
+
+/* ── DROPDOWNS ── */
+[data-theme="typewriter"] .dropdown { background: var(--bg1); border-color: var(--border2); }
+[data-theme="typewriter"] .dd-item { color: var(--text); border-bottom-color: var(--bg2); }
+[data-theme="typewriter"] .dd-item:hover { background: var(--bg2); }
+
+/* ── BLESSURES ── */
+[data-theme="typewriter"] .wound-box { border-color: var(--border2); color: var(--text2); background: #fff; }
+[data-theme="typewriter"] .wound-box.marked { background: var(--border); color: #fff; border-color: var(--border); }
+
+/* ── BODY MAP ── */
+[data-theme="typewriter"] .body-zone { border-color: var(--border2); }
+[data-theme="typewriter"] .body-zone:hover { border-color: var(--border); }
+[data-theme="typewriter"] .zone-items { background: var(--bg1); }
+
+/* ── ORGANISATIONS ── */
+[data-theme="typewriter"] #org-sidebar {
+  background: transparent;
+  border-right: 1px solid var(--border2);
+}
+[data-theme="typewriter"] .org-tab {
+  font-family: 'Space Mono', monospace;
+  background: transparent;
+  border-color: var(--border2);
+  color: var(--text2);
+}
+[data-theme="typewriter"] .org-tab.active { background: var(--border); color: #fff; }
+[data-theme="typewriter"] .org-section { border-left: 2px solid var(--border2); }
+
+/* ── ITEM SEARCH ── */
+[data-theme="typewriter"] .item-search input,
+[data-theme="typewriter"] .npc-cyber-search-wrap input,
+[data-theme="typewriter"] .npc-weap-search-wrap input {
+  background: #fff; border-color: var(--border2);
+  color: var(--text); font-family: 'Space Mono', monospace;
+}
+
+/* ── OVERRIDES nightcity.html / galmap.html ── */
+[data-theme="typewriter"] #nav {
+  background: transparent !important;
+  border-bottom: 1px solid var(--border2) !important;
+}
+[data-theme="typewriter"] #nav h1 { color: var(--text) !important; }
+[data-theme="typewriter"] #nav .sub { color: var(--text2) !important; }
+[data-theme="typewriter"] #nav .back {
+  color: var(--text2) !important;
+  border-color: var(--border2) !important;
+}
+[data-theme="typewriter"] #sidebar {
+  background: transparent !important;
+  border-color: var(--border) !important;
+}
+[data-theme="typewriter"] #sidebar-head {
+  background: var(--border) !important;
+  color: #fff !important;
+}
