@@ -26,7 +26,6 @@
     "directories": { "output": "release" },
     "mac": { "target": ["dmg"], "category": "public.app-category.games" },
     "win": { "target": ["nsis"] },
-    "linux": { "target": ["AppImage", "deb"], "category": "Game" },
     "publish": [{ "provider": "github", "owner": "giorgios-github", "repo": "rache-bartmoss-datafort" }]
   }
 }
