@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Local GM hub for Rache Bartmoss' Datafort — serves the app on your LAN and syncs player sheets.",
+  "repository": { "type": "git", "url": "https://github.com/giorgios-github/rache-bartmoss-datafort.git" },
   "main": "main.js",
   "scripts": {
     "build:hub": "esbuild ../hub/createHub.mjs --bundle --platform=node --format=cjs --outfile=hub.bundle.cjs",
@@ -26,6 +27,6 @@
     "mac": { "target": ["dmg"], "category": "public.app-category.games" },
     "win": { "target": ["nsis"] },
     "linux": { "target": ["AppImage", "deb"], "category": "Game" },
-    "publish": [{ "provider": "github" }]
+    "publish": [{ "provider": "github", "owner": "giorgios-github", "repo": "rache-bartmoss-datafort" }]
   }
 }
