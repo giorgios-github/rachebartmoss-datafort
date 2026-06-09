@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rache Bartmoss' Datafort — Character Sheet</title>
+<link rel="icon" href="img/favicon.ico">
+<link rel="stylesheet" href="css/main.css">
+<!-- <link rel="stylesheet" href="css/themes.css"> -->
+</head>
+<body data-mode="cs">
+<div id="topnav" style="justify-content:space-between;">
+  <h1 class="title" style="margin:0;padding:0;font-size:17px;letter-spacing:4px;">CHARACTER SHEET</h1>
+  <div style="display:flex;gap:6px;align-items:center;">
+    <button class="btn" onclick="csSettingsModal()" title="Settings">⚙</button>
+    <button class="btn" onclick="csLayoutSidebar()" title="Reorder / navigate categories">Layout</button>
+    <button class="btn" onclick="csNew()">New</button>
+    <button class="btn" onclick="csExportTextPdf()" title="Export a real-text CP2020 PDF">PDF</button>
+    <button class="btn btn-cy" onclick="csSave()">Export JSON</button>
+    <button class="btn" onclick="document.getElementById('cs-load').click()">Import JSON</button>
+    <input type="file" id="cs-load" accept=".json" style="display:none" onchange="csLoad(event)">
+  </div>
+</div>
+
+<div id="cs-tabs"></div>
+
+<div id="cs-cust-banner">CUSTOMIZE MODE — editing structure · sheet values are locked · <a onclick="csToggleCustomize()">exit</a></div>
+
+<div class="cs" style="overflow-y:auto;height:calc(100vh - 64px);">
+
+  <!-- IDENTITY -->
+  <div class="cs-section" id="sec-identity">
+    <div class="cs-section-head" onclick="toggleSec(this)"><h2>Identity</h2><span class="toggle"></span></div>
+    <div class="cs-section-body">
+      <div class="id-grid">
+        <div class="id-photo" onclick="document.getElementById('photo-input').click()">
+          <span class="ph-text" id="photo-placeholder">PHOTO</span>
+          <img id="photo-img" style="display:none">
+          <span class="img-clear" id="photo-clear" style="display:none" onclick="event.stopPropagation();clearPhoto()" title="Remove photo">✕</span>
+          <input type="file" id="photo-input" accept="image/*" style="display:none" onchange="loadPhoto(event)">
+        </div>
+        <div class="id-fields">
+          <div class="field"><label>Name</label><input id="cs-name" placeholder="..."></div>
+          <div class="field"><label>Handle</label><input id="cs-handle" placeholder="..."></div>
+          <div class="field"><label>Role</label><input id="cs-role" list="role-list" placeholder="..."><datalist id="role-list"></datalist></div>
+          <div class="field"><label>Age</label><input id="cs-age" type="number" min="14" max="99"></div>
+          <div class="field"><label>Special Ability</label><input id="cs-sa" readonly></div>
+          <div class="field"><label>Reputation</label><input id="cs-reputation" type="number" min="0" value="0"></div>
+        </div>
+      </div>
+      <div id="net-identity-wrap"></div>
+      <input type="file" id="net-icon-photo-input" accept="image/*" style="display:none" onchange="netLoadIconPhoto(event)">
+    </div>
+  </div>
+
+  <!-- LIFEPATH -->
+  <div class="cs-section" id="sec-lifepath">
+    <div class="cs-section-head" onclick="toggleSec(this)"><h2>Lifepath</h2><span class="toggle"></span></div>
+    <div class="cs-section-body">
+      <div id="lifepath-list"></div>
+    </div>
+  </div>
+
+  <!-- LIFE -->
+  <div class="cs-section" id="sec-life">
+    <div class="cs-section-head" onclick="toggleSec(this)"><h2>Life</h2><span class="toggle"></span></div>
+    <div class="cs-section-body">
+      <div class="life-container">
+        <div class="life-health">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+            <span style="font-size:12px;color:var(--text2);text-transform:uppercase;">Health</span>
+            <span id="wound-count" class="hp-big hp-green">0 / 40</span>
+          </div>
+          <div class="wound-track" id="wound-track"></div>
+          <div class="wound-state" id="wound-state"></div>
+        </div>
+        <div class="life-damage">
+          <div style="font-size:12px;color:var(--text2);text-transform:uppercase;margin-bottom:6px;">Damage Calculator</div>
+          <table class="dmg-table">
+            <thead>
+              <tr><th></th><th>Head</th><th>Torso</th><th>R.Arm</th><th>L.Arm</th><th>R.Leg</th><th>L.Leg</th></tr>
+            </thead>
+            <tbody>
+              <tr><td style="text-align:right;font-size:11px;color:var(--text2);">ARMOR SP</td>
+                <td class="sp-val" id="sp-head">0</td><td class="sp-val" id="sp-torso">0</td>
+                <td class="sp-val" id="sp-rarm">0</td><td class="sp-val" id="sp-larm">0</td>
+                <td class="sp-val" id="sp-rleg">0</td><td class="sp-val" id="sp-lleg">0</td>
+              </tr>
+              <tr><td style="text-align:right;font-size:11px;color:var(--text2);">COVER</td>
+                <td><input type="number" min="0" value="0" data-cov="head"></td>
+                <td><input type="number" min="0" value="0" data-cov="torso"></td>
+                <td><input type="number" min="0" value="0" data-cov="rarm"></td>
+                <td><input type="number" min="0" value="0" data-cov="larm"></td>
+                <td><input type="number" min="0" value="0" data-cov="rleg"></td>
+                <td><input type="number" min="0" value="0" data-cov="lleg"></td>
+              </tr>
+              <tr><td style="text-align:right;font-size:11px;color:var(--text2);">DMG</td>
+                <td><input type="number" min="0" value="0" data-dmg="head"></td>
+                <td><input type="number" min="0" value="0" data-dmg="torso"></td>
+                <td><input type="number" min="0" value="0" data-dmg="rarm"></td>
+                <td><input type="number" min="0" value="0" data-dmg="larm"></td>
+                <td><input type="number" min="0" value="0" data-dmg="rleg"></td>
+                <td><input type="number" min="0" value="0" data-dmg="lleg"></td>
+              </tr>
+              <tr><td style="text-align:right;font-size:11px;color:var(--text2);">AP</td>
+                <td><input type="number" min="0" value="0" data-ap="head"></td>
+                <td><input type="number" min="0" value="0" data-ap="torso"></td>
+                <td><input type="number" min="0" value="0" data-ap="rarm"></td>
+                <td><input type="number" min="0" value="0" data-ap="larm"></td>
+                <td><input type="number" min="0" value="0" data-ap="rleg"></td>
+                <td><input type="number" min="0" value="0" data-ap="lleg"></td>
+              </tr>
+              <tr><td></td>
+                <td><button class="btn btn-sm btn-red" onclick="applyDmg('head')">Hit</button></td>
+                <td><button class="btn btn-sm btn-red" onclick="applyDmg('torso')">Hit</button></td>
+                <td><button class="btn btn-sm btn-red" onclick="applyDmg('rarm')">Hit</button></td>
+                <td><button class="btn btn-sm btn-red" onclick="applyDmg('larm')">Hit</button></td>
+                <td><button class="btn btn-sm btn-red" onclick="applyDmg('rleg')">Hit</button></td>
+                <td><button class="btn btn-sm btn-red" onclick="applyDmg('lleg')">Hit</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="cs-section" id="sec-stats">
+    <div class="cs-section-head" onclick="toggleSec(this)"><h2>Stats</h2><span class="toggle"></span></div>
+    <div class="cs-section-body">
+      <div class="stats-grid" id="stats-grid"></div>
+      <div class="derived-grid" id="derived-grid"></div>
+    </div>
+  </div>
+
+  <!-- SKILLS -->
+  <div class="cs-section" id="sec-skills">
+    <div class="cs-section-head" onclick="toggleSec(this)"><h2>Skills</h2><span class="toggle"></span></div>
+    <div class="cs-section-body">
+      <div class="skills-header">
+        <input type="text" id="skill-filter" placeholder="filter..." oninput="renderSkills()">
+        <label style="font-size:12px;color:var(--text2);cursor:pointer;"><input type="checkbox" id="skill-nonzero" onchange="renderSkills()"> non-zero</label>
+        <span style="font-size:12px;color:var(--text2);">START PTS:</span>
+        <input type="number" id="skill-points" min="0" value="40" onchange="renderSkills()" title="Starting skill points (character creation)">
+        <span style="font-size:12px;color:var(--text2);">IP:</span>
+        <input type="number" id="ip-points" min="0" value="0" onchange="renderSkills()" title="Improvement Points earned in play">
+        <span class="points-info" id="points-info"></span>
+        <button class="btn btn-sm" onclick="addCustomSkill()" style="margin-left:auto;">+ Custom</button>
+      </div>
+      <div id="skills-list"></div>
+    </div>
+  </div>
+
+  <!-- CYBERWARE -->
+  <div class="cs-section" id="sec-cyber">
+    <div class="cs-section-head" onclick="toggleSec(this)"><h2>Cyberware</h2><span class="toggle"></span></div>
+    <div class="cs-section-body">
+      <div class="item-search">
+        <input id="cyber-search" placeholder="search cyberware..." oninput="searchItems('cyber')" onfocus="searchItems('cyber')" autocomplete="off">
+        <button class="btn btn-sm" onclick="addCustomCyber()">+ Custom</button>
+        <div class="dropdown" id="cyber-dropdown"></div>
+      </div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:6px;">Humanity Cost: <span id="cyber-hc-total" style="color:var(--red);font-weight:bold;">0</span></div>
+      <div class="cyber-body-layout">
+        <div class="cyber-body-map">
+          <img src="img/body.png" alt="body" class="body-img">
+          <div class="body-zone zone-cerveau"   ondragover="cyberDragOver(event)" ondragenter="cyberDragEnter(event)" ondragleave="cyberDragLeave(event)" ondrop="cyberDrop(event,'cerveau')"><span class="zone-label">BRAIN</span><div class="zone-items" id="bz-cerveau"></div></div>
+          <div class="body-zone zone-chips" style="display:none" ondragover="cyberDragOver(event)" ondragenter="cyberDragEnter(event)" ondragleave="cyberDragLeave(event)" ondrop="cyberDrop(event,'chips')"><span class="zone-label">CHIPS</span><div class="zone-items" id="bz-chips"></div></div>
+          <div class="body-zone zone-yeux"      ondragover="cyberDragOver(event)" ondragenter="cyberDragEnter(event)" ondragleave="cyberDragLeave(event)" ondrop="cyberDrop(event,'yeux')"><span class="zone-label">CYBEROPTIC</span><div class="zone-items" id="bz-yeux"></div></div>
+          <div class="body-zone zone-peau"      ondragover="cyberDragOver(event)" ondragenter="cyberDragEnter(event)" ondragleave="cyberDragLeave(event)" ondrop="cyberDrop(event,'peau')"><span class="zone-label">SKIN</span><div class="zone-items" id="bz-peau"></div></div>
+          <div class="body-zone zone-rarm"      ondragover="cyberDragOver(event)" ondragenter="cyberDragEnter(event)" ondragleave="cyberDragLeave(event)" ondrop="cyberDrop(event,'rarm')"><span class="zone-label">R.ARM</span><div class="zone-items" id="bz-rarm"></div></div>
+          <div class="body-zone zone-larm"      ondragover="cyberDragOver(event)" ondragenter="cyberDragEnter(event)" ondragleave="cyberDragLeave(event)" ondrop="cyberDrop(event,'larm')"><span class="zone-label">L.ARM</span><div class="zone-items" id="bz-larm"></div></div>
+          <div class="body-zone zone-coeur"     ondragover="cyberDragOver(event)" ondragenter="cyberDragEnter(event)" ondragleave="cyberDragLeave(event)" ondrop="cyberDrop(event,'coeur')"><span class="zone-label">BIOWARE</span><div class="zone-items" id="bz-coeur"></div></div>
+          <div class="body-zone zone-centre"    ondragover="cyberDragOver(event)" ondragenter="cyberDragEnter(event)" ondragleave="cyberDragLeave(event)" ondrop="cyberDrop(event,'centre')"><span class="zone-label">IMPLANT</span><div class="zone-items" id="bz-centre"></div></div>
+          <div class="body-zone zone-forearm-r" ondragover="cyberDragOver(event)" ondragenter="cyberDragEnter(event)" ondragleave="cyberDragLeave(event)" ondrop="cyberDrop(event,'forearm-r')"><span class="zone-label">R.FOREARM</span><div class="zone-items" id="bz-forearm-r"></div></div>
+          <div class="body-zone zone-forearm-l" ondragover="cyberDragOver(event)" ondragenter="cyberDragEnter(event)" ondragleave="cyberDragLeave(event)" ondrop="cyberDrop(event,'forearm-l')"><span class="zone-label">L.FOREARM</span><div class="zone-items" id="bz-forearm-l"></div></div>
+          <div class="body-zone zone-rhand"     ondragover="cyberDragOver(event)" ondragenter="cyberDragEnter(event)" ondragleave="cyberDragLeave(event)" ondrop="cyberDrop(event,'rhand')"><span class="zone-label">R.HAND</span><div class="zone-items" id="bz-rhand"></div></div>
+          <div class="body-zone zone-lhand"     ondragover="cyberDragOver(event)" ondragenter="cyberDragEnter(event)" ondragleave="cyberDragLeave(event)" ondrop="cyberDrop(event,'lhand')"><span class="zone-label">L.HAND</span><div class="zone-items" id="bz-lhand"></div></div>
+          <div class="body-zone zone-frame"     ondragover="cyberDragOver(event)" ondragenter="cyberDragEnter(event)" ondragleave="cyberDragLeave(event)" ondrop="cyberDrop(event,'frame')"><span class="zone-label">FRAMES</span><div class="zone-items" id="bz-frame"></div></div>
+          <div class="body-zone zone-rleg"      ondragover="cyberDragOver(event)" ondragenter="cyberDragEnter(event)" ondragleave="cyberDragLeave(event)" ondrop="cyberDrop(event,'rleg')"><span class="zone-label">R.LEG</span><div class="zone-items" id="bz-rleg"></div></div>
+          <div class="body-zone zone-lleg"      ondragover="cyberDragOver(event)" ondragenter="cyberDragEnter(event)" ondragleave="cyberDragLeave(event)" ondrop="cyberDrop(event,'lleg')"><span class="zone-label">L.LEG</span><div class="zone-items" id="bz-lleg"></div></div>
+          <div class="body-zone zone-rfoot"     ondragover="cyberDragOver(event)" ondragenter="cyberDragEnter(event)" ondragleave="cyberDragLeave(event)" ondrop="cyberDrop(event,'rfoot')"><span class="zone-label">R.FOOT</span><div class="zone-items" id="bz-rfoot"></div></div>
+          <div class="body-zone zone-lfoot"     ondragover="cyberDragOver(event)" ondragenter="cyberDragEnter(event)" ondragleave="cyberDragLeave(event)" ondrop="cyberDrop(event,'lfoot')"><span class="zone-label">L.FOOT</span><div class="zone-items" id="bz-lfoot"></div></div>
+        </div>
+        <div class="cyber-list-panel">
+          <div class="inv-list" id="cyber-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CYBERDECK & NET -->
+  <div class="cs-section" id="sec-net">
+    <div class="cs-section-head" onclick="toggleSec(this)"><h2>Cyberdeck &amp; Net</h2><span class="toggle"></span></div>
+    <div class="cs-section-body">
+      <div id="net-section"></div>
+      <input type="file" id="net-deck-photo-input" accept="image/*" style="display:none" onchange="netLoadDeckPhoto(event)">
+    </div>
+  </div>
+
+  <!-- WEAPONS -->
+  <div class="cs-section" id="sec-weapons">
+    <div class="cs-section-head" onclick="toggleSec(this)"><h2>Weapons</h2><span class="toggle"></span></div>
+    <div class="cs-section-body">
+      <div class="item-search">
+        <input id="weap-search" placeholder="search weapons..." oninput="searchItems('weap')" onfocus="searchItems('weap')" autocomplete="off">
+        <button class="btn btn-sm" onclick="addCustomWeapon()">+ Custom</button>
+        <div class="dropdown" id="weap-dropdown"></div>
+      </div>
+      <div class="inv-list" id="weap-list"></div>
+    </div>
+  </div>
+
+  <!-- FASHION & ARMOR -->
+  <div class="cs-section" id="sec-fashion">
+    <div class="cs-section-head" onclick="toggleSec(this)"><h2>Fashion &amp; Armor</h2><span class="toggle"></span></div>
+    <div class="cs-section-body">
+      <div class="clothing-layout">
+        <div class="clothing-bodymap">
+          <div class="fashion-body-map" id="fashion-body-map-wrap">
+            <img src="img/body2.png" alt="body" class="fashion-body-img">
+            <div class="fzone fzone-head"  id="fbz-head"><span class="fzone-label">HEAD</span><div class="fzone-items" id="fbz-items-head"></div></div>
+            <div class="fzone fzone-torso" id="fbz-torso"><span class="fzone-label">TORSO</span><div class="fzone-items" id="fbz-items-torso"></div></div>
+            <div class="fzone fzone-rarm"  id="fbz-rarm"><span class="fzone-label">R.ARM</span><div class="fzone-items" id="fbz-items-rarm"></div></div>
+            <div class="fzone fzone-larm"  id="fbz-larm"><span class="fzone-label">L.ARM</span><div class="fzone-items" id="fbz-items-larm"></div></div>
+            <div class="fzone fzone-rleg"  id="fbz-rleg"><span class="fzone-label">R.LEG</span><div class="fzone-items" id="fbz-items-rleg"></div></div>
+            <div class="fzone fzone-lleg"  id="fbz-lleg"><span class="fzone-label">L.LEG</span><div class="fzone-items" id="fbz-items-lleg"></div></div>
+          </div>
+        </div>
+        <div class="clothing-equipped" id="outfit-section"></div>
+        <div class="clothing-wardrobe">
+          <div class="wardrobe-head">WARDROBE
+            <button class="btn btn-sm wd-custom-btn" onclick="document.getElementById('cs-outfit-import').click()" title="Import an outfit exported from the Outfit Designer">↓ Outfit</button>
+            <button class="btn btn-sm wd-custom-btn" onclick="addCustomToWardrobe()">+ Custom</button>
+            <input type="file" id="cs-outfit-import" accept=".json" style="display:none" onchange="csImportOutfit(event)">
+          </div>
+          <div class="wardrobe-search-wrap">
+            <input id="wardrobe-search" class="wardrobe-search" placeholder="search to add..." oninput="renderWardrobe()" autocomplete="off">
+            <div id="wardrobe-search-results" class="wd-search-results" style="display:none"></div>
+          </div>
+          <div id="wardrobe-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INVENTORY -->
+  <div class="cs-section" id="sec-inventory">
+    <div class="cs-section-head" onclick="toggleSec(this)"><h2>Inventory</h2><span class="toggle"></span></div>
+    <div class="cs-section-body">
+      <div class="inv-layout">
+        <div class="inv-col-left">
+          <div class="inv-subsection-label">Storage</div>
+          <div id="fashion-list"></div>
+          <div class="inv-subsection-label" style="margin-top:10px">Add Storage</div>
+          <div class="item-search">
+            <input id="fashion-search" placeholder="search bags &amp; cases..." oninput="searchItems('fashion')" onfocus="searchItems('fashion')" autocomplete="off">
+            <button class="btn btn-sm" onclick="addCustomFashion()">+ Custom</button>
+            <div class="dropdown" id="fashion-dropdown"></div>
+          </div>
+        </div>
+        <div class="inv-col-right">
+          <div class="inv-subsection-label">Search Equipment</div>
+          <div class="item-search">
+            <input id="gear-search" placeholder="search gear..." oninput="searchItems('gear')" onfocus="searchItems('gear')" autocomplete="off">
+            <button class="btn btn-sm" onclick="addCustomGear()">+ Custom</button>
+            <div class="dropdown" id="gear-dropdown"></div>
+          </div>
+          <div class="inv-list gear-drop-zone" id="gear-list"
+            ondragover="gearDragOver(event)" ondrop="gearDropZone(event)"></div>
+          <div id="not-stored-box" style="display:none">
+            <div class="ns-label">Not stored</div>
+            <div class="ns-items" id="ns-items"
+              ondragover="nsDragOver(event)" ondrop="nsDropZone(event)"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VEHICLES -->
+  <div class="cs-section" id="sec-vehicles">
+    <div class="cs-section-head" onclick="toggleSec(this)"><h2>Vehicles</h2><span class="toggle"></span></div>
+    <div class="cs-section-body">
+      <div class="item-search">
+        <input id="veh-search" placeholder="search vehicles..." oninput="searchItems('veh')" onfocus="searchItems('veh')" autocomplete="off">
+        <button class="btn btn-sm" onclick="addCustomVehicle()">+ Custom</button>
+        <div class="dropdown" id="veh-dropdown"></div>
+      </div>
+      <div class="inv-list" id="veh-list"></div>
+    </div>
+  </div>
+
+  <!-- LIFESTYLE -->
+  <div class="cs-section" id="sec-lifestyle">
+    <div class="cs-section-head" onclick="toggleSec(this)"><h2>Lifestyle</h2><span class="toggle"></span></div>
+    <div class="cs-section-body">
+      <div class="lifestyle-grid" id="lifestyle-grid"></div>
+    </div>
+  </div>
+
+  <!-- NETWORK & GIGS -->
+  <div class="cs-section" id="sec-network">
+    <div class="cs-section-head" onclick="toggleSec(this)"><h2>Network &amp; Gigs</h2><span class="toggle"></span></div>
+    <div class="cs-section-body">
+      <div class="net-grid">
+        <div class="net-col">
+          <div class="net-col-head">CONTACTS <button class="btn btn-sm" onclick="addContactModal()">+ Contact</button></div>
+          <div id="contacts-list"></div>
+        </div>
+        <div class="net-col">
+          <div class="net-col-head">JOB BOARD
+            <span class="net-col-actions">
+              <button class="btn btn-sm" onclick="browseCorpGigsModal()">Browse corp gigs</button>
+              <button class="btn btn-sm" onclick="addJobModal()">+ Gig</button>
+            </span>
+          </div>
+          <div id="jobs-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NOTES -->
+  <div class="cs-section" id="sec-notes">
+    <div class="cs-section-head" onclick="toggleSec(this)"><h2>Notes</h2><span class="toggle"></span></div>
+    <div class="cs-section-body">
+      <textarea class="notes-area" id="cs-notes" placeholder="Background, contacts, events..."></textarea>
+    </div>
+  </div>
+
+  <!-- CUSTOM CATEGORIES are inserted here as direct children of .cs (between native sections per layout order) -->
+  <div id="cs-cust-tools" class="cs-cust-struct">
+    <span class="cs-cust-tools-lbl">Custom:</span>
+    <button class="btn btn-sm" onclick="csAddCategory()">+ Category</button>
+    <button class="btn btn-sm" onclick="csTemplatePicker()">From template…</button>
+    <button class="btn btn-sm" onclick="csManageTemplates()">Manage templates</button>
+  </div>
+
+</div>
+
+<!-- <script src="js/theme.js"></script> -->
+<script src="js/vendor/jspdf.umd.min.js"></script>
+<script src="js/sync.bundle.js"></script>
+<script src="js/main.js"></script>
+<script src="js/cs-join.js"></script>
+</body>
+</html>

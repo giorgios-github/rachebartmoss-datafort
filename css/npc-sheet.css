@@ -1,0 +1,418 @@
+/* ═══════════════════════════════════════════════
+   NPC SHEET
+   ═══════════════════════════════════════════════ */
+
+/* ── Main scroll ── */
+.npc-wrap { overflow-y:auto; height:calc(100vh - 31px); }
+
+/* ── Section (reuse CS section style) ── */
+.npc-section { margin-bottom:0; }
+.npc-section-head { display:flex; align-items:center; cursor:pointer; padding:7px 14px; background:#111; color:#fff; font-family:var(--head); font-size:11px; letter-spacing:2px; text-transform:uppercase; user-select:none; }
+.npc-section-head .toggle { margin-left:auto; font-size:12px; opacity:0.6; }
+.npc-section-body { padding:14px; display:flex; flex-direction:column; gap:10px; }
+.npc-section-body.collapsed { display:none; }
+
+/* ── Identity ── */
+.npc-id-grid { display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; }
+.npc-id-photo { width:12.5%; min-width:130px; max-width:200px; aspect-ratio:3/4; border:2px solid #111; display:flex; align-items:center; justify-content:center; cursor:pointer; overflow:visible; flex-shrink:0; position:relative; }
+.npc-id-photo img { width:100%; height:100%; object-fit:cover; }
+.npc-id-photo .ph-text { font-family:var(--head); font-size:11px; letter-spacing:2px; color:#bbb; position:absolute; }
+.npc-id-fields { flex:1; min-width:180px; display:flex; flex-direction:column; gap:11px; justify-content:center; }
+.npc-field { display:flex; flex-direction:column; gap:4px; }
+.npc-field label { font-family:var(--head); font-size:12px; letter-spacing:1px; color:var(--text2); text-transform:uppercase; }
+.npc-field input, .npc-field select { font-family:var(--mono); font-size:15px; border:none; border-bottom:1.5px solid #111; padding:5px 2px; background:#fff; width:100%; box-sizing:border-box; }
+.npc-field input:focus, .npc-field select:focus { outline:none; border-bottom-color:#3a7bd5; }
+.npc-field textarea { font-family:var(--mono); font-size:13px; border:1px solid #ddd; padding:6px; resize:vertical; min-height:60px; width:100%; box-sizing:border-box; background:#fafafa; }
+.npc-field textarea:focus { outline:none; border-color:#111; background:#fff; }
+
+.npc-roll-btn { font-size:14px; line-height:1; padding:2px 5px; border:1.5px solid #111; background:#fff; color:#111; cursor:pointer; border-radius:2px; }
+.npc-roll-btn:hover { background:#111; color:#fff; }
+
+/* ── Stats + Skills block ── */
+.npc-ss-layout { display:flex; gap:16px; flex-wrap:wrap; }
+.npc-stats-col { flex-shrink:0; min-width:160px; }
+.npc-skills-col { flex:1; min-width:200px; }
+
+.npc-stats-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:10px; }
+.npc-stat-box { display:flex; flex-direction:column; align-items:center; border:1px solid #e0e0e0; padding:4px; }
+.npc-stat-box .slabel { font-family:var(--head); font-size:10px; letter-spacing:1px; color:var(--text2); }
+.npc-stat-box input { font-family:var(--mono); font-size:15px; font-weight:bold; border:none; width:44px; text-align:center; background:transparent; }
+.npc-stat-box input:focus { outline:none; }
+
+.npc-sa-box { border:1px solid #b8860b; padding:6px; background:#fdfaf0; margin-bottom:6px; }
+.npc-sa-box .sa-label { font-family:var(--head); font-size:12px; letter-spacing:1px; color:#b8860b; }
+.npc-sa-box .sa-name { font-family:var(--head); font-size:15px; color:#111; margin-top:2px; }
+.npc-sa-box input { font-family:var(--mono); font-size:16px; font-weight:bold; border:none; border-bottom:1.5px solid #b8860b; width:46px; text-align:center; background:transparent; }
+.npc-sa-box input:focus { outline:none; }
+
+.npc-skills-header { display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap; }
+.npc-skills-header input[type="text"] { font-family:var(--mono); font-size:12px; border:none; border-bottom:1px solid #ddd; padding:3px 6px; flex:1; min-width:120px; background:#fafafa; }
+.npc-skills-header input[type="text"]:focus { outline:none; border-bottom-color:#111; background:#fff; }
+
+.npc-skill-row { display:flex; align-items:center; gap:6px; padding:3px 0; border-bottom:1px solid #f5f5f5; }
+.npc-skill-name { font-family:var(--mono); font-size:12px; flex:1; color:#333; }
+.npc-skill-name.role-skill { color:#111; font-weight:600; }
+/* editable name inputs (skills / cyberware / armor) — look like text until focused */
+.npc-name-edit { font-family:var(--mono); font-size:12px; border:none; background:transparent; flex:1; min-width:0; padding:2px 2px; color:#333; }
+.npc-name-edit:hover { background:#f3f3f3; }
+.npc-name-edit:focus { outline:none; background:#fff; box-shadow:inset 0 -1px 0 #111; }
+.npc-name-edit.role-skill { color:#111; font-weight:600; }
+.npc-skill-stat { font-family:var(--head); font-size:10px; letter-spacing:0.5px; color:#aaa; width:32px; text-align:right; }
+.npc-skill-val { font-family:var(--mono); font-size:13px; font-weight:bold; border:none; border-bottom:1px solid transparent; width:32px; text-align:center; background:transparent; }
+.npc-skill-val:focus { outline:none; border-bottom-color:#111; }
+.npc-skill-rm { color:#ddd; cursor:pointer; font-size:14px; flex-shrink:0; }
+.npc-skill-rm:hover { color:var(--red); }
+
+.npc-add-skill-wrap { position:relative; }
+.npc-add-skill-input { font-family:var(--mono); font-size:12px; border:none; border-bottom:1px solid #ddd; padding:4px 6px; width:100%; box-sizing:border-box; background:#fafafa; }
+.npc-add-skill-input:focus { outline:none; border-bottom-color:#111; background:#fff; }
+.npc-add-skill-results { position:absolute; left:0; right:0; top:100%; background:#fff; border:1px solid #111; border-top:none; z-index:100; max-height:180px; overflow-y:auto; box-shadow:0 4px 12px rgba(0,0,0,0.15); }
+.npc-add-skill-result { padding:5px 10px; cursor:pointer; font-family:var(--mono); font-size:12px; border-bottom:1px solid #f0f0f0; display:flex; justify-content:space-between; }
+.npc-add-skill-result:hover { background:#f5f5f5; }
+.npc-add-skill-stat { font-family:var(--head); font-size:10px; color:#888; }
+
+/* ── Cyberware search ── */
+.npc-cyber-search-wrap { position:relative; display:flex; gap:6px; align-items:center; margin-bottom:8px; }
+.npc-cyber-search { font-family:var(--mono); font-size:12px; border:none; border-bottom:1px solid #ddd; padding:4px 6px; flex:1; background:#fafafa; }
+.npc-cyber-search:focus { outline:none; border-bottom-color:#111; background:#fff; }
+.npc-cyber-results { position:absolute; left:0; right:0; top:100%; background:#fff; border:1px solid #111; border-top:none; z-index:100; max-height:200px; overflow-y:auto; box-shadow:0 4px 12px rgba(0,0,0,0.15); }
+.npc-cyber-result { padding:5px 10px; cursor:pointer; border-bottom:1px solid #f0f0f0; }
+.npc-cyber-result:hover { background:#f5f5f5; }
+.npc-cyber-result-name { font-family:var(--head); font-size:12px; }
+.npc-cyber-result-sub { font-family:var(--mono); font-size:10px; color:#888; }
+
+/* ── Gear (inventory) search ── */
+.npc-gear-search-wrap { position:relative; display:flex; gap:6px; align-items:center; margin-bottom:8px; }
+.npc-gear-search { font-family:var(--mono); font-size:12px; border:none; border-bottom:1px solid #ddd; padding:4px 6px; flex:1; background:#fafafa; }
+.npc-gear-search:focus { outline:none; border-bottom-color:#111; background:#fff; }
+.npc-gear-results { position:absolute; left:0; right:0; top:100%; background:#fff; border:1px solid #111; border-top:none; z-index:100; max-height:200px; overflow-y:auto; box-shadow:0 4px 12px rgba(0,0,0,0.15); }
+.npc-gear-result { padding:5px 10px; cursor:pointer; border-bottom:1px solid #f0f0f0; }
+.npc-gear-result:hover { background:#f5f5f5; }
+.npc-gear-result-name { font-family:var(--head); font-size:12px; }
+.npc-gear-result-sub { font-family:var(--mono); font-size:10px; color:#888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* ── Cyberware (reuse CS styles mostly) ── */
+.npc-cyber-simple { display:flex; flex-direction:column; gap:6px; }
+.npc-cyber-item { display:flex; align-items:center; gap:8px; padding:5px 8px; border:1px solid #f0f0f0; background:#fafafa; }
+.npc-cyber-item-name { font-family:var(--mono); font-size:13px; flex:1; }
+.npc-cyber-item-type { font-family:var(--head); font-size:10px; letter-spacing:0.5px; color:#888; }
+.npc-cyber-item-hc { font-family:var(--head); font-size:11px; color:var(--red); }
+.npc-cyber-rm { color:#ddd; cursor:pointer; font-size:14px; }
+.npc-cyber-rm:hover { color:var(--red); }
+.npc-hc-total { font-family:var(--mono); font-size:13px; color:var(--red); font-weight:bold; }
+
+/* ── Weapons ── */
+.npc-weap-table { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:12px; }
+.npc-weap-table th { font-family:var(--head); font-size:10px; letter-spacing:1px; color:#fff; background:#333; padding:4px 6px; text-align:left; white-space:nowrap; }
+.npc-weap-table td { padding:4px 6px; border-bottom:1px solid #f0f0f0; vertical-align:middle; }
+.npc-weap-table td input { font-family:var(--mono); font-size:12px; border:none; background:transparent; width:100%; }
+.npc-weap-table td input:focus { outline:none; border-bottom:1px solid #111; }
+.npc-weap-search-wrap { position:relative; display:flex; gap:6px; align-items:center; margin-bottom:8px; }
+.npc-weap-search { font-family:var(--mono); font-size:12px; border:none; border-bottom:1px solid #ddd; padding:4px 6px; flex:1; background:#fafafa; }
+.npc-weap-search:focus { outline:none; border-bottom-color:#111; background:#fff; }
+.npc-weap-results { position:absolute; left:0; right:0; top:100%; background:#fff; border:1px solid #111; border-top:none; z-index:100; max-height:200px; overflow-y:auto; box-shadow:0 4px 12px rgba(0,0,0,0.15); }
+.npc-weap-result { padding:5px 8px; cursor:pointer; border-bottom:1px solid #f0f0f0; }
+.npc-weap-result:hover { background:#f5f5f5; }
+.npc-weap-result-name { font-family:var(--head); font-size:12px; }
+.npc-weap-result-dmg { font-family:var(--mono); font-size:11px; color:#888; }
+
+/* ── Fashion & Armor (SP display) ── */
+.npc-armor-layout { display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start; }
+.npc-armor-body { position:relative; width:120px; height:225px; flex-shrink:0; }
+.npc-armor-body img { position:absolute; top:4px; left:50%; transform:translateX(-50%); height:212px; pointer-events:none; opacity:0.15; }
+.npc-sp-overlay { position:absolute; padding:1px 4px; font-family:var(--head); font-size:10px; letter-spacing:0.5px; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,0.7); white-space:nowrap; pointer-events:none; background:rgba(58,123,213,0.55); }
+.npc-sp-overlay.empty { background:rgba(0,0,0,0.08); color:transparent; }
+.npc-armor-items { flex:1; min-width:180px; }
+.npc-armor-search-wrap { position:relative; display:flex; gap:6px; align-items:center; margin-bottom:8px; }
+.npc-armor-search { font-family:var(--mono); font-size:12px; border:none; border-bottom:1px solid #ddd; padding:4px 6px; flex:1; background:#fafafa; }
+.npc-armor-search:focus { outline:none; border-bottom-color:#111; background:#fff; }
+.npc-armor-results { position:absolute; left:0; right:0; top:100%; background:#fff; border:1px solid #111; border-top:none; z-index:100; max-height:200px; overflow-y:auto; box-shadow:0 4px 12px rgba(0,0,0,0.15); }
+.npc-armor-result { padding:6px 10px; cursor:pointer; border-bottom:1px solid #f0f0f0; }
+.npc-armor-result:hover { background:#f5f5f5; }
+.npc-armor-result-name { font-family:var(--head); font-size:12px; }
+.npc-armor-result-sp { font-family:var(--head); font-size:11px; color:#3a7bd5; font-weight:bold; }
+.npc-armor-result-notes { font-family:var(--mono); font-size:10px; color:#aaa; display:block; }
+.npc-armor-item-row { display:flex; align-items:center; gap:6px; padding:4px 0; border-bottom:1px solid #f5f5f5; }
+.npc-armor-item-name { font-family:var(--mono); font-size:12px; flex:1; }
+.npc-armor-item-sp { font-family:var(--head); font-size:11px; color:#3a7bd5; font-weight:bold; width:40px; text-align:center; border:none; border-bottom:1px solid transparent; background:transparent; }
+.npc-armor-item-sp:focus { outline:none; border-bottom-color:#3a7bd5; }
+.npc-armor-loc-checks { display:flex; gap:3px; flex-wrap:wrap; }
+.npc-armor-loc-check { display:flex; flex-direction:column; align-items:center; gap:1px; cursor:pointer; }
+.npc-armor-loc-check input { margin:0; cursor:pointer; }
+.npc-armor-loc-check span { font-family:var(--head); font-size:9px; letter-spacing:0.5px; color:#aaa; text-transform:uppercase; }
+.npc-armor-rm { color:#ddd; cursor:pointer; font-size:14px; }
+.npc-armor-rm:hover { color:var(--red); }
+
+/* ── Inventory ── */
+.npc-inv-row { display:flex; align-items:center; gap:8px; padding:4px 0; border-bottom:1px solid #f5f5f5; }
+.npc-inv-name { font-family:var(--mono); font-size:12px; flex:1; }
+.npc-inv-notes { font-family:var(--mono); font-size:11px; color:#888; flex:1; }
+.npc-inv-rm { color:#ddd; cursor:pointer; font-size:14px; }
+.npc-inv-rm:hover { color:var(--red); }
+.npc-inv-add { display:flex; gap:6px; margin-top:6px; }
+.npc-inv-add input { font-family:var(--mono); font-size:12px; border:none; border-bottom:1px solid #ddd; padding:4px 6px; flex:1; background:#fafafa; }
+.npc-inv-add input:focus { outline:none; border-bottom-color:#111; background:#fff; }
+
+/* ── Vehicles ── */
+.npc-veh-row { display:flex; align-items:center; gap:8px; padding:5px 8px; border:1px solid #f0f0f0; background:#fafafa; }
+.npc-veh-name { font-family:var(--mono); font-size:13px; flex:1; }
+.npc-veh-type { font-family:var(--head); font-size:10px; color:#888; }
+.npc-veh-notes { font-family:var(--mono); font-size:11px; color:#888; }
+.npc-veh-rm { color:#ddd; cursor:pointer; font-size:14px; }
+.npc-veh-rm:hover { color:var(--red); }
+.npc-veh-search-wrap { position:relative; display:flex; gap:6px; align-items:center; margin-bottom:8px; }
+.npc-veh-search { font-family:var(--mono); font-size:12px; border:none; border-bottom:1px solid #ddd; padding:4px 6px; flex:1; background:#fafafa; }
+.npc-veh-search:focus { outline:none; border-bottom-color:#111; background:#fff; }
+.npc-veh-results { position:absolute; left:0; right:0; top:100%; background:#fff; border:1px solid #111; border-top:none; z-index:100; max-height:200px; overflow-y:auto; box-shadow:0 4px 12px rgba(0,0,0,0.15); }
+.npc-veh-result { padding:5px 8px; cursor:pointer; border-bottom:1px solid #f0f0f0; }
+.npc-veh-result:hover { background:#f5f5f5; }
+.npc-veh-result-name { font-family:var(--head); font-size:12px; }
+.npc-veh-result-type { font-family:var(--mono); font-size:11px; color:#888; }
+
+/* ── Notes ── */
+.npc-notes { font-family:var(--mono); font-size:13px; border:1px solid #ddd; padding:10px; resize:vertical; min-height:100px; width:100%; box-sizing:border-box; background:#fafafa; }
+.npc-notes:focus { outline:none; border-color:#111; background:#fff; }
+
+/* ── Shared ── */
+.npc-add-btn { margin-top:6px; }
+.npc-empty-hint { font-family:var(--mono); font-size:12px; color:#bbb; padding:6px 0; }
+
+/* ════════════════════════════════════════
+   NPC TABS (multi-NPC) — site style, share width, full-height, rectangular
+   ════════════════════════════════════════ */
+#npc-tabs { display:flex; align-items:stretch; background:#111; border-bottom:2px solid #111; }
+.npc-tab { position:relative; flex:1 1 0; min-width:0; display:flex; align-items:center; justify-content:center; gap:6px; padding:9px 22px; background:#fff; color:#888; font-family:var(--mono); font-size:13px; cursor:pointer; border-right:1px solid #ccc; }
+.npc-tab:hover { color:#111; }
+.npc-tab.active { background:#111; color:#fff; font-weight:bold; }
+.npc-tab-label { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.npc-tab-close { position:absolute; right:7px; top:50%; transform:translateY(-50%); font-size:11px; opacity:.5; flex-shrink:0; }
+.npc-tab-close:hover { opacity:1; color:#c0392b; }
+.npc-tab-add { flex:0 0 auto; width:42px; display:flex; align-items:center; justify-content:center; background:#111; color:#fff; font-size:16px; cursor:pointer; border-left:1px solid #2a2a2a; }
+.npc-tab-add:hover { background:#fff; color:#111; }
+
+/* view-mode selector in the topnav (next to New) */
+.npc-viewmode-sel { font-family:var(--mono); font-size:12px; padding:3px 6px; border:2px solid #111; background:#fff; color:#111; cursor:pointer; }
+
+/* Edit/View segmented toggle */
+.npc-seg { display:inline-flex; border:2px solid #111; }
+.btn-seg { font-family:var(--mono); font-size:12px; padding:3px 9px; background:#fff; color:#111; border:none; border-right:1px solid #111; cursor:pointer; }
+.btn-seg:last-child { border-right:none; }
+.btn-seg.active { background:#111; color:#fff; }
+#npc-view-controls { display:inline-flex; }
+
+/* ════════════════════════════════════════
+   NPC VIEW MODES (read-only themed documents)
+   ════════════════════════════════════════ */
+/* gray "desk" scroll area; the paper floats inside it */
+#npc-view { background:#5e5e5e; flex:1 1 auto; min-height:0; overflow:auto; }
+#npc-view-area { display:flex; gap:24px; align-items:flex-start; justify-content:center; padding:32px; min-height:100%; box-sizing:border-box; }
+#npc-paper { flex:0 0 auto; background:#fff; box-shadow:0 6px 28px rgba(0,0,0,.45); position:relative; box-sizing:border-box; overflow:hidden; }
+#npc-paper .npc-view { width:100%; height:100%; box-sizing:border-box; }
+#npc-side-panel { width:220px; flex:0 0 auto; background:#2f2f33; color:#e8e8e8; padding:14px; position:sticky; top:32px; box-sizing:border-box; }
+.nv-sp-title { font-family:var(--head); font-size:11px; letter-spacing:2px; text-transform:uppercase; color:#9fd; margin-bottom:10px; padding-bottom:6px; border-bottom:1px solid #555; }
+.nv-sp-field { display:flex; flex-direction:column; gap:3px; margin-bottom:9px; }
+.nv-sp-field label { font-family:var(--head); font-size:10px; letter-spacing:1px; text-transform:uppercase; color:#aaa; }
+.nv-sp-field input, .nv-sp-field select, .nv-sp-field textarea { font-family:var(--mono); font-size:12px; padding:4px 6px; border:1px solid #555; background:#1c1c1f; color:#eee; width:100%; box-sizing:border-box; }
+.nv-sp-field textarea { min-height:64px; resize:vertical; }
+.nv-sp-field input:focus, .nv-sp-field select:focus, .nv-sp-field textarea:focus { outline:none; border-color:#9fd; }
+.nv-sp-hint { font-family:var(--mono); font-size:10px; line-height:1.4; color:#9a9a9a; margin-bottom:12px; }
+.nv-sp-hint b { color:#cfd; }
+.nv-sp-empty { font-family:var(--mono); font-size:11px; color:#888; font-style:italic; }
+.npc-view { width:100%; max-width:none; }
+/* shared bits */
+.nv-head { display:flex; gap:14px; align-items:flex-start; margin-bottom:10px; }
+.nv-photo { width:100px; height:128px; object-fit:cover; flex-shrink:0; border:1px solid rgba(0,0,0,.4); }
+.npc-v-noimg { display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:10px; letter-spacing:1px; color:#999; background:rgba(127,127,127,.18); }
+.nv-headmeta { flex:1; min-width:0; }
+.nv-title { font-family:var(--head); font-size:22px; font-weight:bold; letter-spacing:1px; line-height:1.05; }
+.nv-sub { font-family:var(--mono); font-size:12px; opacity:.75; margin-top:2px; }
+.nv-ref { font-family:var(--mono); font-size:11px; opacity:.6; margin-top:4px; }
+.nv-sec { font-family:var(--head); font-size:11px; letter-spacing:2px; text-transform:uppercase; margin:9px 0 4px; border-bottom:1px solid currentColor; padding-bottom:3px; opacity:.85; }
+.nv-line { font-family:var(--mono); font-size:13px; padding:2px 0; display:flex; justify-content:space-between; gap:8px; }
+.nv-line b { font-weight:bold; }
+.nv-dim { opacity:.6; font-size:11px; }
+/* 2-column rows via a flex:1 name + right meta (html2canvas-safe, no space-between) */
+.nv-line > .nv-l { flex:1 1 auto; min-width:0; }
+.nv-line > .nv-r { flex:0 0 auto; max-width:55%; text-align:right; padding-left:12px; }
+.nv-notes { font-family:var(--mono); font-size:13px; line-height:1.5; white-space:pre-wrap; }
+.nv-empty { font-family:var(--mono); font-size:12px; opacity:.5; font-style:italic; }
+.nv-kv { font-family:var(--mono); font-size:12px; display:flex; gap:8px; margin-top:3px; }
+.nv-kv span { opacity:.6; min-width:78px; }
+.nv-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:5px; margin:4px 0; }
+.nv-stat { font-family:var(--mono); font-size:12px; display:flex; justify-content:space-between; border:1px solid rgba(127,127,127,.4); padding:2px 7px; }
+.nv-chip { display:inline-block; font-family:var(--mono); font-size:11px; padding:2px 8px; margin:2px 3px 2px 0; border:1px solid currentColor; border-radius:11px; }
+
+/* — NetWatch — dark, red CLASSIFIED — */
+.npc-view-netwatch { background:#0d0d12; color:#d6e4ea; border:1px solid #c0392b; padding:14px; position:relative; }
+.npc-view-netwatch .nv-banner { background:repeating-linear-gradient(45deg,#c0392b 0 12px,#7a1f17 12px 24px); color:#fff; text-align:center; font-family:var(--head); font-size:11px; letter-spacing:2px; padding:4px; margin:-14px -14px 12px; }
+.npc-view-netwatch .nv-photo { filter:grayscale(1) contrast(1.2); border-color:#345; }
+.npc-view-netwatch .nv-threat { display:inline-block; margin-top:6px; font-family:var(--head); font-size:12px; letter-spacing:1px; padding:2px 8px; }
+.npc-view-netwatch .nv-threat.t-low{background:#1a7a2e;color:#fff} .npc-view-netwatch .nv-threat.t-medium{background:#b8860b;color:#fff} .npc-view-netwatch .nv-threat.t-high{background:#d35400;color:#fff} .npc-view-netwatch .nv-threat.t-extreme{background:#c0392b;color:#fff}
+.npc-view-netwatch .nv-flag { color:#ff6b6b; font-family:var(--head); font-size:13px; letter-spacing:1px; margin-top:8px; }
+.npc-view-netwatch .nv-stamp { position:absolute; right:18px; bottom:14px; transform:rotate(-12deg); border:3px solid #c0392b; color:#c0392b; opacity:.5; font-family:var(--head); font-size:18px; letter-spacing:3px; padding:3px 10px; }
+
+/* — Corporate dossier — clean white — */
+.npc-view-corpo { background:#fff; color:#111; border:1px solid #ccc; padding:16px; box-shadow:0 2px 10px rgba(0,0,0,.1); }
+.npc-view-corpo .nv-corphead { display:flex; align-items:center; gap:10px; border-bottom:3px solid #1a2a6c; padding-bottom:8px; margin-bottom:12px; }
+.npc-view-corpo .nv-corplogo { font-size:26px; color:#1a2a6c; }
+.npc-view-corpo .nv-corpname { font-family:var(--head); font-size:15px; letter-spacing:2px; }
+.npc-view-corpo .nv-class { margin-left:auto; font-family:var(--mono); font-size:11px; border:1px solid #1a2a6c; color:#1a2a6c; padding:2px 8px; }
+.npc-view-corpo .nv-bar { display:inline-block; width:90px; height:8px; background:#eee; vertical-align:middle; }
+.npc-view-corpo .nv-bar i { display:block; height:100%; background:#1a2a6c; }
+
+/* — Admin form — paper, monospace — */
+.npc-view-admin { background:#f6f4ec; color:#222; border:1px solid #c9c2a8; padding:16px; font-family:var(--mono); }
+.npc-view-admin .nv-formhead { font-family:var(--mono); font-weight:bold; font-size:13px; border:2px solid #222; padding:6px 8px; display:flex; justify-content:space-between; margin-bottom:10px; }
+.npc-view-admin .nv-formgrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.npc-view-admin .nv-formbox { border:1px solid #999; padding:4px 6px; }
+.npc-view-admin .nv-formbox span { font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#777; display:block; }
+.npc-view-admin .nv-formbox div { font-size:13px; min-height:16px; }
+.npc-view-admin .nv-formfoot { margin-top:12px; font-size:10px; text-align:center; color:#888; border-top:1px dashed #999; padding-top:6px; }
+
+/* — Wanted poster — */
+.npc-view-wanted { background:#efe6d2; color:#2a1c0e; border:2px solid #2a1c0e; padding:18px; text-align:center; font-family:Georgia,serif; }
+.npc-view-wanted .nv-wanted { font-family:var(--head); font-size:46px; letter-spacing:6px; font-weight:bold; }
+.npc-view-wanted .nv-wphoto { width:180px; height:200px; object-fit:cover; border:3px solid #2a1c0e; margin:8px auto; display:block; filter:sepia(.4) contrast(1.1); }
+.npc-view-wanted .npc-v-noimg { width:180px; height:200px; margin:8px auto; }
+.npc-view-wanted .nv-walias { font-size:24px; font-style:italic; margin:4px 0; }
+.npc-view-wanted .nv-warmed { color:#a11; font-weight:bold; letter-spacing:2px; }
+.npc-view-wanted .nv-wbounty { font-size:16px; margin:10px 0; letter-spacing:2px; }
+.npc-view-wanted .nv-wbounty b { font-size:30px; display:block; }
+.npc-view-wanted .nv-sec { border:none; text-align:center; }
+.npc-view-wanted .nv-notes { text-align:center; }
+.npc-view-wanted .nv-wfoot { margin-top:12px; font-size:11px; font-style:italic; }
+
+/* — Trauma medical — clinical — */
+.npc-view-medical { background:#f3fbfb; color:#0c3a3a; border:1px solid #b7dede; padding:16px; }
+.npc-view-medical .nv-medhead { background:#e6383b; color:#fff; font-family:var(--head); font-size:13px; letter-spacing:2px; padding:6px 10px; margin:-16px -16px 12px; }
+.npc-view-medical .nv-vitals { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+.npc-view-medical .nv-vitals div { font-family:var(--mono); font-size:11px; border:1px solid #b7dede; padding:5px; text-align:center; }
+.npc-view-medical .nv-vitals b { display:block; font-size:18px; color:#0a7; }
+
+/* — Fixer contact card — */
+.npc-view-fixer { background:#15151c; color:#cfe; border:1px solid #2a2a3a; padding:16px; border-radius:10px; }
+.npc-view-fixer .nv-fixhead { font-family:var(--head); font-size:12px; letter-spacing:2px; color:#7fd6e6; margin-bottom:10px; }
+.npc-view-fixer .nv-photo { border-radius:8px; border-color:#2a2a3a; }
+.npc-view-fixer .nv-chip { border-color:#3a8bb0; color:#7fd6e6; }
+
+/* — Collectible card — */
+.npc-view-card { display:flex; justify-content:center; }
+.npc-view-card .nv-card { width:300px; background:linear-gradient(160deg,#2a2440,#15131f); color:#eee; border:2px solid #b8860b; border-radius:14px; padding:12px; box-shadow:0 6px 20px rgba(0,0,0,.4); }
+.npc-view-card .nv-cardtop { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+.npc-view-card .nv-cardname { font-family:var(--head); font-size:16px; font-weight:bold; }
+.npc-view-card .nv-cardtype { font-family:var(--mono); font-size:10px; opacity:.7; }
+.npc-view-card .nv-cardimg { width:100%; height:170px; object-fit:cover; border:1px solid #b8860b; border-radius:8px; margin:8px 0; }
+.npc-view-card .npc-v-noimg { width:100%; height:170px; margin:8px 0; border-radius:8px; }
+.npc-view-card .nv-stats { grid-template-columns:repeat(3,1fr); }
+.npc-view-card .nv-stat { border-color:rgba(184,134,11,.5); }
+.npc-view-card .nv-cardskills { margin:6px 0; }
+.npc-view-card .nv-cardflavor { font-family:Georgia,serif; font-style:italic; font-size:12px; opacity:.85; margin:6px 0; }
+.npc-view-card .nv-cardfoot { text-align:center; font-family:var(--head); font-size:11px; letter-spacing:2px; color:#b8860b; border-top:1px solid rgba(184,134,11,.4); padding-top:6px; }
+
+/* — ID badge — */
+.npc-view-badge { display:flex; justify-content:center; }
+.npc-view-badge .nv-badge { width:300px; background:#fff; border:1px solid #999; border-radius:10px; overflow:hidden; box-shadow:0 4px 14px rgba(0,0,0,.2); }
+.npc-view-badge .nv-badgehead { background:#1a2a6c; color:#fff; font-family:var(--head); font-size:12px; letter-spacing:3px; text-align:center; padding:6px; }
+.npc-view-badge .nv-badgebody { display:flex; gap:10px; padding:12px; }
+.npc-view-badge .nv-badgeimg { width:80px; height:96px; object-fit:cover; border:1px solid #999; flex-shrink:0; }
+.npc-view-badge .npc-v-noimg { width:80px; height:96px; }
+.npc-view-badge .nv-barcode { height:34px; margin:0 12px 12px; background:repeating-linear-gradient(90deg,#111 0 2px,#fff 2px 4px,#111 4px 5px,#fff 5px 9px); }
+
+/* ════════════════════════════════════════
+   FILE lead-block chrome (id block, meta table, etc.)
+   ════════════════════════════════════════ */
+.nv-fhead { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; }
+.nv-fhead-main { min-width:0; }
+.nv-ftitle { font-family:var(--head); font-size:24px; font-weight:bold; letter-spacing:1px; line-height:1.05; }
+.nv-fhead-side { text-align:right; flex-shrink:0; }
+.nv-statusbadge { display:inline-block; margin-top:5px; font-family:var(--head); font-size:11px; letter-spacing:1px; padding:2px 9px; border:1px solid currentColor; }
+.nv-idblock { display:flex; gap:16px; align-items:flex-start; margin:14px 0; }
+.nv-fphoto { width:120px; height:150px; object-fit:cover; flex-shrink:0; border:1px solid rgba(0,0,0,.4); }
+.nv-idblock .npc-v-noimg { width:120px; height:150px; flex-shrink:0; }
+.nv-metatbl { flex:1; border-collapse:collapse; font-family:var(--mono); font-size:12px; }
+.nv-metatbl td { padding:4px 8px; border:1px solid rgba(127,127,127,.4); vertical-align:top; }
+.nv-metatbl td:first-child { width:42%; font-family:var(--head); font-size:10px; letter-spacing:1px; text-transform:uppercase; opacity:.7; }
+.nv-intro { font-family:var(--mono); font-size:12px; line-height:1.5; font-style:italic; opacity:.85; margin-bottom:6px; }
+.nv-watermark { position:absolute; top:46%; left:50%; transform:translate(-50%,-50%) rotate(-28deg); font-family:var(--head); font-size:84px; letter-spacing:8px; opacity:.05; pointer-events:none; white-space:nowrap; font-weight:bold; }
+
+/* netwatch file specifics */
+.npc-view-netwatch .nv-fphoto { filter:grayscale(1) contrast(1.15); border-color:#345; }
+.npc-view-netwatch .nv-statusbadge { color:#ff9a8a; }
+
+/* corpo file specifics */
+.nv-corphead-txt { flex:1; }
+.npc-view-corpo .nv-corphead { display:flex; align-items:center; gap:10px; }
+
+/* admin file specifics */
+.npc-view-admin .nv-formhead { display:flex; align-items:center; gap:12px; }
+.npc-view-admin .nv-formhead-txt { flex:1; font-size:11px; line-height:1.3; }
+.npc-view-admin .nv-formhead-txt b { font-size:13px; letter-spacing:1px; }
+.nv-seal { width:46px; height:46px; border:2px solid #222; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:var(--head); font-size:13px; letter-spacing:1px; flex-shrink:0; }
+.nv-sigrow { display:flex; gap:14px; margin-top:18px; }
+.nv-sig { flex:1; border-top:1px solid #222; padding-top:4px; font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:1px; opacity:.7; }
+
+/* admin file: fixed-aspect photo (no stretch) + 2-col fields */
+.nv-adminid { display:flex; gap:12px; align-items:flex-start; margin-top:8px; }
+.nv-adminfields { flex:1; display:grid; grid-template-columns:1fr 1fr; gap:8px; align-content:start; }
+.nv-adminphoto { width:120px; height:150px; flex:0 0 auto; border:1px solid #999; background:#fff; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+.nv-adminphoto img { width:100%; height:100%; object-fit:cover; }
+.nv-adminphoto-ph { font-family:var(--head); font-size:10px; letter-spacing:1px; color:#999; }
+
+/* ════════════════════════════════════════
+   MULTI-PAGE (paged files + CP2020 sheet)
+   ════════════════════════════════════════ */
+#npc-paper.npc-paper-multi { background:transparent !important; box-shadow:none !important; overflow:visible !important; display:flex; flex-direction:column; align-items:center; gap:24px; width:794px; }
+.nv-page { width:794px; height:1122px; box-sizing:border-box; padding:0 !important; overflow:hidden; position:relative; display:flex; flex-direction:column; box-shadow:0 6px 28px rgba(0,0,0,.45); }
+.nv-page-head { flex:0 0 auto; padding:8px 30px; font-family:var(--head); font-size:10px; letter-spacing:2px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.nv-page-body { flex:1 1 auto; overflow:hidden; padding:16px 30px; }
+.nv-page-foot { flex:0 0 auto; padding:6px 30px; font-family:var(--mono); font-size:9px; opacity:.7; text-align:center; border-top:1px solid currentColor; }
+.nv-cont { opacity:.6; font-weight:normal; letter-spacing:1px; }
+.nv-filler { text-align:justify; font-size:11px; line-height:1.55; opacity:.92; }
+
+/* per-theme running header/footer accents */
+.npc-view-netwatch .nv-page-head { background:repeating-linear-gradient(45deg,#c0392b 0 12px,#7a1f17 12px 24px); color:#fff; justify-content:center; text-align:center; }
+.npc-view-corpo .nv-page-head { border-bottom:3px solid #1a2a6c; color:#1a2a6c; }
+.npc-view-admin .nv-page-head { border-bottom:2px solid #222; color:#222; }
+
+/* ════════════════════════════════════════
+   CP2020 classic sheet theme (R.Talsorian style)
+   ════════════════════════════════════════ */
+.npc-view-cp2020 { background:#fff; color:#000; border:1px solid #000; font-family:var(--head); }
+.npc-view-cp2020 .nv-page-head { background:#111; color:#fff; justify-content:flex-start; gap:14px; align-items:baseline; }
+.npc-view-cp2020 .cp-htitle { font-family:'Antonio',var(--head); font-weight:700; font-size:17px; letter-spacing:1px; }
+.npc-view-cp2020 .cp-hsub { font-size:10px; letter-spacing:3px; opacity:.85; }
+.npc-view-cp2020 .nv-page-foot { color:#000; border-top-color:#000; }
+.cp-bar, .npc-view-cp2020 .nv-sec { background:#111; color:#fff; font-family:'Antonio',var(--head); font-weight:700; font-size:13px; letter-spacing:1px; padding:3px 8px; text-transform:uppercase; }
+.npc-view-cp2020 .nv-sec { display:block; margin:11px 0 5px; }
+.cp-bar { display:inline-block; }
+.cp-bar-full { display:block; margin:11px 0 5px; }
+.cp-bar-line { display:flex; align-items:stretch; gap:8px; margin-bottom:6px; }
+.cp-bar-line .cp-bar { flex:0 0 auto; display:flex; align-items:center; }
+.cp-fieldval { font-family:'Antonio',var(--head); font-weight:700; font-size:15px; border-bottom:2px solid #111; flex:1; padding:0 4px 2px; display:flex; align-items:flex-end; }
+.cp-idrow { display:flex; gap:12px; align-items:flex-start; }
+.cp-idcol { flex:1; min-width:0; }
+.cp-photobox { width:120px; height:150px; border:2px solid #111; flex:0 0 auto; display:flex; align-items:center; justify-content:center; overflow:hidden; background:#fff; }
+.cp-photo { width:100%; height:100%; object-fit:cover; }
+.cp-photobox .npc-v-noimg { width:100%; height:100%; }
+.cp-stats { display:flex; flex-wrap:wrap; gap:6px 16px; font-family:'Antonio',var(--head); font-weight:700; font-size:15px; margin:5px 0; }
+.cp-stat b { font-weight:700; }
+.cp-armortbl { width:100%; border-collapse:collapse; margin:4px 0; font-family:var(--mono); font-size:11px; }
+.cp-armortbl td { border:1px solid #111; text-align:center; padding:3px 2px; }
+.cp-armortbl-h { background:#111; color:#fff; font-family:'Antonio',var(--head); font-weight:700; text-align:left; padding-left:6px; white-space:nowrap; }
+.cp-armortbl-loc { background:#eee; font-family:'Antonio',var(--head); font-weight:700; font-size:9px; }
+.cp-saverow { display:flex; gap:10px; margin:7px 0; }
+.cp-savebox { border:2px solid #111; padding:4px 12px; font-family:'Antonio',var(--head); font-weight:700; display:flex; gap:7px; align-items:center; }
+.cp-savebox span { font-size:11px; letter-spacing:1px; } .cp-savebox b { font-size:17px; }
+.cp-dmg { display:flex; gap:4px; flex-wrap:wrap; }
+.cp-dmg-col { border:1px solid #111; text-align:center; flex:1 1 0; min-width:62px; }
+.cp-dmg-label { background:#111; color:#fff; font-family:'Antonio',var(--head); font-weight:700; font-size:8px; padding:2px; letter-spacing:.5px; }
+.cp-dmg-boxes { font-size:13px; letter-spacing:2px; padding:3px 0; }
+.cp-dmg-stun { font-family:var(--mono); font-size:8px; border-top:1px solid #111; padding:1px; }
+.cp-skill { display:flex; align-items:baseline; font-family:var(--mono); font-size:12px; padding:1px 0; gap:5px; }
+.cp-skill-name { white-space:nowrap; }
+.cp-skill-name i { color:#777; font-size:10px; font-style:normal; }
+.cp-leader { flex:1; border-bottom:1px dotted #999; align-self:center; height:0; }
+.cp-skill-val { font-family:'Antonio',var(--head); font-weight:700; white-space:nowrap; }
+.npc-view-cp2020 .nv-line { font-family:var(--mono); font-size:12px; padding:2px 0; border-bottom:1px solid #eee; display:flex; gap:8px; }
+.npc-view-cp2020 .nv-notes { font-family:var(--mono); font-size:12px; line-height:1.5; white-space:pre-wrap; }
+.npc-view-cp2020 .nv-empty { font-family:var(--mono); font-size:11px; font-style:italic; opacity:.5; }

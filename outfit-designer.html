@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rache Bartmoss' Datafort — Outfit Designer</title>
+<link rel="icon" href="img/favicon.ico">
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/outfit-designer.css">
+</head>
+<body>
+<div id="topnav" style="justify-content:space-between;">
+  <h1 class="title" style="margin:0;padding:0;font-size:15px;letter-spacing:4px;">OUTFIT DESIGNER</h1>
+  <div style="display:flex;gap:6px;align-items:center;">
+    <button class="btn btn-sm" onclick="odNew()">+ New Outfit</button>
+    <button class="btn btn-sm" onclick="document.getElementById('od-import-input').click()">Import JSON</button>
+    <input type="file" id="od-import-input" accept=".json" style="display:none" onchange="odImportFile(event)">
+  </div>
+</div>
+
+<div id="od-app">
+  <!-- SIDEBAR -->
+  <div id="od-sidebar">
+    <div class="od-sidebar-search">
+      <input id="od-search" placeholder="search outfits..." oninput="odRenderSidebar()" autocomplete="off">
+    </div>
+    <div id="od-sidebar-list"></div>
+  </div>
+
+  <!-- MAIN -->
+  <div id="od-main">
+    <div class="od-welcome">
+      <div class="od-welcome-icon">⬡</div>
+      <div class="od-welcome-title">OUTFIT DESIGNER</div>
+      <div class="od-welcome-sub">Create a new outfit or import a JSON file.</div>
+    </div>
+  </div>
+</div>
+
+<script src="js/outfit-designer.js"></script>
+</body>
+</html>

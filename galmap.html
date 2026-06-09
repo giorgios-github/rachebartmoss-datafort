@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GALMAP</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Antonio:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap');
+  @font-face {
+    font-family: "Eurostile";
+    src:
+      url("EurostileExtendedBlack.ttf") format("truetype");
+  }
+ 
+  :root {
+    --bg:        #ffffff;
+    --bg2:       #ffffff;
+    --bg3:       #ffffff;
+    --cyan:      #111;
+    --cyan-dim:  #888;
+    --amber:     #b8860b;
+    --red:       #c0392b;
+    --green:     #1a7a2e;
+    --purple:    #6a2c91;
+    --text:      #111;
+    --text-dim:  #666;
+    --border:    #111;
+  }
+ 
+  * { margin:0; padding:0; box-sizing:border-box; }
+ 
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+ 
+  #header {
+    background: #111;
+    border-bottom: 3px solid #111;
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-shrink: 0;
+  }
+  #header h1 {
+    font-family: "Eurostile";
+    font-size: 18px;
+    font-weight: 500;
+    color: #fff;
+    letter-spacing: 4px;
+  }
+  #header .sub { color: #888; font-size: 10px; letter-spacing: 2px; }
+  #header .spacer { flex: 1; }
+  #header .stat { color: #888; font-size: 10px; }
+  #header .stat span { color: #fff; }
+ 
+  #controls {
+    background: var(--bg2);
+    border-bottom: 2px solid #111;
+    padding: 6px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  .ctrl-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border-right: 1px solid #ccc;
+    padding-right: 12px;
+  }
+  .ctrl-group:last-child { border-right: none; }
+  .ctrl-label { color: var(--text-dim); font-size: 10px; letter-spacing: 1px; white-space: nowrap; }
+ 
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 80px; height: 2px;
+    background: #ccc; outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 10px; height: 10px;
+    background: #111; border-radius: 0;
+    cursor: pointer;
+  }
+  input[type=number] {
+    background: #fff; border: 2px solid #111;
+    color: #111; font-family: 'Space Mono', monospace;
+    font-size: 11px; padding: 2px 6px; width: 60px; outline: none;
+  }
+  input[type=number]:focus { border-color: #555; }
+  select {
+    background: #fff; border: 2px solid #111;
+    color: var(--text); font-family: 'Space Mono', monospace;
+    font-size: 11px; padding: 3px 6px; outline: none; cursor: pointer;
+  }
+  select:focus { border-color: #555; }
+  button {
+    background: #fff; border: 2px solid #111;
+    color: #111; font-family: 'Space Mono', monospace;
+    font-size: 11px; padding: 3px 10px; cursor: pointer;
+    letter-spacing: 1px; transition: all 0.15s;
+  }
+  button:hover { background: #111; color: #fff; }
+  button.danger { border-color: var(--red); color: var(--red); }
+  button.danger:hover { background: var(--red); color: #fff; }
+ 
+  #main { display: flex; flex: 1; overflow: hidden; }
+ 
+  #canvas-wrap {
+    flex: 1; position: relative; overflow: hidden; background: #fff;
+  }
+  canvas { display: block; cursor: crosshair; }
+  #canvas-wrap.panning { cursor: grabbing; }
+  #canvas-wrap::after {
+    content: ''; position: absolute; inset: 0;
+    background: repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.015) 2px,rgba(0,0,0,0.015) 4px);
+    pointer-events: none; z-index: 10;
+  }
+ 
+  #sidebar {
+    width: 280px; min-width: 280px;
+    background: var(--bg2); border-left: 2px solid #111;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  #sidebar-tabs { display: flex; border-bottom: 2px solid #111; flex-shrink: 0; }
+  .stab {
+    flex: 1; padding: 7px 4px; text-align: center;
+    color: var(--text-dim); font-family: 'Eurostile'; font-size: 11px; letter-spacing: 2px;
+    cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.1s;
+    text-transform: uppercase;
+  }
+  .stab.active { color: #111; border-bottom-color: #111; background: rgba(0,0,0,0.04); font-weight: 500; }
+  .stab:hover:not(.active) { color: var(--text); }
+ 
+  .spanel { display: none; flex: 1; overflow-y: auto; padding: 12px; }
+  .spanel.active { display: block; }
+ 
+  .detail-header { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 2px solid #111; }
+  .detail-name {
+    font-family: 'Eurostile'; font-size: 15px;
+    color: #111; letter-spacing: 2px; margin-bottom: 4px; font-weight: 500;
+  }
+  .detail-type { font-size: 10px; color: var(--text-dim); letter-spacing: 2px; text-transform: uppercase; }
+  .detail-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 11px; }
+  .detail-key { color: var(--text-dim); flex-shrink: 0; }
+  .detail-val { color: var(--text); text-align: right; max-width: 160px; word-break: break-word; }
+  .detail-val.cyan   { color: #111; font-weight: bold; }
+  .detail-val.amber  { color: var(--amber); }
+  .detail-val.red    { color: var(--red); }
+  .detail-val.green  { color: var(--green); }
+  .detail-val.purple { color: var(--purple); }
+  .detail-section {
+    margin-top: 10px; margin-bottom: 4px; font-family: 'Eurostile'; font-size: 11px;
+    letter-spacing: 2px; color: #111; text-transform: uppercase;
+    border-bottom: 2px solid #111; padding-bottom: 3px;
+  }
+  .detail-desc { font-size: 11px; color: var(--text-dim); line-height: 1.6; margin-top: 6px; }
+ 
+  .sub-item {
+    font-size: 10px; color: var(--text-dim); padding: 3px 0;
+    border-bottom: 0.5px solid #ddd;
+    display: flex; justify-content: space-between;
+  }
+  .sub-item .sub-name { color: var(--text); }
+ 
+  .corpo-tag {
+    display: inline-block; padding: 2px 6px; border: 1.5px solid;
+    font-size: 10px; margin: 2px 2px 0 0; letter-spacing: 1px;
+  }
+  .corpo-tag.corpo    { border-color: var(--purple); color: var(--purple); }
+  .corpo-tag.empire   { border-color: var(--amber); color: var(--amber); }
+  .corpo-tag.alliance { border-color: #2255aa; color: #2255aa; }
+ 
+  .empty-state { text-align: center; color: var(--text-dim); font-size: 11px; padding: 40px 16px; line-height: 2; }
+  .empty-state .big { font-family: 'Eurostile'; font-size: 28px; color: #ccc; display: block; margin-bottom: 12px; letter-spacing: 4px; }
+ 
+  .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 11px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; border: 1.5px solid #111; }
+  .legend-shape { width: 12px; height: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+ 
+  #minimap {
+    position: absolute; bottom: 12px; right: 12px;
+    width: 120px; height: 80px;
+    background: rgba(245,243,237,0.9); border: 2px solid #111; z-index: 20;
+  }
+  #minimap canvas { display: block; }
+  #coords { position: absolute; bottom: 12px; left: 12px; color: var(--text-dim); font-size: 10px; z-index: 20; letter-spacing: 1px; }
+ 
+  #tooltip {
+    position: absolute; background: rgba(255,255,255,0.95);
+    border: 2px solid #111; padding: 6px 10px;
+    font-size: 11px; color: var(--text); pointer-events: none;
+    z-index: 30; display: none; max-width: 200px; line-height: 1.6;
+  }
+  #tooltip .tt-name { font-family: 'Eurostile'; color: #111; font-size: 13px; margin-bottom: 2px; letter-spacing: 1px; }
+  #tooltip .tt-type { color: var(--text-dim); font-size: 10px; letter-spacing: 1px; }
+ 
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg2); }
+  ::-webkit-scrollbar-thumb { background: #ccc; }
+ 
+  .edit-field { margin-bottom: 8px; }
+  .edit-label { font-size: 10px; color: var(--text-dim); letter-spacing: 1px; margin-bottom: 3px; }
+  .edit-field input, .edit-field select, .edit-field textarea {
+    width: 100%; background: #fff; border: 2px solid #111;
+    color: var(--text); font-family: 'Space Mono', monospace;
+    font-size: 11px; padding: 4px 6px; outline: none; resize: vertical;
+  }
+  .edit-field input:focus, .edit-field select:focus, .edit-field textarea:focus { border-color: #555; }
+</style>
+<!-- <link rel="stylesheet" href="css/themes.css"> -->
+</head>
+<body>
+
+<div id="header">
+  <h1>DATATERM DISPLAY SYSTEM</h1>
+  <span class="sub">Topic: Galactic Flashmap</span>
+  <div class="spacer"></div>
+  <div class="stat">NODES <span id="stat-nodes">0</span></div>
+  <div class="stat">ROUTES <span id="stat-edges">0</span></div>
+  <div class="stat">SEED <span id="stat-seed">—</span></div>
+</div>
+
+<div id="controls">
+  <div class="ctrl-group">
+    <span class="ctrl-label">SEED</span>
+    <input type="number" id="seed-input" value="2027" min="0" max="99999">
+    <button onclick="generate()">GENERATE</button>
+    <button onclick="randomSeed()">RANDOM</button>
+  </div>
+  <div class="ctrl-group">
+    <span class="ctrl-label">NODES</span>
+    <input type="range" id="node-count" min="8" max="50" value="10">
+    <span id="node-count-val" style="color:var(--cyan);font-size:11px;">10</span>
+  </div>
+  <div class="ctrl-group">
+    <span class="ctrl-label">DENSITY</span>
+    <input type="range" id="edge-density" min="1" max="5" value="3">
+    <span id="edge-density-val" style="color:var(--cyan);font-size:11px;">3</span>
+  </div>
+  <div class="ctrl-group">
+    <span class="ctrl-label">SPREAD</span>
+    <input type="range" id="spread" min="1" max="5" value="5">
+    <span id="spread-val" style="color:var(--cyan);font-size:11px;">5</span>
+  </div>
+  <div class="ctrl-group">
+    <span class="ctrl-label">FILTER</span>
+    <select id="faction-filter">
+      <option value="all">ALL FACTIONS</option>
+      <option value="empire">EMPIRE</option>
+      <option value="alliance">ALLIANCE</option>
+      <option value="fezzan">FEZZAN</option>
+      <option value="contested">CONTESTED</option>
+      <option value="unknown">UNKNOWN</option>
+    </select>
+  </div>
+  <div class="ctrl-group">
+    <button onclick="exportJSON()">EXPORT JSON</button>
+    <button onclick="resetView()">RESET VIEW</button>
+  </div>
+</div>
+
+<div id="main">
+  <div id="canvas-wrap">
+    <canvas id="map"></canvas>
+    <div id="minimap"><canvas id="mini" width="120" height="80"></canvas></div>
+    <div id="coords">X: — | Y: —</div>
+    <div id="tooltip"><div class="tt-name" id="tt-name"></div><div class="tt-type" id="tt-type"></div><div id="tt-body"></div></div>
+  </div>
+
+  <div id="sidebar">
+    <div id="sidebar-tabs">
+      <div class="stab active" data-panel="detail">DETAIL</div>
+      <div class="stab" data-panel="legend">LEGEND</div>
+      <div class="stab" data-panel="edit">EDIT</div>
+    </div>
+
+    <div id="panel-detail" class="spanel active">
+      <div class="empty-state"><span class="big">✦</span>click a node<br>to inspect</div>
+    </div>
+
+    <div id="panel-legend" class="spanel">
+      <div class="detail-section">FACTIONS</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ffaa00;box-shadow:0 0 6px #ffaa00"></div>Empire Galactique</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#4488ff;box-shadow:0 0 6px #4488ff"></div>Alliance des Planètes Libres</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#00f5ff;box-shadow:0 0 6px #00f5ff"></div>Fezzan (neutre)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ff3333;box-shadow:0 0 6px #ff3333"></div>Zone contestée</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#444"></div>Espace inexploré</div>
+      <div class="detail-section" style="margin-top:14px">NODE TYPES</div>
+      <div class="legend-item"><div class="legend-shape">■</div>Capital / Planète-Ville</div>
+      <div class="legend-item"><div class="legend-shape" style="color:#567070">●</div>Système majeur</div>
+      <div class="legend-item"><div class="legend-shape" style="color:#334444;font-size:9px">●</div>Système mineur</div>
+      <div class="legend-item"><div class="legend-shape" style="color:#567070">◆</div>Station orbitale</div>
+      <div class="legend-item"><div class="legend-shape" style="color:#567070;font-size:9px">▲</div>Forteresse / Iserlohn</div>
+      <div class="legend-item"><div class="legend-shape" style="color:#334444;letter-spacing:-2px;font-size:9px">···</div>Ceinture d'astéroïdes</div>
+      <div class="detail-section" style="margin-top:14px">ROUTES</div>
+      <div class="legend-item"><div style="width:24px;height:2px;background:#00f5ff;flex-shrink:0"></div>Route commerciale majeure</div>
+      <div class="legend-item"><div style="width:24px;height:1px;background:#567070;flex-shrink:0"></div>Couloir de transit</div>
+      <div class="legend-item"><div style="width:24px;height:1px;border-top:1px dashed #333;flex-shrink:0"></div>Route spéculative</div>
+      <div class="detail-section" style="margin-top:14px">CONTRÔLES</div>
+      <div style="font-size:11px;color:var(--text-dim);line-height:1.8">
+        Scroll — zoom<br>Drag — pan<br>Click — inspect node<br>Double-click — edit node
+      </div>
+    </div>
+
+    <div id="panel-edit" class="spanel">
+      <div class="empty-state"><span class="big">⬡</span>double-click a node<br>to edit</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── LORE DATA ────────────────────────────────────────────────────────────────
+
+const SYSTEM_NAMES = [
+  // LoGH canon
+  "Fezzan","Odin","Heinessen","Iserlohn","Geiersberg","Amlitzer","Westerland",
+  "Rantemario","Vermillion","Shanpuul","Gandharva","Cahokia","Baalat","Tiamat",
+  "Shiva","Uruvasi","Kapche-Lanka","Marr-Adetta","Phezzan-VII","Laconia",
+  // CP2020-flavored
+  "Night Drift","Neon Reach","Blackgate","Ironhull","Cygnus Deep",
+  "Ashfall","Ember Cross","Voidholm","Crux Station","Halo Point",
+  "Requiem","Nachtfall","Perihelion","Cascade","Duskwall","Aurelius",
+  "Gethsemane","Noctis","Thermidor","Miramar","Kronstad","Styx Junction",
+  "Kali's Reach","Port Lazarus","Arasaka Prime","New Pacifica Drift",
+  "Militech Anchorage","Chrome Corridor","Deepshine","Ouroboros Gate",
+  "Harlan's World","Kovacs Station","Metatron","Void Assembly","Blacksun",
+  "Corpus Delicti","Wyvern's Eye","Sable Junction","Threshold",
+];
+
+const CORPO_NAMES = [
+  "Arasaka","Militech","Biotechnica","Petrochem","SovOil","Orbital Air",
+  "Zhirafa","EBM","Lazarus Group","IEC","Net 54","Microtech",
+  "Kendachi","Trauma Team Int.","Rocklin Augmentics","Raven Microcybernetics",
+  "CHOOH2 Consortium","Zetatech","Zeiss Orbital","Hilliard-Chu Defense",
+  "Pacific Data Systems","InterSpace Dynamics","Aegis Galactic","Nakamura Heavy",
+  "Tycho Mining Corp","Void Logistics","Blackwall Shipping","Fezzan Exchange",
+];
+
+// Grandes villes / points d'intérêt par type de nœud
+const CITY_NAMES_PLANET = [
+  ["Night City Orbital District","Port Lazaro","The Sprawl"],
+  ["Neue Berliner Hafen","Midtown Prime","Chrometown"],
+  ["Akasaka Megalopolis","New Chiba","The Stack"],
+  ["Port Heinessen","Liberty Plaza","Understate Ring"],
+  ["Odinheim","Imperial Quarter","The Citadel"],
+  ["Fezzan City","Neutral Zone","The Exchange"],
+  ["Kovacs Landing","Harbortown","Neon Barrio"],
+  ["Cascadia Hub","The Corridor","Sprawl East"],
+];
+
+const ORBITAL_STATIONS = [
+  "Ring Station Alpha","Dry Dock 7","Torus Lazarus","High Port Fezzan",
+  "Arasaka Orbital HQ","ISS Kovacs","Militech Defense Platform","Lagrange 4 Hub",
+  "The Needle","Drift Station Omega","Echo Ring","Crown Station",
+];
+
+const ASTEROID_NAMES = [
+  "Belt AC-4419","Tycho Cluster","The Fragments","Dead Man's Belt",
+  "Goldreich Field","Cinder Belt","Shatter Ring","Gravel Sea",
+  "Obsidian Belt","Kronos Fragments","The Reef","Junk Drift",
+];
+
+const FORTRESS_NAMES = [
+  "Iserlohn Fortress","Gate of Conquest","Geiersberg Fortress",
+  "Blackwall Station","Militech Citadel Alpha","Cerberus Platform",
+  "The Bulwark","Station Leviathan","Fort Lazarus","Aegis Prime",
+];
+
+// Descriptions par faction + type
+const DESC = {
+  empire: {
+    planet_city: [
+      "Mégalopole impériale de {pop} habitants — les néons du quartier nobilaire tranchent avec les souterrains où s'entassent les non-citoyens. Arasaka y gère la sécurité sous contrat depuis {year}.",
+      "Capitale régionale tenue par la Haute Maison {noble}. Les chantiers navals souterrains fabriquent des destroyers en flux continu. Militech a tenté d'y acheter un accès — refusé.",
+      "Monde-usine à {pop} millions. Trois districts corpo délimitent la ville comme des fiefs. La population ouvrière est syndiquée sous l'ETU galactique — illégalement.",
+      "Centre administratif de l'Empire périphérique. La bureaucratie y est un sport de contact. Petrochem finance le parti loyal local depuis une décennie.",
+    ],
+    major: [
+      "Système stratégique avec garnison lourde. Les agents d'Arasaka y ont des bureaux derrière les consulats. Le taux de surveillance est classé noir.",
+      "Fief militaire — base de flotte régionale. Lazarus Group y recrute des mercenaires pour 'missions de maintien de l'ordre' dans les systèmes frontaliers.",
+      "Monde agricole dont la production est monopolisée par CHOOH2 Consortium. Trois révoltes paysannes réprimées en dix ans. La quatrième se prépare.",
+    ],
+    minor: [
+      "Colonie minière exploitée par Tycho Corp sous licence impériale. Population captive. Rotation de main-d'œuvre tous les 18 mois.",
+      "Avant-poste de surveillance sur la frontière. Une station radar, une garnison de 200 soldats, et un relais de données cryptées vers Odin.",
+      "Monde de transit saturé. La corruption douanière est institutionnalisée — chaque passage coûte 5% de la cargaison aux agents locaux.",
+    ],
+  },
+  alliance: {
+    planet_city: [
+      "Bastion démocratique en théorie. En pratique Pacific Data Systems contrôle les médias, Zetatech contrôle l'éducation, et Net 54 contrôle le reste.",
+      "Hub d'immigration — {pop} résidents de 140 systèmes différents. Terrain fertile pour les fixers. Trois factions se disputent le marché noir de cyberware.",
+      "Monde universitaire. Yang Wenli y a étudié. Les archives militaires sont partiellement accessibles moyennant des crédits — ou un netrunner compétent.",
+      "Port franc qui accueille les réfugiés des deux camps. Raven Microcybernetics y a ouvert une clinique. Pas de questions posées.",
+    ],
+    major: [
+      "Centre logistique de l'Alliance. Orbital Air y fait transiter 40% du fret militaire. Les syndicats ont la main sur les docks.",
+      "Ancienne colonie terrienne. Nostalgie républicaine forte, terrain des mouvements radicaux. Militech y a planté une 'présence commerciale' qui ressemble à une base.",
+      "Système de production industrielle reconverti en dépôt d'armement. Biotechnica y teste des améliorations cybers sur des volontaires en manque de crédits.",
+    ],
+    minor: [
+      "Relais de communication civilian. Zeiss Orbital y opère une antenne de surveillance déguisée en station météo.",
+      "Colonie agricole indépendante qui résiste à l'intégration corporatiste. CHOOH2 Consortium fait pression depuis trois ans.",
+      "Système minier à bout de souffle. La veine principale est épuisée. La population cherche une sortie — et certains ont trouvé Fezzan.",
+    ],
+  },
+  fezzan: {
+    planet_city: [
+      "Nœud commercial neutre de {pop} millions — tout se négocie ici. Informations, loyautés, identités. Arasaka et Militech y ont des bureaux à 200 mètres l'un de l'autre.",
+      "Zone franche absolue. Pas d'extradition. Beaucoup d'argent, beaucoup de sang sous les néons. Fezzan Exchange régule (théoriquement) les transactions.",
+      "Capitale officieuse des corporations intergalactiques. {ncorpo} sièges sociaux y sont enregistrés. Le Landesherr est un ancien PDG d'IEC.",
+      "Marché noir de données militaires le plus important du secteur. Les netrunners s'y retrouvent dans les sous-niveaux du district Omega.",
+    ],
+    major: [
+      "Station commerciale neutre à mi-chemin entre les lignes. Les deux camps y envoient des diplomates non officiels. Blackwall Shipping gère la logistique.",
+      "Centre bancaire interstellaire. Fezzan Exchange y centralise les flux de devises des deux guerres. Qui contrôle ce nœud contrôle le crédit de secteur.",
+      "Carrefour d'informations — les médias de toutes les factions y ont des bureaux. La vérité y coûte cher. Le mensonge aussi.",
+    ],
+    minor: [
+      "Petit nœud de transit. Une station-service pour vaisseaux, un bar, et des rumeurs sur ce qui passe en contrebande.",
+      "Relais de données cryptées. Personne ne demande d'où viennent les paquets ni où ils vont.",
+      "Point de ravitaillement discret. Void Logistics y stocke des cargaisons non déclarées sous protection fezzanaise.",
+    ],
+  },
+  contested: {
+    planet_city: [
+      "Mégalopole sous triple administration provisoire. L'Empire, l'Alliance, et Arasaka se disputent les infrastructures. La population choisit son camp selon le quartier.",
+      "Ville-frontière de {pop} millions. La ligne de front passe dans les sous-niveaux. Les corps jonchent les rues du niveau 3.",
+      "Zone grise — officiellement neutre, effectivement occupée par Lazarus Group qui fait payer les deux camps pour 'la sécurité'.",
+    ],
+    major: [
+      "Zone de friction active. La ligne de front passe ici depuis six ans. InterSpace Dynamics vend des équipements militaires aux deux camps depuis le même bureau.",
+      "Système sous administration provisoire qui dure depuis 12 ans. Chaque faction a ses zones, ses checkpoints, ses règles. Les civils naviguent entre les trois.",
+      "Terrain de jeu des mercenaires. Lazarus Group, Militech Security Division et des bandes armées locales se partagent le territoire.",
+    ],
+    minor: [
+      "Débris d'une bataille récente en orbite. Les pillards font des affaires. Trauma Team International y opère mais ne patrouille pas en dessous du niveau 5.",
+      "Avant-poste revendiqué simultanément par l'Empire et l'Alliance. Les deux garnisons se regardent en chiens de faïence depuis 8 mois.",
+      "Zone d'exclusion non officielle. Personne ne revendique officiellement — mais trois factions y ont des actifs cachés.",
+    ],
+  },
+  unknown: {
+    planet_city: [
+      "Données classifiées. Accès restreint niveau noir. Dernière transmission reçue il y a {year} ans. Contenu : non divulgué.",
+      "Monde disparu des registres après l'incident de {year}. Certains disent qu'Arasaka y gère une installation de recherche noire.",
+    ],
+    major: [
+      "Aucune donnée récente. Dernière sonde : 40 ans. Ce qu'elle a trouvé n'a jamais été publié.",
+      "Zone d'exclusion. Personne n'explique pourquoi. Les pilotes qui s'y aventurent reviennent — parfois.",
+      "Signal intermittent détecté. Signature énergétique non identifiée. Aucune réponse aux hails depuis 6 mois.",
+    ],
+    minor: [
+      "Espace mort. Pas de réponse aux hails. Quelque chose s'y est passé.",
+      "Système non cartographié. Des rumeurs persistent sur une installation cachée de recherche corpo.",
+      "Coordonnées sans nom dans les registres. La donnée existe — le contexte a été effacé.",
+    ],
+  },
+};
+
+const STATION_DESC = [
+  "Station orbitale {corp} — amarrage, ravitaillement, et probablement de la surveillance. Capacité : {n} vaisseaux simultanés.",
+  "Dry dock de réparation militaire. Les deux camps y envoient leurs vaisseaux endommagés sous couverture commerciale.",
+  "Hub de transit orbital. {pop} résidents permanents, {n}x plus de passage. Trauma Team y a un pad d'urgence.",
+  "Station de recherche Biotechnica. Accès restreint. Le personnel ne communique qu'en interne.",
+  "Point de ravitaillement de Orbital Air. Routinier en surface — mais le sous-niveau 4 est loué par Arasaka.",
+  "Ancienne station militaire reconvertie. Les nouvelles fonctions sont commerciales. Les anciens systèmes d'armement sont toujours en place.",
+];
+
+const FORTRESS_DESC = [
+  "Forteresse-système — l'accès à ce couloir de navigation est impossible sans passer sous ses canons. Construite par l'Empire, convoitée par tout le monde.",
+  "Station de défense planétaire avec armement lourd intégré. Militech a conçu les systèmes d'armes. Qui l'opère est une autre question.",
+  "Forteresse-Iserlohn du secteur — point d'étranglement entre les territoires. Changer de mains une fois tous les dix ans.",
+  "Citadelle corporatiste d'Arasaka. Officiellement une installation de sécurité privée. Effectivement une position militaire stratégique.",
+  "Bastion de l'Alliance reconverti après la dernière guerre. Les systèmes de défense tournent encore. Le personnel est réduit mais armé.",
+];
+
+const ASTEROID_DESC = [
+  "Ceinture minière active — Tycho Mining Corp y opère 400 unités d'extraction automatisées. La main-d'œuvre humaine est réservée aux incidents.",
+  "Fragments d'une planète détruite dans un conflit datant de 80 ans. Personne n'a jamais officiellement admis ce qui s'est passé.",
+  "Junkyard galactique — épaves de vaisseaux, équipements jetés, technologie oubliée. Les pillards y font de bonnes affaires.",
+  "Réseau d'astéroïdes utilisé comme cover par des contrebandiers. Void Logistics y a des dépôts non déclarés.",
+  "Zone de test de munitions — accès interdit. Les détonations périodiques visibles à distance sont 'des phénomènes naturels' selon les communiqués officiels.",
+  "Ceinture de ressources rares. Quatre corporations se disputent les droits d'extraction devant le tribunal fezzanais depuis 15 ans.",
+];
+
+const NOBLE_NAMES = ["Lohengramm","Reuentahl","Mittermeyer","Littenheim","Braunschweig","Kesler","Steinmetz"];
+const ECONOMIES = ["militaire","commercial","industriel","agricole","informationnel","extraction","R&D","transit"];
+const THREAT_LEVELS = ["vert","jaune","orange","rouge","noir"];
+const FACTIONS = ["empire","alliance","fezzan","contested","unknown"];
+const FACTION_COLORS = {
+  empire:    "#ffaa00",
+  alliance:  "#4488ff",
+  fezzan:    "#00f5ff",
+  contested: "#ff3333",
+  unknown:   "#444444",
+};
+const FACTION_LABELS = {
+  empire:    "Empire Galactique",
+  alliance:  "Alliance des Planètes Libres",
+  fezzan:    "Fezzan",
+  contested: "Zone contestée",
+  unknown:   "Espace inexploré",
+};
+
+// Node types avec poids de génération
+const NODE_TYPE_WEIGHTS = [
+  { type: "planet_city", weight: 8 },
+  { type: "major",       weight: 20 },
+  { type: "minor",       weight: 30 },
+  { type: "station",     weight: 15 },
+  { type: "fortress",    weight: 5 },
+  { type: "asteroid",    weight: 12 },
+];
+const NODE_TYPE_LABELS = {
+  planet_city: "PLANÈTE-VILLE",
+  major:       "SYSTÈME MAJEUR",
+  minor:       "SYSTÈME MINEUR",
+  station:     "STATION ORBITALE",
+  fortress:    "FORTERESSE",
+  asteroid:    "CEINTURE D'ASTÉROÏDES",
+};
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+
+let nodes = [], edges = [];
+let selectedNode = null;
+let editingNode = null;
+let hoveredNode = null;
+let cam = { x: 0, y: 0, zoom: 1 };
+let isPanning = false, panStart = {x:0,y:0}, camStart = {x:0,y:0};
+
+// ─── SEEDED RNG ───────────────────────────────────────────────────────────────
+
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+let rng = mulberry32(2020);
+function pick(arr)      { return arr[Math.floor(rng() * arr.length)]; }
+function rngInt(a, b)   { return Math.floor(rng() * (b - a + 1)) + a; }
+function rngFloat(a, b) { return rng() * (b - a) + a; }
+
+function weightedPick(weighted) {
+  const total = weighted.reduce((s, w) => s + w.weight, 0);
+  let r = rng() * total;
+  for (const w of weighted) { r -= w.weight; if (r <= 0) return w.type; }
+  return weighted[weighted.length - 1].type;
+}
+
+// ─── DESCRIPTION GENERATION ──────────────────────────────────────────────────
+
+function fillTemplate(tpl, vars) {
+  return tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] || '?');
+}
+
+function genDesc(faction, type, corpos) {
+  const pool = DESC[faction]?.[type] || DESC[faction]?.major || DESC.unknown.minor;
+  const tpl = pick(pool);
+  return fillTemplate(tpl, {
+    pop: rngInt(1, 9) + '.' + rngInt(0, 9) + 'B',
+    year: rngInt(5, 40),
+    noble: pick(NOBLE_NAMES),
+    ncorpo: corpos.length,
+    n: rngInt(20, 200),
+    corp: corpos[0] || 'Orbital Air',
+  });
+}
+
+function genStationDesc(corpos) {
+  return fillTemplate(pick(STATION_DESC), {
+    corp: corpos[0] || 'Orbital Air',
+    pop: rngInt(2, 50) + 'k',
+    n: rngInt(20, 120),
+  });
+}
+
+// ─── GENERATION ──────────────────────────────────────────────────────────────
+
+function generate() {
+  const seedVal = parseInt(document.getElementById('seed-input').value) || 2020;
+  rng = mulberry32(seedVal);
+  document.getElementById('stat-seed').textContent = seedVal;
+
+  const W = canvas.width, H = canvas.height;
+  const count   = parseInt(document.getElementById('node-count').value);
+  const spread  = parseInt(document.getElementById('spread').value);
+
+  // Spread controls how clustered vs spread out nodes are
+  // High spread = nodes spread across full canvas
+  // Low spread = nodes cluster in center
+  const margin = 80;
+  const spreadFactor = 0.3 + (spread - 1) * 0.175; // 0.3 → 1.0
+  const useW = (W - margin * 2) * spreadFactor;
+  const useH = (H - margin * 2) * spreadFactor;
+  const offX = margin + (W - margin * 2 - useW) / 2;
+  const offY = margin + (H - margin * 2 - useH) / 2;
+
+  nodes = [];
+  const usedNames = new Set();
+
+  // Min distance scales with node count and spread
+  const minDist = Math.min(useW, useH) / (Math.sqrt(count) * 1.4);
+
+  for (let attempt = 0; attempt < count * 30 && nodes.length < count; attempt++) {
+    // Non-uniform distribution: some clusters, some isolated
+    let x, y;
+    if (rng() < 0.3 && nodes.length > 2) {
+      // Place near existing node (cluster)
+      const anchor = pick(nodes);
+      const angle = rng() * Math.PI * 2;
+      const dist = minDist * rngFloat(1.1, 2.5);
+      x = anchor.x + Math.cos(angle) * dist;
+      y = anchor.y + Math.sin(angle) * dist;
+      // Clamp to bounds
+      x = Math.max(offX, Math.min(offX + useW, x));
+      y = Math.max(offY, Math.min(offY + useH, y));
+    } else {
+      x = offX + rng() * useW;
+      y = offY + rng() * useH;
+    }
+
+    // Enforce min distance
+    let ok = true;
+    for (const n of nodes) {
+      if (Math.hypot(n.x - x, n.y - y) < minDist) { ok = false; break; }
+    }
+    if (!ok) continue;
+
+    // Name
+    let name; let na = 0;
+    do { name = pick(SYSTEM_NAMES); na++; } while (usedNames.has(name) && na < 40);
+    usedNames.add(name);
+
+    const faction = pick(FACTIONS);
+    const type    = weightedPick(NODE_TYPE_WEIGHTS);
+    const economy = pick(ECONOMIES);
+    const threat  = pick(THREAT_LEVELS);
+
+    // Corpo presence — more in fezzan/contested
+    const maxCorpo = faction === 'fezzan' ? 5 : faction === 'contested' ? 4 : 3;
+    const nCorpos  = rngInt(0, maxCorpo);
+    const corpos   = [];
+    const shuffled = [...CORPO_NAMES].sort(() => rng() - 0.5);
+    for (let c = 0; c < nCorpos; c++) corpos.push(shuffled[c]);
+
+    // Cities / POI — only for planet_city and major
+    const cities = [];
+    if (type === 'planet_city') {
+      const pool = pick(CITY_NAMES_PLANET);
+      const n = rngInt(2, 3);
+      for (let i = 0; i < n; i++) cities.push(pool[i]);
+    }
+
+    // Orbital stations
+    const orbitals = [];
+    if (type === 'planet_city' || (type === 'major' && rng() < 0.5)) {
+      const n = rngInt(1, type === 'planet_city' ? 3 : 1);
+      const shuffledO = [...ORBITAL_STATIONS].sort(() => rng() - 0.5);
+      for (let i = 0; i < n; i++) orbitals.push(shuffledO[i]);
+    }
+
+    // Description
+    let desc;
+    if (type === 'station')  desc = genStationDesc(corpos);
+    else if (type === 'fortress') desc = pick(FORTRESS_DESC);
+    else if (type === 'asteroid') desc = pick(ASTEROID_DESC);
+    else desc = genDesc(faction, type, corpos);
+
+    // Name override for special types
+    let displayName = name;
+    if (type === 'station')  displayName = pick(ORBITAL_STATIONS);
+    if (type === 'fortress') displayName = pick(FORTRESS_NAMES);
+    if (type === 'asteroid') displayName = pick(ASTEROID_NAMES);
+
+    const pop = type === 'asteroid' ? '—'
+              : type === 'station'  ? rngInt(1, 80) + 'k'
+              : type === 'fortress' ? rngInt(5, 30) + 'k'
+              : rng() < 0.3 ? rngInt(1,9) + '.' + rngInt(1,9) + 'B'
+              : rng() < 0.6 ? rngInt(100,999) + 'M'
+              : rngInt(1, 99) + 'M';
+
+    nodes.push({
+      id: nodes.length, x, y,
+      name: displayName, faction, type, economy, threat,
+      desc, corpos, cities, orbitals, pop,
+      vmag: rngInt(2,9) + '.' + rngInt(0,9),
+      notes: "",
+    });
+  }
+
+  // ─── EDGES ───────────────────────────────────────────────────────────────────
+  edges = [];
+  const edgeSet = new Set();
+  const density = parseInt(document.getElementById('edge-density').value);
+
+  // Minimum spanning tree (ensures connectivity)
+  const inTree = new Set([0]);
+  while (inTree.size < nodes.length) {
+    let best = null, bestDist = Infinity;
+    for (const ai of inTree) {
+      for (let bi = 0; bi < nodes.length; bi++) {
+        if (inTree.has(bi)) continue;
+        const d = Math.hypot(nodes[ai].x - nodes[bi].x, nodes[ai].y - nodes[bi].y);
+        if (d < bestDist) { bestDist = d; best = [ai, bi]; }
+      }
+    }
+    if (!best) break;
+    const [a, b] = best;
+    inTree.add(b);
+    const key = `${Math.min(a,b)}-${Math.max(a,b)}`;
+    if (!edgeSet.has(key)) {
+      edgeSet.add(key);
+      const etype = bestDist < minDist * 2 ? 'major' : 'minor';
+      edges.push({ a, b, type: etype });
+    }
+  }
+
+  // Extra edges based on density — progressive tiers
+  // density 1: MST only  2: +nearby  3: +medium  4: +long  5: mesh
+  const extraRatios = [0, 0.3, 0.7, 1.2, 2.0];
+  const extraTarget = Math.floor(nodes.length * (extraRatios[density - 1] || 0));
+
+  // Sort all possible edges by distance
+  const candidates = [];
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const d = Math.hypot(nodes[i].x - nodes[j].x, nodes[i].y - nodes[j].y);
+      candidates.push({ i, j, d });
+    }
+  }
+  candidates.sort((a, b) => a.d - b.d);
+
+  // At density 3+, allow longer edges; at density 5, allow any distance
+  const maxEdgeDist = minDist * (2 + density * 1.5);
+
+  let added = 0;
+  for (const e of candidates) {
+    if (added >= extraTarget) break;
+    if (e.d > maxEdgeDist && density < 5) continue;
+    const key = `${e.i}-${e.j}`;
+    if (!edgeSet.has(key)) {
+      edgeSet.add(key);
+      const etype = e.d < minDist * 1.8 ? 'minor' : 'speculative';
+      edges.push({ a: e.i, b: e.j, type: etype });
+      added++;
+    }
+  }
+
+  document.getElementById('stat-nodes').textContent = nodes.length;
+  document.getElementById('stat-edges').textContent = edges.length;
+  selectedNode = null;
+  showNodeDetail(null);
+  drawMap();
+  drawMini();
+}
+
+// ─── CANVAS ───────────────────────────────────────────────────────────────────
+
+const canvasWrap = document.getElementById('canvas-wrap');
+const canvas     = document.getElementById('map');
+const ctx        = canvas.getContext('2d');
+const miniCanvas = document.getElementById('mini');
+const miniCtx    = miniCanvas.getContext('2d');
+
+function resize() {
+  canvas.width  = canvasWrap.clientWidth;
+  canvas.height = canvasWrap.clientHeight;
+  drawMap(); drawMini();
+}
+window.addEventListener('resize', resize);
+/* Re-fit when the frame gains size (lazy-loaded inside a hidden iframe on Neocities) */
+if (window.ResizeObserver) {
+  new ResizeObserver(function() {
+    if (canvasWrap.clientWidth && (canvas.width !== canvasWrap.clientWidth || canvas.height !== canvasWrap.clientHeight)) resize();
+  }).observe(canvasWrap);
+}
+
+function worldToScreen(wx, wy) {
+  return { x: (wx - cam.x) * cam.zoom + canvas.width/2, y: (wy - cam.y) * cam.zoom + canvas.height/2 };
+}
+function screenToWorld(sx, sy) {
+  return { x: (sx - canvas.width/2) / cam.zoom + cam.x, y: (sy - canvas.height/2) / cam.zoom + cam.y };
+}
+
+function drawGrid() {
+  const W = canvas.width, H = canvas.height;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,245,255,0.022)';
+  ctx.lineWidth = 1;
+  const gs = 100 * cam.zoom;
+  const ox = ((-cam.x * cam.zoom + W/2) % gs + gs) % gs;
+  const oy = ((-cam.y * cam.zoom + H/2) % gs + gs) % gs;
+  for (let x = ox; x < W; x += gs) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for (let y = oy; y < H; y += gs) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+  ctx.restore();
+}
+
+function nodeRadius(n) {
+  const base = { planet_city:11, major:7, minor:5, station:5, fortress:9, asteroid:7 }[n.type] || 5;
+  return base * Math.max(0.4, Math.min(2.2, cam.zoom));
+}
+
+function drawNode(n) {
+  if (!nodeVisible(n)) return;
+  const p = worldToScreen(n.x, n.y);
+  const col = FACTION_COLORS[n.faction];
+  const r   = nodeRadius(n);
+  const sel = n === selectedNode;
+  const hov = n === hoveredNode;
+
+  ctx.save();
+  ctx.shadowColor = col;
+  ctx.shadowBlur  = sel ? 22 : hov ? 12 : 5;
+
+  switch (n.type) {
+    case 'planet_city': {
+      // Large square with inner marker
+      ctx.strokeStyle = col;
+      ctx.lineWidth   = sel ? 2.5 : 1.5;
+      ctx.fillStyle   = sel ? col + '33' : '#050a0a';
+      ctx.fillRect(p.x - r, p.y - r, r*2, r*2);
+      ctx.strokeRect(p.x - r, p.y - r, r*2, r*2);
+      // Inner cross
+      ctx.strokeStyle = col + 'aa';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(p.x - r*0.4, p.y); ctx.lineTo(p.x + r*0.4, p.y); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(p.x, p.y - r*0.4); ctx.lineTo(p.x, p.y + r*0.4); ctx.stroke();
+      break;
+    }
+    case 'fortress': {
+      // Triangle
+      ctx.strokeStyle = col;
+      ctx.lineWidth   = sel ? 2 : 1.5;
+      ctx.fillStyle   = sel ? col + '33' : '#050a0a';
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y - r);
+      ctx.lineTo(p.x + r * 0.87, p.y + r * 0.5);
+      ctx.lineTo(p.x - r * 0.87, p.y + r * 0.5);
+      ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      break;
+    }
+    case 'station': {
+      // Diamond
+      ctx.strokeStyle = col + (sel ? 'ff' : '99');
+      ctx.lineWidth = sel ? 1.5 : 1;
+      ctx.fillStyle = '#050a0a';
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y - r);
+      ctx.lineTo(p.x + r, p.y);
+      ctx.lineTo(p.x, p.y + r);
+      ctx.lineTo(p.x - r, p.y);
+      ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      break;
+    }
+    case 'asteroid': {
+      // Irregular cluster of dots
+      ctx.fillStyle = col + (sel ? 'cc' : '55');
+      const dots = [[0,-r*0.8],[r*0.6,-r*0.4],[r*0.8,r*0.3],[-r*0.5,r*0.7],[-r*0.9,-r*0.1],[r*0.2,r*0.9]];
+      for (const [dx,dy] of dots) {
+        ctx.beginPath();
+        ctx.arc(p.x + dx, p.y + dy, r*0.18, 0, Math.PI*2);
+        ctx.fill();
+      }
+      if (sel) {
+        ctx.strokeStyle = col + '44';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2,3]);
+        ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI*2); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      break;
+    }
+    case 'major': {
+      ctx.strokeStyle = col;
+      ctx.lineWidth   = sel ? 2 : 1;
+      ctx.fillStyle   = sel ? col + '33' : '#050a0a';
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI*2);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, Math.PI*2); ctx.fill();
+      break;
+    }
+    default: { // minor
+      ctx.strokeStyle = col + '88';
+      ctx.lineWidth = 1;
+      ctx.fillStyle = '#050a0a';
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI*2);
+      ctx.fill(); ctx.stroke();
+      break;
+    }
+  }
+
+  ctx.restore();
+
+  // Label
+  if (cam.zoom > 0.45) {
+    const sz = Math.max(9, Math.min(12, 10 * cam.zoom));
+    ctx.save();
+    ctx.fillStyle   = sel ? col : hov ? '#c0d8d8' : '#4a6868';
+    ctx.font        = `${sz}px Eurostile`;
+    ctx.textAlign   = 'center';
+    ctx.shadowColor = sel ? col : 'transparent';
+    ctx.shadowBlur  = sel ? 8 : 0;
+    ctx.fillText(n.name, p.x, p.y + nodeRadius(n) + 13);
+    ctx.restore();
+  }
+
+  // Selection ring
+  if (sel) {
+    ctx.save();
+    ctx.strokeStyle = col;
+    ctx.lineWidth   = 1;
+    ctx.globalAlpha = 0.35;
+    ctx.setLineDash([3, 5]);
+    ctx.beginPath(); ctx.arc(p.x, p.y, nodeRadius(n) + 6, 0, Math.PI*2); ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawMap() {
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#050a0a';
+  ctx.fillRect(0, 0, W, H);
+  drawGrid();
+
+  if (nodes.length === 0) {
+    ctx.fillStyle = '#567070';
+    ctx.font = '12px Eurostile';
+    ctx.textAlign = 'center';
+    ctx.fillText('[ NO DATA — GENERATE A MAP ]', W/2, H/2);
+    return;
+  }
+
+  // Edges
+  for (const e of edges) {
+    const na = nodes[e.a], nb = nodes[e.b];
+    if (!nodeVisible(na) || !nodeVisible(nb)) continue;
+    const pa = worldToScreen(na.x, na.y);
+    const pb = worldToScreen(nb.x, nb.y);
+    ctx.save();
+    if (e.type === 'major') {
+      ctx.strokeStyle = 'rgba(0,245,255,0.28)';
+      ctx.lineWidth   = 1.5;
+      ctx.setLineDash([]);
+    } else if (e.type === 'minor') {
+      ctx.strokeStyle = 'rgba(86,112,112,0.35)';
+      ctx.lineWidth   = 1;
+      ctx.setLineDash([]);
+    } else {
+      ctx.strokeStyle = 'rgba(50,70,70,0.25)';
+      ctx.lineWidth   = 1;
+      ctx.setLineDash([4, 7]);
+    }
+    ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+    ctx.restore();
+  }
+
+  // Nodes
+  for (const n of nodes) drawNode(n);
+}
+
+function drawMini() {
+  const MW = 120, MH = 80;
+  miniCtx.clearRect(0, 0, MW, MH);
+  miniCtx.fillStyle = '#050a0a';
+  miniCtx.fillRect(0, 0, MW, MH);
+  if (nodes.length === 0) return;
+
+  const xs = nodes.map(n => n.x), ys = nodes.map(n => n.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const rX = maxX - minX || 1, rY = maxY - minY || 1;
+  const pad = 8;
+  function tm(x, y) {
+    return { x: pad + (x-minX)/rX*(MW-pad*2), y: pad + (y-minY)/rY*(MH-pad*2) };
+  }
+  for (const e of edges) {
+    const pa = tm(nodes[e.a].x, nodes[e.a].y);
+    const pb = tm(nodes[e.b].x, nodes[e.b].y);
+    miniCtx.strokeStyle = 'rgba(86,112,112,0.25)';
+    miniCtx.lineWidth = 0.5;
+    miniCtx.beginPath(); miniCtx.moveTo(pa.x, pa.y); miniCtx.lineTo(pb.x, pb.y); miniCtx.stroke();
+  }
+  for (const n of nodes) {
+    const p = tm(n.x, n.y);
+    miniCtx.fillStyle = FACTION_COLORS[n.faction];
+    miniCtx.beginPath();
+    miniCtx.arc(p.x, p.y, n === selectedNode ? 3 : 1.5, 0, Math.PI*2);
+    miniCtx.fill();
+  }
+  const tl = screenToWorld(0, 0), br = screenToWorld(canvas.width, canvas.height);
+  const tlm = tm(tl.x, tl.y), brm = tm(br.x, br.y);
+  miniCtx.strokeStyle = 'rgba(0,245,255,0.45)';
+  miniCtx.lineWidth = 1;
+  miniCtx.strokeRect(tlm.x, tlm.y, brm.x-tlm.x, brm.y-tlm.y);
+}
+
+// ─── INTERACTION ──────────────────────────────────────────────────────────────
+
+function nodeVisible(n) {
+  const f = document.getElementById('faction-filter').value;
+  return f === 'all' || n.faction === f;
+}
+
+function getNodeAt(sx, sy, radius = 16) {
+  let best = null, bestD = radius;
+  for (const n of nodes) {
+    if (!nodeVisible(n)) continue;
+    const p = worldToScreen(n.x, n.y);
+    const d = Math.hypot(p.x - sx, p.y - sy);
+    if (d < bestD) { bestD = d; best = n; }
+  }
+  return best;
+}
+
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+
+  if (isPanning) {
+    cam.x = camStart.x - (sx - panStart.x) / cam.zoom;
+    cam.y = camStart.y - (sy - panStart.y) / cam.zoom;
+    drawMap(); drawMini();
+  }
+
+  const n = getNodeAt(sx, sy);
+  if (n !== hoveredNode) {
+    hoveredNode = n;
+    canvas.style.cursor = n ? 'pointer' : 'crosshair';
+    drawMap();
+  }
+
+  const tooltip = document.getElementById('tooltip');
+  if (n) {
+    tooltip.style.display = 'block';
+    tooltip.style.left = (sx + 18) + 'px';
+    tooltip.style.top  = Math.max(0, sy - 16) + 'px';
+    document.getElementById('tt-name').textContent = n.name;
+    document.getElementById('tt-type').textContent = NODE_TYPE_LABELS[n.type];
+    document.getElementById('tt-body').innerHTML =
+      `${FACTION_LABELS[n.faction]}<br>${n.economy} · menace ${n.threat}`;
+  } else {
+    tooltip.style.display = 'none';
+  }
+
+  const w = screenToWorld(sx, sy);
+  document.getElementById('coords').textContent = `X: ${Math.round(w.x)} | Y: ${Math.round(w.y)}`;
+});
+
+canvas.addEventListener('mousedown', e => {
+  const rect = canvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+  if (getNodeAt(sx, sy)) return;
+  isPanning = true;
+  panStart = { x: sx, y: sy };
+  camStart = { x: cam.x, y: cam.y };
+  canvasWrap.classList.add('panning');
+});
+
+canvas.addEventListener('mouseup', e => {
+  const rect = canvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+  if (!isPanning || (Math.abs(sx - panStart.x) < 4 && Math.abs(sy - panStart.y) < 4)) {
+    const n = getNodeAt(sx, sy);
+    if (n) { selectedNode = n; showNodeDetail(n); drawMap(); }
+  }
+  isPanning = false;
+  canvasWrap.classList.remove('panning');
+});
+
+canvas.addEventListener('dblclick', e => {
+  const rect = canvas.getBoundingClientRect();
+  const n = getNodeAt(e.clientX - rect.left, e.clientY - rect.top);
+  if (n) showNodeEdit(n);
+});
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.1 : 0.9;
+  const rect = canvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+  const before = screenToWorld(sx, sy);
+  cam.zoom = Math.max(0.12, Math.min(5, cam.zoom * factor));
+  const after = screenToWorld(sx, sy);
+  cam.x += before.x - after.x;
+  cam.y += before.y - after.y;
+  drawMap(); drawMini();
+}, { passive: false });
+
+// ─── SIDEBAR ──────────────────────────────────────────────────────────────────
+
+document.querySelectorAll('.stab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.stab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.spanel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+  });
+});
+
+function threatColor(t) {
+  return { vert:'green', jaune:'amber', orange:'amber', rouge:'red', noir:'red' }[t] || '';
+}
+
+function showNodeDetail(n) {
+  const panel = document.getElementById('panel-detail');
+  if (!n) { panel.innerHTML = `<div class="empty-state"><span class="big">✦</span>click a node<br>to inspect</div>`; return; }
+
+  const col = FACTION_COLORS[n.faction];
+  const typeLabel = NODE_TYPE_LABELS[n.type];
+
+  let citiesHTML = '';
+  if (n.cities && n.cities.length > 0) {
+    citiesHTML = `<div class="detail-section">GRANDES VILLES</div>`;
+    citiesHTML += n.cities.map(c => `<div class="sub-item"><span class="sub-name">${c}</span></div>`).join('');
+  }
+
+  let orbitalsHTML = '';
+  if (n.orbitals && n.orbitals.length > 0) {
+    orbitalsHTML = `<div class="detail-section">STATIONS ORBITALES</div>`;
+    orbitalsHTML += n.orbitals.map(o => `<div class="sub-item"><span class="sub-name">${o}</span></div>`).join('');
+  }
+
+  let corpoHTML = '';
+  if (n.corpos && n.corpos.length > 0) {
+    corpoHTML = `<div class="detail-section">PRÉSENCE CORPORATISTE</div><div style="margin-top:4px">`;
+    corpoHTML += n.corpos.map(c => `<span class="corpo-tag corpo">${c}</span>`).join('');
+    corpoHTML += '</div>';
+  }
+
+  panel.innerHTML = `
+    <div class="detail-header">
+      <div class="detail-name">${n.name}</div>
+      <div class="detail-type">${typeLabel} · #${n.id + 1}</div>
+    </div>
+    <div class="detail-row"><span class="detail-key">faction</span><span class="detail-val" style="color:${col}">${FACTION_LABELS[n.faction]}</span></div>
+    <div class="detail-row"><span class="detail-key">économie</span><span class="detail-val">${n.economy}</span></div>
+    ${n.pop !== '—' ? `<div class="detail-row"><span class="detail-key">population</span><span class="detail-val cyan">${n.pop}</span></div>` : ''}
+    <div class="detail-row"><span class="detail-key">menace</span><span class="detail-val ${threatColor(n.threat)}">${n.threat.toUpperCase()}</span></div>
+    <div class="detail-row"><span class="detail-key">magnitude</span><span class="detail-val">${n.vmag}</span></div>
+    <div class="detail-section">DESCRIPTION</div>
+    <div class="detail-desc">${n.desc}</div>
+    ${citiesHTML}
+    ${orbitalsHTML}
+    ${corpoHTML}
+    ${n.notes ? `<div class="detail-section">NOTES GM</div><div class="detail-desc" style="color:var(--amber)">${n.notes.replace(/\n/g,'<br>')}</div>` : ''}
+    <div style="margin-top:14px"><button onclick="showNodeEdit(nodes[${n.id}])">EDIT NODE</button></div>
+  `;
+}
+
+function showNodeEdit(n) {
+  editingNode = n;
+  document.querySelectorAll('.stab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.spanel').forEach(p => p.classList.remove('active'));
+  document.querySelector('[data-panel="edit"]').classList.add('active');
+  document.getElementById('panel-edit').classList.add('active');
+
+  const panel = document.getElementById('panel-edit');
+  panel.innerHTML = `
+    <div class="detail-name" style="margin-bottom:12px">${n.name}</div>
+    <div class="edit-field"><div class="edit-label">NOM</div><input type="text" id="edit-name" value="${n.name}"></div>
+    <div class="edit-field"><div class="edit-label">FACTION</div><select id="edit-faction">${FACTIONS.map(f => `<option value="${f}" ${n.faction===f?'selected':''}>${FACTION_LABELS[f]}</option>`).join('')}</select></div>
+    <div class="edit-field"><div class="edit-label">TYPE</div><select id="edit-type">${Object.keys(NODE_TYPE_LABELS).map(t => `<option value="${t}" ${n.type===t?'selected':''}>${NODE_TYPE_LABELS[t]}</option>`).join('')}</select></div>
+    <div class="edit-field"><div class="edit-label">ÉCONOMIE</div><select id="edit-economy">${ECONOMIES.map(e => `<option value="${e}" ${n.economy===e?'selected':''}>${e}</option>`).join('')}</select></div>
+    <div class="edit-field"><div class="edit-label">NIVEAU DE MENACE</div><select id="edit-threat">${THREAT_LEVELS.map(t => `<option value="${t}" ${n.threat===t?'selected':''}>${t.toUpperCase()}</option>`).join('')}</select></div>
+    <div class="edit-field"><div class="edit-label">POPULATION</div><input type="text" id="edit-pop" value="${n.pop}"></div>
+    <div class="edit-field"><div class="edit-label">DESCRIPTION</div><textarea id="edit-desc" rows="5">${n.desc}</textarea></div>
+    <div class="edit-field"><div class="edit-label">NOTES GM (privé)</div><textarea id="edit-notes" rows="3">${n.notes||''}</textarea></div>
+    <div style="display:flex;gap:8px;margin-top:8px"><button onclick="saveEdit()">SAVE</button><button class="danger" onclick="cancelEdit()">CANCEL</button></div>
+  `;
+}
+
+function saveEdit() {
+  if (!editingNode) return;
+  editingNode.name    = document.getElementById('edit-name').value;
+  editingNode.faction = document.getElementById('edit-faction').value;
+  editingNode.type    = document.getElementById('edit-type').value;
+  editingNode.economy = document.getElementById('edit-economy').value;
+  editingNode.threat  = document.getElementById('edit-threat').value;
+  editingNode.pop     = document.getElementById('edit-pop').value;
+  editingNode.desc    = document.getElementById('edit-desc').value;
+  editingNode.notes   = document.getElementById('edit-notes').value;
+  if (selectedNode === editingNode) showNodeDetail(editingNode);
+  editingNode = null;
+  drawMap(); drawMini();
+  document.querySelectorAll('.stab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.spanel').forEach(p => p.classList.remove('active'));
+  document.querySelector('[data-panel="detail"]').classList.add('active');
+  document.getElementById('panel-detail').classList.add('active');
+}
+
+function cancelEdit() {
+  editingNode = null;
+  document.querySelectorAll('.stab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.spanel').forEach(p => p.classList.remove('active'));
+  document.querySelector('[data-panel="detail"]').classList.add('active');
+  document.getElementById('panel-detail').classList.add('active');
+}
+
+// ─── CONTROLS ─────────────────────────────────────────────────────────────────
+
+['node-count','edge-density','spread'].forEach(id => {
+  document.getElementById(id).addEventListener('input', function() {
+    document.getElementById(id+'-val').textContent = this.value;
+  });
+});
+document.getElementById('faction-filter').addEventListener('change', () => { drawMap(); });
+
+function randomSeed() {
+  document.getElementById('seed-input').value = Math.floor(Math.random() * 99999);
+  generate();
+}
+function resetView() {
+  if (nodes.length > 0) {
+    cam.x = nodes.reduce((s,n) => s+n.x,0) / nodes.length;
+    cam.y = nodes.reduce((s,n) => s+n.y,0) / nodes.length;
+  } else {
+    cam.x = 0; cam.y = 0;
+  }
+  cam.zoom = 1;
+  drawMap(); drawMini();
+}
+function exportJSON() {
+  const data = JSON.stringify({ seed: parseInt(document.getElementById('seed-input').value), nodes, edges }, null, 2);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+  a.download = `galmap_${document.getElementById('seed-input').value}.json`;
+  a.click();
+}
+
+resize();
+generate();
+/* Belt-and-suspenders: the canvas pixel size depends on layout, which may not be
+   flushed yet when this runs inside a freshly-shown / lazy-loaded iframe. Re-fit
+   once layout settles and whenever the frame later gains size. */
+window.addEventListener('load', resize);
+setTimeout(resize, 60);
+setTimeout(resize, 300);
+</script>
+<!-- <script src="js/theme.js"></script> -->
+</body>
+</html>
