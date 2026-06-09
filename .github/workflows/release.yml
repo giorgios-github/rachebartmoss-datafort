@@ -27,11 +27,17 @@ jobs:
       - run: npm install
       - run: npm run build:sync
 
-      # Build + package the Electron app.
+      # Build + package the Electron app (explicit steps — no ambiguous arg passing).
       - working-directory: desktop
         run: npm install
+      - working-directory: desktop
+        run: npm run build:hub          # esbuild ../hub/createHub.mjs -> hub.bundle.cjs
+      - working-directory: desktop
+        run: npm run build:site         # copies the (already built) site into desktop/site
       - name: Package & publish
         working-directory: desktop
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run dist -- --publish always
+          # Unsigned builds on CI: don't let electron-builder try to codesign.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npx --no-install electron-builder --publish always
