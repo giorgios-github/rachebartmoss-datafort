@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rache Bartmoss' Datafort</title>
+<link rel="icon" href="img/favicon.ico">
+<link rel="stylesheet" href="css/main.css">
+<style>
+  html, body { height:100%; }
+  body { background:var(--bg); color:var(--text); font-family:var(--mono); display:flex; flex-direction:column; overflow:hidden; }
+  /* role chooser */
+  #role-chooser { position:fixed; inset:0; background:#111; display:flex; align-items:center; justify-content:center; z-index:50; }
+  .rc-card { text-align:center; max-width:760px; padding:24px; }
+  .rc-logo { width:340px; max-width:70vw; display:block; margin:0 auto; filter:invert(0); }
+  .rc-sub { font-family:var(--head); color:#fff; font-size:30px; letter-spacing:0; transform:scaleX(.78); transform-origin:center; margin:-18px 0 4px; }
+  .rc-tag { color:#9a9a9a; font-size:13px; letter-spacing:2px; text-transform:uppercase; margin-bottom:26px; }
+  .rc-roles { display:flex; gap:18px; justify-content:center; flex-wrap:wrap; }
+  .rc-role { width:240px; background:#1a1a1a; border:2px solid #383838; color:#ddd; padding:22px 18px; cursor:pointer; transition:border-color .12s, background .12s; }
+  .rc-role:hover { border-color:#fff; background:#000; }
+  .rc-role h2 { font-family:var(--head); font-size:18px; letter-spacing:3px; margin:0 0 8px; color:#fff; }
+  .rc-role p { font-size:12px; color:#9a9a9a; line-height:1.6; margin:0; }
+  .rc-foot { margin-top:22px; color:#666; font-size:11px; }
+  .rc-foot a { color:#999; }
+</style>
+</head>
+<body>
+<div id="role-chooser">
+  <div class="rc-card">
+    <img class="rc-logo" src="img/RacheBartmoss.png" alt="Rache Bartmoss">
+    <div class="rc-sub">datafort</div>
+    <div class="rc-tag">Cyberpunk 2020 · local-first companion</div>
+    <div class="rc-roles">
+      <div class="rc-role" onclick="chooseRole('gm')">
+        <h2>GAME MASTER</h2>
+        <p>Manage campaigns, host sessions, and edit every player's sheet live on your Wi-Fi.</p>
+      </div>
+      <div class="rc-role" onclick="chooseRole('player')">
+        <h2>PLAYER</h2>
+        <p>Build your character and connect to your GM's session to sync your sheet.</p>
+      </div>
+    </div>
+    <div class="rc-foot">You can switch role anytime. &nbsp;·&nbsp; <a href="index.html">Just browsing? Open the toolkit →</a></div>
+  </div>
+</div>
+
+<script src="js/sync.bundle.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
