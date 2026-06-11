@@ -25,8 +25,8 @@
     "extraResources": [{ "from": "site", "to": "site" }],
     "directories": { "output": "release" },
     "afterPack": "./build/afterPack.cjs",
-    "mac": { "target": ["dmg"], "category": "public.app-category.games", "identity": null },
-    "win": { "target": ["nsis"] },
+    "mac": { "target": ["dmg"], "category": "public.app-category.games", "identity": null, "icon": "build/icon.icns" },
+    "win": { "target": ["nsis"], "icon": "build/icon.png" },
     "publish": [{ "provider": "github", "owner": "giorgios-github", "repo": "rache-bartmoss-datafort" }]
   }
 }
