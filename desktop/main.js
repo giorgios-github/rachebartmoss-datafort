@@ -6,9 +6,22 @@
  * same Wi-Fi. Campaign sheets are stored as JSON files in a visible folder the
  * GM can open/edit.
  */
-const { app, BrowserWindow, Menu, shell, dialog, clipboard } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog, clipboard, ipcMain } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
+
+// Folder picker for the campaign manager: returns text files' { name, content }.
+ipcMain.handle('pick-folder-files', async () => {
+  const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
+  if (r.canceled || !r.filePaths[0]) return [];
+  const dir = r.filePaths[0];
+  const out = [];
+  for (const f of fs.readdirSync(dir)) {
+    if (!/\.(json|md|txt)$/i.test(f)) continue;
+    try { out.push({ name: f, content: fs.readFileSync(path.join(dir, f), 'utf8') }); } catch {}
+  }
+  return out;
+});
 
 // createHub is bundled (with its deps) into hub.bundle.cjs by `npm run build:hub`.
 const { createHub } = require('./hub.bundle.cjs');
@@ -37,8 +50,7 @@ async function startHub() {
 
 // The app opens on the role chooser (app.html); GM/Player routes from there.
 function appUrl() { return `http://127.0.0.1:${hub.port}/app.html`; }
-function dashboardUrl() { return `http://127.0.0.1:${hub.port}/gm.html?campaign=${CAMPAIGN}`; }
-function lanDashboardUrl() { return `http://${hub.primaryHost}:${hub.port}/gm.html?campaign=${CAMPAIGN}`; }
+function lanAppUrl() { return `http://${hub.primaryHost}:${hub.port}/app.html`; }
 
 function buildMenu() {
   const template = [
@@ -51,10 +63,11 @@ function buildMenu() {
           label: 'Change campaign folder…',
           click: async () => {
             const r = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'] });
-            if (!r.canceled && r.filePaths[0]) { dataDir = r.filePaths[0]; await startHub(); win.loadURL(dashboardUrl()); }
+            if (!r.canceled && r.filePaths[0]) { dataDir = r.filePaths[0]; await startHub(); if (win) win.loadURL(appUrl()); }
           },
         },
         { type: 'separator' },
+        { label: 'New player window', click: () => openAppWindow() },
         {
           label: 'Copy player links',
           click: () => {
@@ -62,9 +75,9 @@ function buildMenu() {
             clipboard.writeText(ls.length ? ls.map((l) => `${l.name}: ${l.url}`).join('\n') : 'No sheets yet.');
           },
         },
-        { label: 'Open dashboard in browser', click: () => shell.openExternal(lanDashboardUrl()) },
+        { label: 'Open the app in a browser', click: () => shell.openExternal(lanAppUrl()) },
         { type: 'separator' },
-        { label: 'Restart hub', click: async () => { await startHub(); win.loadURL(dashboardUrl()); } },
+        { label: 'Restart hub', click: async () => { await startHub(); if (win) win.loadURL(appUrl()); } },
       ],
     },
     { role: 'editMenu' },
@@ -74,13 +87,20 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-async function createWindow() {
-  win = new BrowserWindow({
+// Open an app window on the role chooser. Returns it WITHOUT touching the
+// global `win` — used both for the primary window and extra player windows.
+function openAppWindow() {
+  const w = new BrowserWindow({
     width: 1200, height: 820, minWidth: 720, minHeight: 480,
     title: 'Bartmoss Datafort',
-    webPreferences: { contextIsolation: true, nodeIntegration: false },
+    webPreferences: { contextIsolation: true, nodeIntegration: false, preload: path.join(__dirname, 'preload.js') },
   });
-  await win.loadURL(appUrl());
+  w.loadURL(appUrl());
+  return w;
+}
+
+async function createWindow() {
+  win = openAppWindow();
 }
 
 const gotLock = app.requestSingleInstanceLock();
@@ -93,8 +113,20 @@ else {
     await startHub();
     buildMenu();
     await createWindow();
-    app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+    // Re-clicking the dock icon (macOS) recreates the window. The hub stays
+    // alive while the app runs, but guard against it being gone — otherwise the
+    // new window loads a dead http://127.0.0.1:<port> and shows blank.
+    app.on('activate', async () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        if (!hub) await startHub();
+        await createWindow();
+      }
+    });
   });
 
-  app.on('window-all-closed', () => { if (hub) try { hub.stop(); } catch {}; if (process.platform !== 'darwin') app.quit(); });
+  // Keep the hub running when the last window closes on macOS (the app itself
+  // stays alive there); only quit on Windows/Linux. The hub is stopped for real
+  // on quit.
+  app.on('window-all-closed', () => { if (process.platform !== 'darwin') { if (hub) { try { hub.stop(); } catch {} } app.quit(); } });
+  app.on('before-quit', () => { if (hub) { try { hub.stop(); } catch {} hub = null; } });
 }

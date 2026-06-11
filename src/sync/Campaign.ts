@@ -69,6 +69,17 @@ export class Campaign {
     return id;
   }
 
+  // ── session flags (shared via the doc) — e.g. GM pauses the session ──
+  private session() { return this.store.doc.getMap('session'); }
+  setPaused(paused: boolean): void { this.session().set('paused', !!paused); }
+  isPaused(): boolean { return !!this.session().get('paused'); }
+  onPaused(cb: (paused: boolean) => void): () => void {
+    const m = this.session();
+    const h = () => cb(!!m.get('paused'));
+    m.observe(h);
+    return () => m.unobserve(h);
+  }
+
   // ── presence (awareness): who's online / future combat turn ──
   setPresence(state: Record<string, unknown>): void {
     Object.keys(state).forEach((k) => this.provider.awareness.setLocalStateField(k, state[k]));

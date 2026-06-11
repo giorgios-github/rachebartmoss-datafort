@@ -104,6 +104,7 @@ function _schedSave() {
   _saveTimer = setTimeout(_flushSave, 600);
 }
 function _flushSave() {
+  if (window.__cdoc) return; // file-bridge mode: campaign-doc.js owns persistence
   // Never persist bundled orgs — they're always loaded fresh from their source files
   try { localStorage.setItem(_LS_KEY, JSON.stringify(_orgs.filter(function(o){ return !o._bundled; }))); } catch(e) {}
 }
@@ -5041,6 +5042,17 @@ function removeFundSrc(idx) {
    INIT
    ═══════════════════════════════════════════════ */
 window.addEventListener('DOMContentLoaded', async function() {
+  window.__cdoc = new URLSearchParams(window.location.search).get('cdoc') === '1';
+  if (window.__cdoc) {
+    // File-bridge mode: the org is loaded from a campaign file by campaign-doc.js.
+    _orgs = [];
+    window.__cdocAdapter = {
+      load: function (json) { if (!json || !Object.keys(json).length) return; _migrateOrg(json); _orgs = [json]; _activeId = json.id; renderSidebar(); renderMain(); },
+      serialize: function () { return _getActive(); },
+    };
+    renderSidebar(); renderMain();
+    return;
+  }
   _loadFromStorage();
 
   /* ── Load bundled orgs (always fresh from file, never persisted) ── */

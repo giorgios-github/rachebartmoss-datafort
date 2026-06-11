@@ -14,6 +14,7 @@
   var q = new URLSearchParams(location.search);
   var campaign = q.get('campaign');
   var sheetId = q.get('sheet');
+  var mode = q.get('mode'); // 'send' = push local sheet; else receive GM's copy
   if (!campaign || !sheetId || !S) return; // local mode
 
   var camp = null;
@@ -61,29 +62,41 @@
 
   function doBind() {
     var rec = camp.getSheet(sheetId);
-    if (!rec) { // genuinely new (GM hasn't created it / player pushing a build)
-      var json = (window.CS && typeof window.CS === 'object') ? window.CS : window.makeBlankCS();
-      json._id = sheetId;
-      lastLocalAt = camp.publishSheet(sheetId, json.handle || json.name || 'PC', json);
+    if (mode === 'send' && window.CS && typeof window.CS === 'object') {
+      // "Send my sheet": push the player's local build, overwriting any GM copy,
+      // then sync live. main.js loaded the local active sheet into window.CS.
+      window.CS._id = sheetId;
+      lastLocalAt = camp.publishSheet(sheetId, window.CS.handle || window.CS.name || 'PC', window.CS);
       lastAppliedAt = lastLocalAt;
-      rec = camp.getSheet(sheetId);
+      try { lastPublishedJson = JSON.stringify(window.CS); } catch (e) { lastPublishedJson = null; }
+    } else {
+      if (!rec) { // genuinely new (GM hasn't created it) → seed from what we have
+        var json = (window.CS && typeof window.CS === 'object') ? window.CS : window.makeBlankCS();
+        json._id = sheetId;
+        lastLocalAt = camp.publishSheet(sheetId, json.handle || json.name || 'PC', json);
+        lastAppliedAt = lastLocalAt;
+        rec = camp.getSheet(sheetId);
+      }
+      loadIntoApp(rec); // receive / default: the GM's copy wins on connect
     }
-    loadIntoApp(rec);
     camp.onSheetsChange(maybeApplyRemote);
     // Listen at the DOCUMENT level (capture) so EVERY interaction triggers a
     // publish — including ones outside .cs: settings modal, lifestyle controls,
     // any button-driven mutation, dropdowns, etc. publishLocal() no-ops when
     // nothing actually changed, so over-triggering is cheap.
+    // 'input' covers all text/number/checkbox edits; 'change' covers selects;
+    // 'click' covers button-driven mutations (add skill, lifestyle, etc.).
+    // 'keyup' was redundant with 'input' and just doubled the event volume.
     document.addEventListener('input', schedulePublish, true);
     document.addEventListener('change', schedulePublish, true);
     document.addEventListener('click', schedulePublish, true);
-    document.addEventListener('keyup', schedulePublish, true);
     document.addEventListener('focusout', function () {
       if (pendingRemote && !isEditingSheet()) { var r = pendingRemote; pendingRemote = null; if (r.updatedAt > lastAppliedAt) loadIntoApp(r); }
     }, true);
     // Safety net for purely programmatic CS changes (timers, async) that emit no
-    // DOM event: catch them within ~1.5s.
-    setInterval(publishLocal, 1500);
+    // DOM event. publishLocal() no-ops when nothing changed, so a relaxed 4s
+    // interval is plenty and keeps idle sheets cheap.
+    setInterval(publishLocal, 4000);
   }
   function tryBind() { if (bound || !mainReady || !isSynced) return; bound = true; doBind(); }
 
@@ -102,7 +115,9 @@
 
   function start() {
     banner();
-    camp = S.join({ url: wsUrl(), room: campaign, member: { name: 'Player', role: 'player' } });
+    // GM-side editor iframes pass ?as=gm so they aren't counted as players.
+    var asRole = q.get('as') === 'gm' ? 'gm' : 'player';
+    camp = S.join({ url: wsUrl(), room: campaign, member: { name: asRole === 'gm' ? 'GM' : 'Player', role: asRole } });
     camp.onStatus(function (st) {
       var b = document.getElementById('cs-join-banner'); if (!b) return;
       if (st === 'connected') { b.style.background = '#1a7a2e'; b.textContent = 'CONNECTED · campaign "' + campaign + '" · live sync'; }
@@ -110,6 +125,20 @@
     });
     camp.onSynced(function () { isSynced = true; tryBind(); });
     setTimeout(function () { isSynced = true; tryBind(); }, 5000); // fallback: offline / hub down
+    // GM can pause the session — show a prominent banner (sync keeps running).
+    if (camp.onPaused) camp.onPaused(showPaused);
+  }
+
+  function showPaused(paused) {
+    var id = 'cs-paused-overlay';
+    var ex = document.getElementById(id);
+    if (!paused) { if (ex) ex.parentNode.removeChild(ex); return; }
+    if (ex) return;
+    var o = document.createElement('div');
+    o.id = id;
+    o.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#b8860b;color:#111;font-family:var(--head,sans-serif);letter-spacing:6px;font-size:18px;text-align:center;padding:8px;box-shadow:0 2px 10px rgba(0,0,0,.4);';
+    o.textContent = 'PAUSED';
+    document.body.insertBefore(o, document.body.firstChild);
   }
 
   // main.js calls this at the end of its init() in joined mode (deterministic).

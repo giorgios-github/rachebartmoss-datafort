@@ -1,7 +1,7 @@
 {
   "name": "bartmoss-gm-hub",
   "productName": "Bartmoss GM Hub",
-  "version": "0.1.0",
+  "version": "0.7.0",
   "private": true,
   "description": "Local GM hub for Rache Bartmoss' Datafort — serves the app on your LAN and syncs player sheets.",
   "repository": { "type": "git", "url": "https://github.com/giorgios-github/rache-bartmoss-datafort.git" },
@@ -21,7 +21,7 @@
   "build": {
     "appId": "com.bartmoss.datafort.hub",
     "productName": "Bartmoss GM Hub",
-    "files": ["main.js", "hub.bundle.cjs"],
+    "files": ["main.js", "preload.js", "hub.bundle.cjs"],
     "extraResources": [{ "from": "site", "to": "site" }],
     "directories": { "output": "release" },
     "mac": { "target": ["dmg"], "category": "public.app-category.games" },

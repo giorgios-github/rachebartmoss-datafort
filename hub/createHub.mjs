@@ -56,7 +56,8 @@ export function createHub(opts = {}) {
 
   let PRIMARY_HOST = lanAddresses()[0] || 'localhost';
   let PORT = REQ_PORT;
-  const playerLink = (id) => `http://${PRIMARY_HOST}:${PORT}/cs.html?campaign=${encodeURIComponent(CAMPAIGN)}&sheet=${encodeURIComponent(id)}`;
+  const playerLinkFor = (campaign, id) => `http://${PRIMARY_HOST}:${PORT}/cs.html?campaign=${encodeURIComponent(campaign)}&sheet=${encodeURIComponent(id)}`;
+  const playerLink = (id) => playerLinkFor(CAMPAIGN, id);
 
   /* ── Yjs relay (rooms) ── */
   const MSG_SYNC = 0, MSG_AWARENESS = 1;
@@ -91,6 +92,7 @@ export function createHub(opts = {}) {
     conn.binaryType = 'arraybuffer';
     const name = (req.url || '').slice(1).split('?')[0] || CAMPAIGN;
     const room = getRoom(name);
+    bindRoom(name); // a room IS a campaign — persist it to <DATA>/<name>/sheets
     room.conns.add(conn);
     conn.controlledIds = new Set();
     const awarenessChange = ({ added, removed }, origin) => {
@@ -128,17 +130,18 @@ export function createHub(opts = {}) {
     }
   }
 
-  /* ── Campaign folder persistence (+ legacy junk guard) ── */
+  /* ── Per-campaign folder persistence (rooms ARE campaigns) + legacy junk guard ── */
   const _warnedJunk = new Set();
   const isJunkId = (id) => /^nc-/.test(String(id || ''));
-  function loadSheetsInto(sheetsMap, doc) {
+  const sheetsDirFor = (name) => path.join(DATA, name, 'sheets');
+  function loadSheetsInto(sheetsMap, doc, dir) {
     let loaded = 0;
-    for (const f of fs.existsSync(SHEETS_DIR) ? fs.readdirSync(SHEETS_DIR) : []) {
+    for (const f of fs.existsSync(dir) ? fs.readdirSync(dir) : []) {
       if (!f.endsWith('.json')) continue;
       const base = f.replace(/\.json$/, '');
-      if (isJunkId(base)) { try { fs.unlinkSync(path.join(SHEETS_DIR, f)); log('  - removed legacy junk file', f); } catch {} continue; }
+      if (isJunkId(base)) { try { fs.unlinkSync(path.join(dir, f)); log('  - removed legacy junk file', f); } catch {} continue; }
       try {
-        const raw = JSON.parse(fs.readFileSync(path.join(SHEETS_DIR, f), 'utf8'));
+        const raw = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
         let rec;
         if (raw && raw.id && raw.json) rec = { id: base, ownerId: raw.ownerId ?? null, name: raw.name || base, updatedAt: raw.updatedAt || Date.now(), json: raw.json };
         else { raw._id = base; rec = { id: base, ownerId: null, name: raw.handle || raw.name || base, updatedAt: Date.now(), json: raw }; }
@@ -149,30 +152,37 @@ export function createHub(opts = {}) {
     return loaded;
   }
   const _writeTimers = new Map();
-  function scheduleWrite(id, rec) {
-    if (isJunkId(id)) { if (!_warnedJunk.has(id)) { _warnedJunk.add(id); log('  ! ignoring legacy id "' + id + '" pushed by a stale client — reload/close old browser tabs.'); } return; }
-    clearTimeout(_writeTimers.get(id));
-    _writeTimers.set(id, setTimeout(() => {
-      try { fs.writeFileSync(path.join(SHEETS_DIR, id + '.json'), JSON.stringify((rec && rec.json) || {}, null, 2)); log('  · saved', (rec && rec.name) || id); }
-      catch (e) { log('  ! write failed', id, '-', e.message); }
+  function scheduleWrite(name, id, rec) {
+    if (isJunkId(id)) { const k = name + '/' + id; if (!_warnedJunk.has(k)) { _warnedJunk.add(k); log('  ! ignoring legacy id "' + id + '" in "' + name + '" — reload/close old browser tabs.'); } return; }
+    const key = name + '/' + id;
+    clearTimeout(_writeTimers.get(key));
+    _writeTimers.set(key, setTimeout(() => {
+      try { const dir = sheetsDirFor(name); fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, id + '.json'), JSON.stringify((rec && rec.json) || {}, null, 2)); log(`  · saved ${name}/${(rec && rec.name) || id}`); }
+      catch (e) { log('  ! write failed', name, id, '-', e.message); }
     }, 400));
   }
-  const _knownIds = new Set();
-  function bindCampaignFolder() {
-    fs.mkdirSync(SHEETS_DIR, { recursive: true });
-    const room = getRoom(CAMPAIGN);
+  const boundRooms = new Set();
+  const _knownByRoom = new Map();
+  function bindRoom(name) {
+    if (boundRooms.has(name)) return 0;
+    boundRooms.add(name);
+    const dir = sheetsDirFor(name);
+    fs.mkdirSync(dir, { recursive: true });
+    const room = getRoom(name);
     const sheets = room.doc.getMap('sheets');
-    const n = loadSheetsInto(sheets, room.doc);
-    sheets.forEach((_rec, id) => _knownIds.add(id));
+    const n = loadSheetsInto(sheets, room.doc, dir);
+    const known = new Set(); _knownByRoom.set(name, known);
+    sheets.forEach((_rec, id) => known.add(id));
     sheets.observeDeep(() => {
       sheets.forEach((rec, id) => {
         if (!rec || !id) return;
-        scheduleWrite(id, rec);
-        if (!_knownIds.has(id)) { _knownIds.add(id); log(`  + new sheet "${rec.name || id}"  ->  ${playerLink(id)}`); }
+        scheduleWrite(name, id, rec);
+        if (!known.has(id)) { known.add(id); log(`  + new sheet "${rec.name || id}"  ->  ${playerLinkFor(name, id)}`); }
       });
     });
     return n;
   }
+  function bindCampaignFolder() { return bindRoom(CAMPAIGN); }
 
   /* ── Campaign JSON API (file-backed, used by the in-app campaign manager) ── */
   const DOC_TYPES = ['sheets', 'npcs', 'orgs', 'nightcity', 'documents'];

@@ -15,7 +15,7 @@ const OUT = path.join(ROOT, 'desktop', 'site');
 // Top-level entries to ship (files + whole dirs).
 const INCLUDE = [
   'index.html', 'app.html', 'cs.html', 'npc-sheet.html', 'organisations.html',
-  'nightcity.html', 'galmap.html', 'outfit-designer.html', 'gm.html',
+  'nightcity.html', 'galmap.html', 'outfit-designer.html',
   'join.html', 'not_found.html', 'robots.txt',
   'EurostileExtendedBlack.ttf', 'EurostileExtendedBlack.woff2', 'terminal-grotesque.ttf',
   'css', 'js', 'img', 'data', 'pdfs',
