@@ -41,6 +41,14 @@
   .gm-btn { font-family:var(--mono); font-size:12px; padding:4px 9px; border:1px solid #111; background:#fff; color:#111; cursor:pointer; text-decoration:none; display:inline-block; }
   .gm-btn:hover { background:#111; color:#fff; }
   .gm-empty { color:#888; font-style:italic; }
+  /* in-app modal (Electron has no window.prompt) */
+  .gm-modal-ov { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; display:flex; align-items:center; justify-content:center; }
+  .gm-modal { background:#fff; border:3px solid #111; width:380px; max-width:92vw; }
+  .gm-modal-head { background:#111; color:#fff; font-family:var(--head); letter-spacing:2px; text-transform:uppercase; font-size:13px; padding:9px 13px; }
+  .gm-modal-input { width:100%; box-sizing:border-box; margin:12px 0 0; padding:8px 10px; border:1px solid #111; font-family:var(--mono); font-size:14px; }
+  .gm-modal-input { width:calc(100% - 26px); margin:12px 13px 0; }
+  .gm-modal-actions { display:flex; justify-content:flex-end; gap:8px; padding:12px 13px; }
+  .gm-modal-ok { background:#111; color:#fff; }
 </style>
 </head>
 <body>

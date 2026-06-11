@@ -20,6 +20,7 @@
   var applyingRemote = false;
   var lastLocalAt = 0, lastAppliedAt = 0, pendingRemote = null, publishTimer = null;
   var mainReady = false, isSynced = false, bound = false;
+  var lastPublishedJson = null; // last serialized CS we sent — skip no-op publishes
 
   function wsUrl() { return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host; }
   function isEditingSheet() { var ae = document.activeElement; return !!(ae && ae.closest && ae.closest('.cs')); }
@@ -33,6 +34,7 @@
     window.csActiveIdx = 0;
     if (typeof window.applyCS === 'function') window.applyCS();
     lastAppliedAt = (rec && rec.updatedAt) || Date.now();
+    try { lastPublishedJson = JSON.stringify(window.CS); } catch (e) { lastPublishedJson = null; }
     applyingRemote = false;
   }
 
@@ -40,10 +42,14 @@
     if (applyingRemote || !camp || !window.CS) return;
     if (typeof window.collectState === 'function') window.collectState();
     window.CS._id = sheetId;
+    var s; try { s = JSON.stringify(window.CS); } catch (e) { s = null; }
+    if (s !== null && s === lastPublishedJson) return; // nothing actually changed
+    lastPublishedJson = s;
     lastLocalAt = camp.publishSheet(sheetId, window.CS.handle || window.CS.name || 'PC', window.CS);
     lastAppliedAt = lastLocalAt;
   }
-  function schedulePublish() { clearTimeout(publishTimer); publishTimer = setTimeout(publishLocal, 500); }
+  // Debounced; short so any interaction reflects within ~300ms.
+  function schedulePublish() { clearTimeout(publishTimer); publishTimer = setTimeout(publishLocal, 300); }
 
   function maybeApplyRemote() {
     if (!camp) return;
@@ -64,14 +70,20 @@
     }
     loadIntoApp(rec);
     camp.onSheetsChange(maybeApplyRemote);
-    var cs = document.querySelector('.cs');
-    if (cs) {
-      cs.addEventListener('input', schedulePublish, true);
-      cs.addEventListener('change', schedulePublish, true);
-      cs.addEventListener('focusout', function () {
-        if (pendingRemote && !isEditingSheet()) { var r = pendingRemote; pendingRemote = null; if (r.updatedAt > lastAppliedAt) loadIntoApp(r); }
-      }, true);
-    }
+    // Listen at the DOCUMENT level (capture) so EVERY interaction triggers a
+    // publish — including ones outside .cs: settings modal, lifestyle controls,
+    // any button-driven mutation, dropdowns, etc. publishLocal() no-ops when
+    // nothing actually changed, so over-triggering is cheap.
+    document.addEventListener('input', schedulePublish, true);
+    document.addEventListener('change', schedulePublish, true);
+    document.addEventListener('click', schedulePublish, true);
+    document.addEventListener('keyup', schedulePublish, true);
+    document.addEventListener('focusout', function () {
+      if (pendingRemote && !isEditingSheet()) { var r = pendingRemote; pendingRemote = null; if (r.updatedAt > lastAppliedAt) loadIntoApp(r); }
+    }, true);
+    // Safety net for purely programmatic CS changes (timers, async) that emit no
+    // DOM event: catch them within ~1.5s.
+    setInterval(publishLocal, 1500);
   }
   function tryBind() { if (bound || !mainReady || !isSynced) return; bound = true; doBind(); }
 

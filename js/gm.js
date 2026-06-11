@@ -91,7 +91,7 @@
         var link = playerLink(b.getAttribute('data-link'));
         navigator.clipboard.writeText(link).then(
           function () { b.textContent = 'Copied!'; setTimeout(function () { b.textContent = 'Copy player link'; }, 1200); },
-          function () { window.prompt('Copy this player link:', link); });
+          function () { _gmCopyBox('Player link', link); });
       };
     });
   }
@@ -109,15 +109,49 @@
       var lines = sheetsDeduped().map(function (r) { return (r.name || r.id) + ': ' + playerLink(r.id); }).join('\n');
       navigator.clipboard.writeText(lines).then(
         function () { btn.textContent = 'Copied!'; setTimeout(function () { btn.textContent = 'Copy all player links'; }, 1200); },
-        function () { window.prompt('Copy the player links:', lines); });
+        function () { _gmCopyBox('Player links', lines); });
     };
   }
 
+  /* In-app modal — Electron disables window.prompt, so we never use it. */
+  function gmModalClose() { var ov = document.getElementById('gm-modal-ov'); if (ov) ov.parentNode.removeChild(ov); }
+  function gmPrompt(title, placeholder, onOk) {
+    gmModalClose();
+    var ov = document.createElement('div');
+    ov.id = 'gm-modal-ov'; ov.className = 'gm-modal-ov';
+    ov.innerHTML = '<div class="gm-modal"><div class="gm-modal-head">' + esc(title) + '</div>' +
+      '<input id="gm-modal-input" class="gm-modal-input" placeholder="' + esc(placeholder || '') + '">' +
+      '<div class="gm-modal-actions"><button class="gm-btn" data-x>Cancel</button><button class="gm-btn gm-modal-ok" data-ok>OK</button></div></div>';
+    ov.onclick = function (e) { if (e.target === ov) gmModalClose(); };
+    document.body.appendChild(ov);
+    var input = ov.querySelector('#gm-modal-input');
+    input.focus();
+    function commit() { var v = input.value; gmModalClose(); onOk(v); }
+    ov.querySelector('[data-ok]').onclick = commit;
+    ov.querySelector('[data-x]').onclick = gmModalClose;
+    input.onkeydown = function (e) { if (e.key === 'Enter') commit(); else if (e.key === 'Escape') gmModalClose(); };
+  }
+  function gmCopyBox(title, text) {
+    gmModalClose();
+    var ov = document.createElement('div');
+    ov.id = 'gm-modal-ov'; ov.className = 'gm-modal-ov';
+    ov.innerHTML = '<div class="gm-modal"><div class="gm-modal-head">' + esc(title) + '</div>' +
+      '<textarea class="gm-modal-input" rows="4" readonly>' + esc(text) + '</textarea>' +
+      '<div class="gm-modal-actions"><button class="gm-btn" data-x>Close</button></div></div>';
+    ov.onclick = function (e) { if (e.target === ov) gmModalClose(); };
+    document.body.appendChild(ov);
+    var ta = ov.querySelector('textarea'); ta.focus(); ta.select();
+    ov.querySelector('[data-x]').onclick = gmModalClose;
+  }
+  // expose for the copy fallbacks
+  window._gmCopyBox = gmCopyBox;
+
   window.gmNewSheet = function () {
     if (!camp) return;
-    var name = window.prompt('New character name:'); if (name == null) return;
-    var id = camp.createSheet(name.trim() || 'New character', {});
-    setTimeout(function () { showTab(id); }, 150); // open the new sheet's editor
+    gmPrompt('New character', 'character name', function (name) {
+      var id = camp.createSheet((name || '').trim() || 'New character', {});
+      setTimeout(function () { showTab(id); }, 150); // open the new sheet's editor
+    });
   };
 
   function init() {

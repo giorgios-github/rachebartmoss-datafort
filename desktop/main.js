@@ -35,6 +35,8 @@ async function startHub() {
   return hub;
 }
 
+// The app opens on the role chooser (app.html); GM/Player routes from there.
+function appUrl() { return `http://127.0.0.1:${hub.port}/app.html`; }
 function dashboardUrl() { return `http://127.0.0.1:${hub.port}/gm.html?campaign=${CAMPAIGN}`; }
 function lanDashboardUrl() { return `http://${hub.primaryHost}:${hub.port}/gm.html?campaign=${CAMPAIGN}`; }
 
@@ -75,10 +77,10 @@ function buildMenu() {
 async function createWindow() {
   win = new BrowserWindow({
     width: 1200, height: 820, minWidth: 720, minHeight: 480,
-    title: 'Bartmoss GM Hub',
+    title: 'Bartmoss Datafort',
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   });
-  await win.loadURL(dashboardUrl());
+  await win.loadURL(appUrl());
 }
 
 const gotLock = app.requestSingleInstanceLock();

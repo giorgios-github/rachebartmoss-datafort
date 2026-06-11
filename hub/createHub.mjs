@@ -40,7 +40,17 @@ export function createHub(opts = {}) {
   const ROOT = path.resolve(opts.root || process.cwd());
   const CAMPAIGN = opts.campaign || 'main';
   const DATA = path.resolve(opts.dataDir || path.join(ROOT, 'campaign-data'));
-  const SHEETS_DIR = path.join(DATA, 'sheets');
+  // Per-campaign folder: <DATA>/<campaign>/{sheets,npcs,orgs,nightcity,documents}.
+  const CAMPAIGN_DIR = path.join(DATA, CAMPAIGN);
+  const SHEETS_DIR = path.join(CAMPAIGN_DIR, 'sheets');
+  // Migrate the legacy flat layout (<DATA>/sheets) into <DATA>/<campaign>/sheets.
+  try {
+    const legacy = path.join(DATA, 'sheets');
+    if (fs.existsSync(legacy) && !fs.existsSync(SHEETS_DIR)) {
+      fs.mkdirSync(CAMPAIGN_DIR, { recursive: true });
+      fs.renameSync(legacy, SHEETS_DIR);
+    }
+  } catch (e) { /* ignore */ }
   const REQ_PORT = Number.isFinite(opts.port) ? opts.port : 8787;
   const log = opts.log || console.log;
 
@@ -164,6 +174,70 @@ export function createHub(opts = {}) {
     return n;
   }
 
+  /* ── Campaign JSON API (file-backed, used by the in-app campaign manager) ── */
+  const DOC_TYPES = ['sheets', 'npcs', 'orgs', 'nightcity', 'documents'];
+  const slug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'campaign';
+  const safeName = (n) => path.basename(String(n || '')).replace(/[^\w. -]+/g, '_');
+  const campDir = (id) => path.join(DATA, safeName(id));
+  function jsonRes(res, code, obj) { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(obj)); }
+  function readBody(req) { return new Promise((resolve) => { let b = ''; req.on('data', (c) => { b += c; if (b.length > 60 * 1024 * 1024) req.destroy(); }); req.on('end', () => resolve(b)); req.on('error', () => resolve('')); }); }
+  function listType(id, type) {
+    const dir = path.join(campDir(id), type);
+    if (!fs.existsSync(dir)) return [];
+    return fs.readdirSync(dir).filter((f) => !f.startsWith('.')).map((f) => { const st = fs.statSync(path.join(dir, f)); return { name: f, size: st.size, mtime: st.mtimeMs }; });
+  }
+  function listCampaigns() {
+    if (!fs.existsSync(DATA)) return [];
+    return fs.readdirSync(DATA).filter((d) => { try { return fs.statSync(path.join(DATA, d)).isDirectory(); } catch { return false; } })
+      .map((id) => { let meta = {}; try { meta = JSON.parse(fs.readFileSync(path.join(DATA, id, 'meta.json'), 'utf8')); } catch {} return { id, name: meta.name || id, sheets: listType(id, 'sheets').length }; });
+  }
+  function ensureCampaign(id, name) {
+    const dir = campDir(id);
+    DOC_TYPES.forEach((t) => fs.mkdirSync(path.join(dir, t), { recursive: true }));
+    const mp = path.join(dir, 'meta.json');
+    if (!fs.existsSync(mp)) fs.writeFileSync(mp, JSON.stringify({ id, name: name || id, createdAt: Date.now() }, null, 2));
+  }
+  async function apiHandler(req, res, urlPath) {
+    const parts = urlPath.replace(/^\/__api\//, '').split('/').filter(Boolean).map(decodeURIComponent);
+    const m = req.method;
+    // /campaigns
+    if (parts.length === 1 && parts[0] === 'campaigns') {
+      if (m === 'GET') return jsonRes(res, 200, { campaigns: listCampaigns() });
+      if (m === 'POST') { const body = await readBody(req); let name = ''; try { name = (JSON.parse(body || '{}').name || '').trim(); } catch {} if (!name) return jsonRes(res, 400, { error: 'name required' }); let id = slug(name), n = 2; while (fs.existsSync(campDir(id))) id = slug(name) + '-' + n++; ensureCampaign(id, name); return jsonRes(res, 200, { id, name }); }
+      return jsonRes(res, 405, { error: 'method' });
+    }
+    if (parts[0] === 'campaigns' && parts[1]) {
+      const id = parts[1];
+      if (!fs.existsSync(campDir(id)) && m !== 'PUT') { /* allow PUT to create */ }
+      // /campaigns/:id
+      if (parts.length === 2) {
+        if (m === 'GET') { let meta = {}; try { meta = JSON.parse(fs.readFileSync(path.join(campDir(id), 'meta.json'), 'utf8')); } catch {} const docs = {}; DOC_TYPES.forEach((t) => docs[t] = listType(id, t)); return jsonRes(res, 200, { id, meta, docs }); }
+        if (m === 'DELETE') { try { fs.rmSync(campDir(id), { recursive: true, force: true }); } catch {} return jsonRes(res, 200, { ok: true }); }
+        if (m === 'PUT') { const body = await readBody(req); let meta = {}; try { meta = JSON.parse(body || '{}'); } catch {} ensureCampaign(id, meta.name); fs.writeFileSync(path.join(campDir(id), 'meta.json'), JSON.stringify(Object.assign({ id }, meta), null, 2)); return jsonRes(res, 200, { ok: true }); }
+        return jsonRes(res, 405, { error: 'method' });
+      }
+      const type = parts[2];
+      if (DOC_TYPES.indexOf(type) < 0) return jsonRes(res, 400, { error: 'bad type' });
+      const typeDir = path.join(campDir(id), type);
+      // /campaigns/:id/:type
+      if (parts.length === 3) {
+        if (m === 'GET') return jsonRes(res, 200, { items: listType(id, type) });
+        if (m === 'POST') { const body = await readBody(req); let payload; try { payload = JSON.parse(body || '{}'); } catch { return jsonRes(res, 400, { error: 'bad json' }); } var nm = safeName(payload.name || ((payload.json && (payload.json.handle || payload.json.name)) || 'item') + '.json'); if (!/\.[a-z0-9]+$/i.test(nm)) nm += '.json'; fs.mkdirSync(typeDir, { recursive: true }); var content = typeof payload.content === 'string' ? payload.content : JSON.stringify(payload.json != null ? payload.json : {}, null, 2); fs.writeFileSync(path.join(typeDir, nm), content); return jsonRes(res, 200, { name: nm }); }
+        return jsonRes(res, 405, { error: 'method' });
+      }
+      // /campaigns/:id/:type/:name
+      if (parts.length === 4) {
+        const nm = safeName(parts[3]); const fp = path.join(typeDir, nm);
+        if (!fp.startsWith(typeDir)) return jsonRes(res, 403, { error: 'path' });
+        if (m === 'GET') { if (!fs.existsSync(fp)) return jsonRes(res, 404, { error: 'not found' }); res.writeHead(200, { 'content-type': nm.endsWith('.json') ? 'application/json; charset=utf-8' : 'text/plain; charset=utf-8' }); res.end(fs.readFileSync(fp)); return; }
+        if (m === 'PUT') { const body = await readBody(req); fs.mkdirSync(typeDir, { recursive: true }); fs.writeFileSync(fp, body); return jsonRes(res, 200, { ok: true, name: nm }); }
+        if (m === 'DELETE') { try { fs.unlinkSync(fp); } catch {} return jsonRes(res, 200, { ok: true }); }
+        return jsonRes(res, 405, { error: 'method' });
+      }
+    }
+    return jsonRes(res, 404, { error: 'no route' });
+  }
+
   /* ── HTTP static server ── */
   const server = http.createServer((req, res) => {
     try {
@@ -173,6 +247,7 @@ export function createHub(opts = {}) {
         res.end(JSON.stringify({ host: PRIMARY_HOST, port: PORT, campaign: CAMPAIGN }));
         return;
       }
+      if (urlPath.startsWith('/__api/')) { apiHandler(req, res, urlPath).catch(() => { try { res.writeHead(500); res.end('api error'); } catch {} }); return; }
       const rel = urlPath === '/' ? 'index.html' : urlPath.replace(/^\/+/, '');
       const filePath = path.join(ROOT, rel);
       if (!filePath.startsWith(ROOT)) { res.writeHead(403); res.end('forbidden'); return; }

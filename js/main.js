@@ -529,6 +529,52 @@ function tutoOpen(id) {
 }
 function tutoClose() { var ov = document.getElementById('tuto-popup-overlay'); if (ov) ov.style.display = 'none'; }
 
+/* Site landing tutorial — reuses the Character-Sheet tutorial popup look. */
+function homeTutorial() {
+  var ov = _tutoPopupEl();
+  document.getElementById('tuto-popup-title').innerHTML = 'How this works';
+  document.getElementById('tuto-popup-body').innerHTML =
+    '<p>A free, unofficial companion for <b>Cyberpunk 2020</b> (v2.01). Everything runs in your browser — nothing to sign up for.</p>' +
+    '<h4>Tools</h4><ul>' +
+      '<li><b class="tuto-ui">Character Sheet</b> — full PC sheet: stats, skills, gear, lifepath, cyberdeck, lifestyle &amp; banking. Export/import as JSON.</li>' +
+      '<li><b class="tuto-ui">NPC Sheet</b>, <b class="tuto-ui">Organisations</b>, <b class="tuto-ui">Night City Map</b>, <b class="tuto-ui">Outfit Designer</b> — build the world around the table.</li>' +
+    '</ul>' +
+    '<h4>Data &amp; Files</h4><ul>' +
+      '<li><b class="tuto-ui">Data</b> — searchable lists (cyberware, weapons, vehicles, gear, corps) with their book references.</li>' +
+      '<li><b class="tuto-ui">Files</b> — core books and homebrew supplements.</li>' +
+    '</ul>' +
+    '<h4>Multiplayer <span class="tuto-chiprep">beta</span></h4>' +
+    '<p>Play at the table on your own Wi-Fi — <b>no cloud, no account, no fees</b>.</p>' +
+    '<div class="tuto-example">The GM runs a small free desktop app (the <b>GM Hub</b>) and shares a link. Players open it; their sheets sync live to the GM. See the <a href="#" onclick="tutoClose();setCategory(\'multiplayer\');return false;">Multiplayer</a> tab to download it, or the <a href="join.html">Join page</a> if your GM already sent you a link.</div>' +
+    '<div class="tuto-links"><b class="tuto-links-h">⇄ Tips</b><ul>' +
+      '<li><span class="tuto-arrow">→</span> Most sheets export to JSON so you can back them up or hand them to your GM.</li>' +
+      '<li><span class="tuto-arrow">→</span> The <span class="tuto-chiprep">i</span> chips throughout the app open per-section guides like this one.</li>' +
+    '</ul></div>';
+  ov.style.display = 'flex';
+}
+
+/* Multiplayer tutorial — same popup look, explains how a local session runs. */
+function multiTutorial() {
+  var ov = _tutoPopupEl();
+  document.getElementById('tuto-popup-title').innerHTML = 'Multiplayer';
+  document.getElementById('tuto-popup-body').innerHTML =
+    '<p>Everything runs on your own network — <b>no cloud, no account, no fees</b>. The GM hosts; players just open a link.</p>' +
+    '<h4>For the GM</h4><ul>' +
+      '<li>Download and open the <b class="tuto-ui">GM Hub</b> app (buttons on this tab).</li>' +
+      '<li>It opens your dashboard and a folder of editable sheet files.</li>' +
+      '<li>Share each player their link; their sheet appears live and you can edit any of them.</li>' +
+    '</ul>' +
+    '<h4>For a player</h4><ul>' +
+      '<li>Nothing to install — open the link your GM sends, on the same Wi-Fi.</li>' +
+      '<li>Edit your sheet; it syncs to the GM. Offline edits merge when you reconnect.</li>' +
+    '</ul>' +
+    '<div class="tuto-example">A link looks like <code>http://192.168.1.42:8787/cs.html?campaign=main&amp;sheet=Player_1</code>. The page is served by the GM\'s machine, so it\'s plain <code>http://</code> on the LAN — no padlock, that\'s normal and safe here.</div>' +
+    '<div class="tuto-links"><b class="tuto-links-h">⇄ Links</b><ul>' +
+      '<li><span class="tuto-arrow">→</span> Got a link already? Use the <a href="join.html">Join page</a>.</li>' +
+    '</ul></div>';
+  ov.style.display = 'flex';
+}
+
 /* Inject a chip into every section header that has a TUTORIALS entry (idempotent) */
 function initTutorialChips() {
   Object.keys(TUTORIALS).forEach(function(id) {
