@@ -1,5 +1,5 @@
 /**
- * Bartmoss GM Hub — Electron main process.
+ * Datafort (Bartmoss GM app) — Electron main process.
  *
  * Starts the local hub (createHub) in-process and opens a window on the GM
  * dashboard served by it. Players connect to http://<lan-ip>:<port>/ on the
@@ -9,6 +9,10 @@
 const { app, BrowserWindow, Menu, shell, dialog, clipboard, ipcMain } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
+
+// Force the display name early so the macOS menu bar / dock say "Datafort"
+// instead of "Electron" in dev (packaged apps already use productName).
+app.setName('Datafort');
 
 // Folder picker for the campaign manager: returns text files' { name, content }.
 ipcMain.handle('pick-folder-files', async () => {
@@ -54,7 +58,19 @@ function lanAppUrl() { return `http://${hub.primaryHost}:${hub.port}/app.html`; 
 
 function buildMenu() {
   const template = [
-    ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
+    // Explicit app menu (instead of role:'appMenu') so the macOS menu bar shows
+    // "Datafort" even in dev, where role:'appMenu' would inherit the Electron
+    // bundle name. Packaged builds would say Datafort either way.
+    ...(process.platform === 'darwin' ? [{
+      label: 'Datafort',
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    }] : []),
     {
       label: 'Campaign',
       submenu: [
@@ -92,7 +108,7 @@ function buildMenu() {
 function openAppWindow() {
   const w = new BrowserWindow({
     width: 1200, height: 820, minWidth: 720, minHeight: 480,
-    title: 'Bartmoss Datafort',
+    title: 'Datafort',
     webPreferences: { contextIsolation: true, nodeIntegration: false, preload: path.join(__dirname, 'preload.js') },
   });
   w.loadURL(appUrl());
@@ -109,6 +125,12 @@ else {
   app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
 
   app.whenReady().then(async () => {
+    // In dev (`electron .`) the dock shows Electron's default icon — the
+    // build.icon only applies to packaged apps. Set it explicitly so dev looks
+    // right. Packaged builds use the bundled .icns (build/ isn't shipped).
+    if (process.platform === 'darwin' && !app.isPackaged) {
+      try { app.dock.setIcon(path.join(__dirname, 'build', 'icon.png')); } catch {}
+    }
     try { fs.mkdirSync(dataDir, { recursive: true }); } catch {}
     await startHub();
     buildMenu();
