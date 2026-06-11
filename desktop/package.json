@@ -24,7 +24,8 @@
     "files": ["main.js", "preload.js", "hub.bundle.cjs"],
     "extraResources": [{ "from": "site", "to": "site" }],
     "directories": { "output": "release" },
-    "mac": { "target": ["dmg"], "category": "public.app-category.games" },
+    "afterPack": "./build/afterPack.cjs",
+    "mac": { "target": ["dmg"], "category": "public.app-category.games", "identity": null },
     "win": { "target": ["nsis"] },
     "publish": [{ "provider": "github", "owner": "giorgios-github", "repo": "rache-bartmoss-datafort" }]
   }
