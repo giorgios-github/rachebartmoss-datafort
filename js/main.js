@@ -575,6 +575,60 @@ function multiTutorial() {
   ov.style.display = 'flex';
 }
 
+/* ─── Player CONNECT (C6): pull the GM's copy or push your local build ─── */
+function _initPlayerConnect() {
+  var foot = document.getElementById('sidebar-foot'); if (!foot) return;
+  if (document.getElementById('player-connect-btn')) return;
+  var b = document.createElement('button');
+  b.id = 'player-connect-btn';
+  b.className = 'side-connect';
+  b.innerHTML = '⇄ CONNECT';
+  b.title = "Connect to your GM's session";
+  b.onclick = playerConnect;
+  foot.insertBefore(b, foot.firstChild);
+}
+function playerConnect() {
+  var ov = _tutoPopupEl();
+  document.getElementById('tuto-popup-title').innerHTML = 'Connect to your GM';
+  document.getElementById('tuto-popup-body').innerHTML =
+    '<p>On the same Wi-Fi as your GM. Paste the link they gave you (or fill it in), then choose to pull their copy or push your local build.</p>' +
+    '<label class="pc-label">Paste the link your GM gave you</label>' +
+    '<input id="pc-link" class="pc-input" placeholder="http://192.168.1.42:8787/cs.html?campaign=main&amp;sheet=Player_1">' +
+    '<div class="pc-or">— or fill it in —</div>' +
+    '<div class="pc-row">' +
+      '<div><label class="pc-label">Campaign</label><input id="pc-camp" class="pc-input" value="main"></div>' +
+      '<div><label class="pc-label">Your sheet id</label><input id="pc-sheet" class="pc-input" placeholder="Player_1"></div>' +
+    '</div>' +
+    '<div class="pc-actions">' +
+      '<button class="pc-btn pc-btn-recv" onclick="_playerGo(\'receive\')">Receive sheet<small>load the GM’s copy</small></button>' +
+      '<button class="pc-btn pc-btn-send" onclick="_playerGo(\'send\')">Send my sheet<small>push your local build</small></button>' +
+    '</div>' +
+    '<div id="pc-err" class="pc-err"></div>';
+  ov.style.display = 'flex';
+}
+function _playerGo(mode) {
+  var errEl = document.getElementById('pc-err');
+  function fail(m) { if (errEl) errEl.textContent = m; }
+  var link = (document.getElementById('pc-link').value || '').trim();
+  var camp, sheet, origin = '';
+  if (link) {
+    try {
+      var u = new URL(link, location.href);
+      if (!/^https?:$/.test(u.protocol)) return fail('That does not look like a valid hub link.');
+      camp = u.searchParams.get('campaign'); sheet = u.searchParams.get('sheet');
+      if (!camp || !sheet) return fail('That link is missing the campaign or sheet.');
+      if (u.origin !== location.origin) origin = u.origin; // a different hub
+    } catch (e) { return fail('That does not look like a valid link.'); }
+  } else {
+    camp = (document.getElementById('pc-camp').value || 'main').trim();
+    sheet = (document.getElementById('pc-sheet').value || '').trim();
+    if (!sheet) return fail('Paste the link, or enter your sheet id.');
+  }
+  var url = (origin ? origin + '/' : '') + 'cs.html?campaign=' + encodeURIComponent(camp) +
+    '&sheet=' + encodeURIComponent(sheet) + '&mode=' + mode;
+  window.location.href = url;
+}
+
 /* Inject a chip into every section header that has a TUTORIALS entry (idempotent) */
 function initTutorialChips() {
   Object.keys(TUTORIALS).forEach(function(id) {
@@ -5348,10 +5402,10 @@ function _csSaveScroll() { var el = _csScrollEl(); if (el && CS) _csScroll.set(C
 function _csRestoreScroll() { var el = _csScrollEl(); if (el) el.scrollTop = _csScroll.get(CS) || 0; }
 function _csPersist() {
   if (document.getElementById('cs-name')) collectState();
-  // Joined mode: the campaign (hub) is the source of truth, so we must NOT
-  // write the bound sheet into the shared localStorage (all iframes share one
-  // origin → that caused cross-talk). cs-join.js handles publishing instead.
-  if (window.__csJoined) return;
+  // Joined mode / file-bridge: the campaign (hub) is the source of truth, so we
+  // must NOT write the bound sheet into shared localStorage. cs-join.js (live) or
+  // campaign-doc.js (file) handles persistence instead.
+  if (window.__csJoined || window.__cdoc) return;
   try { localStorage.setItem(_CS_LS, JSON.stringify({ list: SHEETS, active: csActiveIdx })); } catch (e) {}
 }
 function renderCsTabs() {
@@ -6254,6 +6308,10 @@ function init() {
     // Initial sub-nav for the active category (home) + preload menu tool view
     renderSubNav('home');
     showTool('menu');
+
+    // Player mode (in-app: role=player → index.html?player=1): add a prominent
+    // CONNECT button to the sidebar foot, above the collapse arrow.
+    if (new URLSearchParams(location.search).get('player') === '1') _initPlayerConnect();
   }
 
   /* ─── Character sheet data ─── */
@@ -6267,8 +6325,15 @@ function init() {
     // js/cs-join.js — do NOT load the local localStorage tabs here (they'd
     // clobber the bound sheet, since init() runs after cs-join's setup).
     window.__csJoined = !!(_params.get('campaign') && _params.get('sheet'));
-    if (window.__csJoined) {
-      SHEETS = [makeBlankCS()]; csActiveIdx = 0; CS = SHEETS[0]; // placeholder until cs-join binds
+    // File-bridge mode (?cdoc=1): the sheet is loaded from a campaign file by
+    // js/campaign-doc.js; same as joined mode, don't touch local tabs.
+    var _cdoc = _params.get('cdoc') === '1';
+    // Player "Send my sheet" (?mode=send): we DO want the local active sheet
+    // loaded so cs-join can push it to the hub. "receive" (default) keeps the
+    // placeholder and pulls the GM's copy.
+    var _sendMode = _params.get('mode') === 'send';
+    if ((window.__csJoined && !_sendMode) || _cdoc) {
+      SHEETS = [makeBlankCS()]; csActiveIdx = 0; CS = SHEETS[0]; // placeholder until the bridge binds
     } else {
       var imported = null;
       try {
@@ -6325,6 +6390,11 @@ function init() {
     // Joined mode: init() has finished, so cs-join can now safely bind the
     // campaign sheet without being overwritten. Deterministic hand-off.
     if (window.__csJoined && typeof window.__csJoinReady === 'function') window.__csJoinReady();
+    // File-bridge adapter (campaign-doc.js loads/saves a single sheet file).
+    window.__cdocAdapter = {
+      load: function (json) { CS = (json && Object.keys(json).length) ? json : makeBlankCS(); SHEETS = [CS]; csActiveIdx = 0; applyCS(); },
+      serialize: function () { if (typeof collectState === 'function') collectState(); return CS; },
+    };
   }
   initTutorialChips();
 }

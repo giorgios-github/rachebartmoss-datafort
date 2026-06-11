@@ -27,8 +27,8 @@ createHub(opts).then((hub) => {
   console.log('  ╚════════════════════════════════════════════╝\n');
   console.log(`  Campaign: "${hub.campaign}"  ·  loaded ${hub.loaded} sheet(s)`);
   console.log(`  Folder:   ${hub.sheetsDir}\n`);
-  console.log('  GM dashboard:');
-  console.log(`     http://${hub.primaryHost}:${hub.port}/gm.html?campaign=${hub.campaign}\n`);
+  console.log('  Open the app:');
+  console.log(`     http://${hub.primaryHost}:${hub.port}/app.html\n`);
   const ls = hub.links();
   if (ls.length) { console.log('  Player sheet links (give each player theirs):'); ls.forEach((l) => console.log(`     ${(l.name).padEnd(20)} ->  ${l.url}`)); }
   else console.log('  No sheets yet. Create one in the dashboard (its link prints here).');

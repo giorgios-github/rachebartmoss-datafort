@@ -63,6 +63,7 @@ function _npcMigrate(n) {            // ensure new fields on any loaded NPC
   return n;
 }
 function _save() {
+  if (window.__cdoc) return; // file-bridge mode: campaign-doc.js owns persistence
   try { localStorage.setItem(_LS_KEY_ALL, JSON.stringify({ list: NPCS, active: activeIdx })); } catch(e) {}
 }
 function _load() {
@@ -112,16 +113,21 @@ async function loadData() {
     console.warn('NPC loadData error:', e);
   }
 
-  // Check for sessionStorage preload
+  // Check for sessionStorage preload / file-bridge mode
+  var _params = new URLSearchParams(window.location.search);
+  window.__cdoc = _params.get('cdoc') === '1';
   try {
-    var params = new URLSearchParams(window.location.search);
-    var ssKey = params.get('key');
-    if (ssKey) {
-      var stored = sessionStorage.getItem(ssKey);
-      if (stored) { NPCS = [_npcMigrate(JSON.parse(stored))]; activeIdx = 0; NPC = NPCS[0]; }
-      else { _load(); }
+    if (window.__cdoc) {
+      NPCS = [makeBlankNPC()]; activeIdx = 0; NPC = NPCS[0]; // placeholder until the bridge loads the file
     } else {
-      _load();
+      var ssKey = _params.get('key');
+      if (ssKey) {
+        var stored = sessionStorage.getItem(ssKey);
+        if (stored) { NPCS = [_npcMigrate(JSON.parse(stored))]; activeIdx = 0; NPC = NPCS[0]; }
+        else { _load(); }
+      } else {
+        _load();
+      }
     }
   } catch(e) { _load(); }
 
@@ -129,6 +135,12 @@ async function loadData() {
   renderAll();
   initRoleDropdown();
   applyViewMode();
+
+  // File-bridge adapter (campaign-doc.js loads/saves a single NPC file).
+  window.__cdocAdapter = {
+    load: function (json) { NPC = (json && Object.keys(json).length) ? _npcMigrate(json) : makeBlankNPC(); NPCS = [NPC]; activeIdx = 0; renderNpcTabs(); renderAll(); applyViewMode(); },
+    serialize: function () { return NPC; },
+  };
 }
 
 function initRoleDropdown() {
