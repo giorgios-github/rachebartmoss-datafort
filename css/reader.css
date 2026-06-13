@@ -1,0 +1,82 @@
+/* reader.css — "L'Établi" sourcebook reader. Dark workbench, book on top,
+   tabbed spine (TOC), bookmark ribbons, spiral notebook. Datafort tokens. */
+.reader-host { flex:1; min-height:0; }
+.rdr { display:flex; flex-direction:column; height:100%; min-height:0; background:#1b1b20; color:#e8e8e0; font-family:var(--mono,monospace); }
+
+.rdr-tabs { display:flex; gap:0; background:#111; flex-shrink:0; min-height:34px; }
+.rdr-tab { background:#2a2a2a; color:#aaa; border:none; border-right:1px solid #000; padding:8px 16px; font-family:var(--head,sans-serif); letter-spacing:1px; font-size:12px; cursor:pointer; }
+.rdr-tab:hover { color:#fff; }
+.rdr-tab.active { background:#f4f4ef; color:#111; }
+
+.rdr-stage { flex:1; min-height:0; display:flex; }
+
+/* spine — tabbed table of contents on the book's left flank */
+.rdr-spine { flex:0 0 40px; display:flex; flex-direction:column; gap:6px; padding:24px 0 0 6px; align-items:flex-start; }
+.rdr-stab { width:40px; background:#111; color:#cfcfcf; border:1px solid #000; border-right:none; font-family:var(--head,sans-serif); font-size:10px; letter-spacing:1px; padding:9px 0; cursor:pointer; transition:width .1s, background .1s; }
+.rdr-stab:hover { width:52px; background:#000; color:#fff; }
+
+.rdr-deskwrap { flex:1; min-width:0; position:relative; display:flex; align-items:center; justify-content:center; padding:30px 18px 18px; }
+
+/* bookmark ribbons hanging from the top */
+.rdr-ribbons { position:absolute; top:0; left:50%; transform:translateX(-50%); display:flex; gap:10px; z-index:3; }
+.rdr-ribbon { width:18px; height:34px; border:none; cursor:pointer; color:#fff; clip-path:polygon(0 0,100% 0,100% 100%,50% 84%,0 100%); display:flex; align-items:flex-start; justify-content:center; padding-top:3px; transition:height .12s; }
+.rdr-ribbon:hover { height:42px; }
+.rdr-ribbon span { font-size:8px; writing-mode:vertical-rl; }
+.rdr-ribbon.red { background:#c0392b; } .rdr-ribbon.gold { background:#b8860b; }
+
+/* the open book — sized to the actual PDF page dimensions (no slack margins) */
+.rdr-book { position:relative; display:flex; align-items:stretch; max-width:100%; max-height:100%; filter:drop-shadow(0 18px 30px rgba(0,0,0,.45)); }
+.rdr-page { flex:0 0 auto; position:relative; background:#fbfbf7; overflow:hidden; }
+.rdr-page-l { border:2px solid #111; border-right:1px solid #c9c9c2; }
+.rdr-page-r { border:2px solid #111; border-left:1px solid #e2e2db; }
+.rdr-page canvas { display:block; }
+/* selectable text layer over each page */
+.rdr-text { position:absolute; left:0; top:0; overflow:hidden; line-height:1; opacity:1; }
+.rdr-text > span { color:transparent; position:absolute; white-space:pre; cursor:text; transform-origin:0 0; }
+.rdr-text ::selection { background:rgba(184,134,11,.4); }
+.rdr-text ::-moz-selection { background:rgba(184,134,11,.4); }
+.rdr-selnote { position:absolute; z-index:5; background:#1a7a2e; color:#fff; border:1px solid #0c4a1c; font-family:var(--mono,monospace); font-size:11px; padding:4px 9px; cursor:pointer; }
+.rdr-selnote[hidden] { display:none; }
+.rdr-bind { position:absolute; left:50%; top:0; bottom:0; width:34px; transform:translateX(-50%); pointer-events:none; background:linear-gradient(90deg,rgba(0,0,0,0),rgba(0,0,0,.22) 50%,rgba(0,0,0,0)); z-index:2; }
+.rdr-curl { position:absolute; right:0; bottom:0; width:46px; height:46px; pointer-events:none; clip-path:polygon(100% 0,100% 100%,0 100%); background:linear-gradient(135deg,#fff 0%,#f1f1ea 42%,#d2d2c9 78%,#c4c4ba 100%); box-shadow:-6px -6px 14px rgba(0,0,0,.2); }
+
+/* day/night switch */
+.rdr-switch { position:absolute; top:14px; right:18px; display:flex; border:2px solid #000; cursor:pointer; box-shadow:0 4px 10px rgba(0,0,0,.45); z-index:3; }
+.rdr-switch span { font-family:var(--head,sans-serif); font-size:10px; letter-spacing:1px; padding:5px 8px; }
+.rdr-sw-day { background:#f4f4ef; color:#111; } .rdr-sw-night { background:#111; color:#777; }
+.rdr.night .rdr-sw-day { background:#111; color:#777; } .rdr.night .rdr-sw-night { background:#f4f4ef; color:#111; }
+/* night: invert the rendered pages for a dark read */
+.rdr.night .rdr-deskwrap { background:#0e0e12; }
+.rdr.night .rdr-page { background:#15151a; }
+.rdr.night .rdr-page canvas { filter:invert(1) hue-rotate(180deg); }
+
+/* spiral notebook — page-anchored notes */
+.rdr-notebook { flex:0 0 320px; background:#f7f6ef; border-left:2px solid #000; display:flex; flex-direction:column; }
+.rdr-nb-head { display:flex; align-items:center; gap:8px; font-family:var(--head,sans-serif); letter-spacing:2px; font-size:12px; color:#111; padding:12px 14px 10px 44px; border-bottom:1px solid #ddd9c8; }
+.rdr-nb-add { margin-left:auto; background:#111; color:#fff; border:none; font-family:var(--mono,monospace); font-size:11px; padding:4px 9px; cursor:pointer; }
+.rdr-nb-add:hover { background:#b8860b; color:#111; }
+.rdr-nb-body { flex:1; min-height:0; overflow:auto; position:relative; padding:10px 12px 12px 44px; }
+.rdr-nb-body::before { content:''; position:absolute; left:16px; top:8px; bottom:8px; width:14px; background:repeating-linear-gradient(transparent 0 9px,#cfcdbe 9px 13px,transparent 13px 22px); border-left:2px solid #c7c5b6; }
+.rdr-nb-empty { color:#999; font-size:13px; font-style:italic; padding:6px 0; }
+.rdr-note { border-bottom:1px dashed #d6d3c2; padding:8px 0; }
+.rdr-note-ex { font-family:var(--mono,monospace); font-size:11px; color:#7a6a3a; border-left:2px solid #c0392b; padding-left:8px; margin-bottom:5px; }
+.rdr-note-t { width:100%; box-sizing:border-box; border:none; background:transparent; color:#222; font-family:'Caveat',var(--mono,monospace); font-size:19px; line-height:1.15; resize:vertical; min-height:34px; }
+.rdr-note-t:focus { outline:none; }
+.rdr-note-foot { display:flex; align-items:center; gap:8px; margin-top:3px; }
+.rdr-note-go { background:transparent; border:none; color:#1a7a2e; font-family:var(--mono,monospace); font-size:11px; cursor:pointer; padding:0; }
+.rdr-note-go:hover { text-decoration:underline; }
+.rdr-note-del { margin-left:auto; background:transparent; border:none; color:#c0392b; cursor:pointer; font-size:12px; }
+
+/* footer nav */
+.rdr-foot { display:flex; align-items:center; justify-content:center; gap:18px; background:#111; flex-shrink:0; padding:6px; }
+.rdr-fbtn { background:#1a1a1a; color:#ddd; border:1px solid #555; font-size:18px; line-height:1; width:40px; height:30px; cursor:pointer; }
+.rdr-fbtn:hover { background:#000; color:#fff; }
+.rdr-foot-mid { display:flex; align-items:center; gap:14px; }
+.rdr-pageno { font-size:12px; letter-spacing:1px; color:#cfcfcf; }
+.rdr-bm { background:transparent; border:1px solid #555; color:#b8860b; font-family:var(--mono,monospace); font-size:11px; letter-spacing:1px; padding:4px 9px; cursor:pointer; }
+.rdr-bm:hover { color:#fff; border-color:#b8860b; background:#b8860b; }
+
+.rdr-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#888; font-size:13px; padding:30px; text-align:center; z-index:6; background:#1b1b20; }
+.rdr-empty[hidden] { display:none; }
+
+@media (max-width:900px) { .rdr-notebook { display:none; } }

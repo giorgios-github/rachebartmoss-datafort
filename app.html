@@ -7,6 +7,9 @@
 <link rel="icon" href="img/favicon.ico">
 <link rel="stylesheet" href="css/main.css">
 <link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/combat.css">
+<link rel="stylesheet" href="css/reader.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&display=swap">
 </head>
 <body>
 
@@ -43,16 +46,23 @@
     <span id="app-live" class="app-live">● LIVE</span>
     <span id="app-crumbs"></span>
     <span id="app-status" class="app-status">offline</span>
+    <button class="app-btn" onclick="openReaderApp()" title="Sourcebooks">▤ Books</button>
     <button class="app-btn" onclick="switchRole()">Switch role</button>
   </header>
   <main id="app-main">
     <section id="view-campaigns" class="app-view"></section>
     <section id="view-campaign" class="app-view" hidden></section>
+    <section id="view-pconnect" class="app-view" hidden></section>
     <section id="view-session" class="app-view app-view-session" hidden></section>
   </main>
 </div>
 
 <script src="js/sync.bundle.js"></script>
+<script src="js/vendor/pdf.min.js"></script>
+<script src="js/combat-engine.js"></script>
+<script src="js/combat-ui.js"></script>
+<script src="js/npc-archetypes.js"></script>
+<script src="js/reader.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
