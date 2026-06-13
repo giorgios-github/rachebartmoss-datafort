@@ -198,7 +198,7 @@ export function createHub(opts = {}) {
   }
   function listCampaigns() {
     if (!fs.existsSync(DATA)) return [];
-    return fs.readdirSync(DATA).filter((d) => { try { return fs.statSync(path.join(DATA, d)).isDirectory(); } catch { return false; } })
+    return fs.readdirSync(DATA).filter((d) => { if (d.indexOf('__') === 0) return false; try { return fs.statSync(path.join(DATA, d)).isDirectory(); } catch { return false; } })
       .map((id) => { let meta = {}; try { meta = JSON.parse(fs.readFileSync(path.join(DATA, id, 'meta.json'), 'utf8')); } catch {} return { id, name: meta.name || id, sheets: listType(id, 'sheets').length }; });
   }
   function ensureCampaign(id, name) {
@@ -210,6 +210,24 @@ export function createHub(opts = {}) {
   async function apiHandler(req, res, urlPath) {
     const parts = urlPath.replace(/^\/__api\//, '').split('/').filter(Boolean).map(decodeURIComponent);
     const m = req.method;
+    // /books — the local sourcebook folder (DATA/__books): list PDFs + stream one.
+    if (parts[0] === 'books') {
+      const booksDir = path.join(DATA, '__books');
+      try { fs.mkdirSync(booksDir, { recursive: true }); } catch {}
+      if (parts.length === 1) {
+        let files = [];
+        try { files = fs.readdirSync(booksDir).filter((f) => /\.pdf$/i.test(f)).sort(); } catch {}
+        const books = files.map((f) => ({ id: f.replace(/\.pdf$/i, ''), title: f.replace(/\.pdf$/i, ''), url: '/__api/books/' + encodeURIComponent(f) }));
+        return jsonRes(res, 200, { books, dir: booksDir });
+      }
+      if (parts.length === 2) {
+        const fp = path.join(booksDir, safeName(parts[1]));
+        if (!fp.startsWith(booksDir) || !fs.existsSync(fp)) { res.writeHead(404); res.end('not found'); return; }
+        const st = fs.statSync(fp);
+        res.writeHead(200, { 'content-type': 'application/pdf', 'content-length': st.size, 'cache-control': 'no-store' });
+        fs.createReadStream(fp).pipe(res); return;
+      }
+    }
     // /campaigns
     if (parts.length === 1 && parts[0] === 'campaigns') {
       if (m === 'GET') return jsonRes(res, 200, { campaigns: listCampaigns() });

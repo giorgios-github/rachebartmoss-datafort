@@ -591,17 +591,16 @@ function playerConnect() {
   var ov = _tutoPopupEl();
   document.getElementById('tuto-popup-title').innerHTML = 'Connect to your GM';
   document.getElementById('tuto-popup-body').innerHTML =
-    '<p>On the same Wi-Fi as your GM. Paste the link they gave you (or fill it in), then choose to pull their copy or push your local build.</p>' +
+    '<p>On the same Wi-Fi as your GM. Paste the link they gave you (or fill it in) to join the session.</p>' +
     '<label class="pc-label">Paste the link your GM gave you</label>' +
-    '<input id="pc-link" class="pc-input" placeholder="http://192.168.1.42:8787/cs.html?campaign=main&amp;sheet=Player_1">' +
+    '<input id="pc-link" class="pc-input" placeholder="http://192.168.1.42:8787/app.html?campaign=main&amp;sheet=Player_1">' +
     '<div class="pc-or">— or fill it in —</div>' +
     '<div class="pc-row">' +
       '<div><label class="pc-label">Campaign</label><input id="pc-camp" class="pc-input" value="main"></div>' +
       '<div><label class="pc-label">Your sheet id</label><input id="pc-sheet" class="pc-input" placeholder="Player_1"></div>' +
     '</div>' +
     '<div class="pc-actions">' +
-      '<button class="pc-btn pc-btn-recv" onclick="_playerGo(\'receive\')">Receive sheet<small>load the GM’s copy</small></button>' +
-      '<button class="pc-btn pc-btn-send" onclick="_playerGo(\'send\')">Send my sheet<small>push your local build</small></button>' +
+      '<button class="pc-btn pc-btn-recv" onclick="_playerGo(\'join\')">⇄ CONNECT<small>join the session</small></button>' +
     '</div>' +
     '<div id="pc-err" class="pc-err"></div>';
   ov.style.display = 'flex';
@@ -624,8 +623,9 @@ function _playerGo(mode) {
     sheet = (document.getElementById('pc-sheet').value || '').trim();
     if (!sheet) return fail('Paste the link, or enter your sheet id.');
   }
-  var url = (origin ? origin + '/' : '') + 'cs.html?campaign=' + encodeURIComponent(camp) +
-    '&sheet=' + encodeURIComponent(sheet) + '&mode=' + mode;
+  // Connect opens the session shell (app.html) for this campaign/sheet.
+  var url = (origin ? origin + '/' : '') + 'app.html?campaign=' + encodeURIComponent(camp) +
+    '&sheet=' + encodeURIComponent(sheet);
   window.location.href = url;
 }
 
@@ -675,6 +675,24 @@ function setCategory(panel) {
   document.querySelectorAll('.cat').forEach(function(c) { c.classList.toggle('active', c.dataset.panel === panel); });
   document.querySelectorAll('.panel').forEach(function(p) { p.classList.toggle('active', p.id === panel); });
   renderSubNav(panel);
+  if (panel === 'pdfs') mountSiteReader();
+}
+// Files tab → the "Établi" sourcebook reader (offline). Books from the hub's
+// local folder (/__api/books) when served by a hub, else the static pdf-src list.
+function mountSiteReader() {
+  var host = document.getElementById('pdf-frame');
+  if (!host || !window.SourcebookReader || host.dataset.reader) return;
+  host.dataset.reader = '1';
+  function staticBooks() {
+    var src = document.getElementById('pdf-src'); if (!src) return [];
+    return Array.prototype.slice.call(src.querySelectorAll('li[data-pdf]')).map(function (li) {
+      return { id: li.dataset.pdf, title: (li.textContent || '').trim(), url: li.dataset.pdf };
+    });
+  }
+  fetch('/__api/books').then(function (r) { return r.ok ? r.json() : { books: [] }; }).then(function (d) {
+    var list = (d && d.books && d.books.length) ? d.books : staticBooks();
+    host.innerHTML = ''; window.SourcebookReader.mount(host, { books: list });
+  }).catch(function () { host.innerHTML = ''; window.SourcebookReader.mount(host, { books: staticBooks() }); });
 }
 function renderSubNav(panel) {
   var sn = document.getElementById('sub-nav'); if (!sn) return;
@@ -691,15 +709,8 @@ function renderSubNav(panel) {
     }).join('');
     sn.querySelectorAll('.db-tab').forEach(function(b) { b.onclick = function() { setDbTab(b.dataset.name); }; });
   } else if (panel === 'pdfs') {
-    var src = document.getElementById('pdf-src');
-    sn.innerHTML = '<div class="pdf-list">' + (src ? src.innerHTML : '') + '</div>';
-    sn.querySelectorAll('li[data-pdf]').forEach(function(li) {
-      li.onclick = function() {
-        sn.querySelectorAll('li[data-pdf]').forEach(function(l) { l.classList.remove('active'); });
-        li.classList.add('active');
-        document.getElementById('pdf-frame').innerHTML = '<iframe src="' + li.dataset.pdf + '"></iframe>';
-      };
-    });
+    // The reader has its own source tabs / TOC; the sidebar is just a hint.
+    sn.innerHTML = '<div class="sub-note">Sourcebooks open on the workbench. Switch books with the tabs at the top.</div>';
   } else if (panel === 'multiplayer') {
     sn.innerHTML = '<div class="sub-note">Local-first co-op: the GM runs a small free app, players sync on the same Wi-Fi. No cloud.</div>' +
       '<div class="sub-item" onclick="document.getElementById(\'dl-mac\').scrollIntoView({behavior:\'smooth\'})">Download the GM Hub</div>' +
@@ -1578,8 +1589,11 @@ function removeClothing(fi) { unequipToWardrobe(fi); }
 
 function renderFashionBodyMap() {
   var zones = { head: [], torso: [], rarm: [], larm: [], rleg: [], lleg: [] };
-  var equippedOutfit = (CS.outfits || []).filter(function(o) { return o.equipped; })[0];
-  ((equippedOutfit && equippedOutfit.items) || []).forEach(function(f) {
+  // Overlay follows the ACTIVE tab (the outfit being viewed/edited), not the equipped one,
+  // so each tab shows its own coverage. (ARMOR SP in the damage calc still uses the equipped outfit.)
+  var outfits = CS.outfits || [];
+  var activeOutfit = outfits[Math.min(_activeOutfitIdx, outfits.length - 1)];
+  ((activeOutfit && activeOutfit.items) || []).forEach(function(f) {
     if (!f.locs) return;
     LOCS.forEach(function(loc) {
       if (f.locs[loc]) zones[loc].push(f.name);
@@ -1814,6 +1828,10 @@ function renderOutfitSection() {
     '<div class="outfit-items" ondragover="clothingEquippedDragOver(event)" ondrop="clothingEquippedDrop(event)">' +
       itemsHtml +
     '</div>';
+
+  // Keep the body-map overlay in sync with the active tab on every re-render
+  // (covers + new tab, add/remove item, etc., not just explicit tab switches).
+  renderFashionBodyMap();
 }
 function renderClothing() { renderOutfitSection(); } // shim
 
@@ -4025,7 +4043,7 @@ function renderLifestyle() {
     var opts = '<option value=""' + (!a.feeAccountId?' selected':'') + '>Cash</option>' +
       openAccts.map(function(b){ return '<option value="' + b.id + '"' + (feeTgt===b.id?' selected':'') + '>' + _esc(b.name) + (b.id===a.id?' (self)':'') + '</option>'; }).join('');
     return '<div class="ls-svc-row ls-svc-acct">' +
-      '<span class="ls-svc-name">🏦 ' + _esc(a.name) + ' — account fee</span>' +
+      '<span class="ls-svc-name">' + _esc(a.name) + ' — account fee</span>' +
       '<select class="ls-svc-bill" title="Fee billed to" onchange="lsSetFeeAccount(\'' + a.id + '\',this.value)">' + opts + '</select>' +
       '<span class="ls-svc-cost-fixed">' + fee + '</span><span class="ls-suf">eb/mo</span>' +
     '</div>';

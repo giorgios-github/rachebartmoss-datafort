@@ -97,6 +97,9 @@
     // DOM event. publishLocal() no-ops when nothing changed, so a relaxed 4s
     // interval is plenty and keeps idle sheets cheap.
     setInterval(publishLocal, 4000);
+    // Joining mid-combat: the initial sync may have landed before our observer —
+    // check once now so the player transitions straight into the combat view.
+    syncCombatState();
   }
   function tryBind() { if (bound || !mainReady || !isSynced) return; bound = true; doBind(); }
 
@@ -116,8 +119,10 @@
   function start() {
     banner();
     // GM-side editor iframes pass ?as=gm so they aren't counted as players.
+    // Players use their sheet id as the presence name so the session shell and
+    // this Live-sheet iframe (two connections from one player) dedupe to one.
     var asRole = q.get('as') === 'gm' ? 'gm' : 'player';
-    camp = S.join({ url: wsUrl(), room: campaign, member: { name: asRole === 'gm' ? 'GM' : 'Player', role: asRole } });
+    camp = S.join({ url: wsUrl(), room: campaign, member: { name: asRole === 'gm' ? 'GM' : sheetId, role: asRole } });
     camp.onStatus(function (st) {
       var b = document.getElementById('cs-join-banner'); if (!b) return;
       if (st === 'connected') { b.style.background = '#1a7a2e'; b.textContent = 'CONNECTED · campaign "' + campaign + '" · live sync'; }
@@ -127,6 +132,58 @@
     setTimeout(function () { isSynced = true; tryBind(); }, 5000); // fallback: offline / hub down
     // GM can pause the session — show a prominent banner (sync keeps running).
     if (camp.onPaused) camp.onPaused(showPaused);
+    // Combat: when the GM starts one, every player transitions to the combat
+    // overlay (resorbable — collapse back to the sheet, reopen via the button).
+    if (camp.onCombatChange) camp.onCombatChange(syncCombatState);
+  }
+
+  /* ── Combat overlay (player) ── */
+  var combatUI = null, combatWasActive = false;
+  function combatActive() {
+    var m = (camp && camp.combatMeta && camp.combatMeta()) || {};
+    return !!m.active;
+  }
+  function syncCombatState() {
+    // GM session-dashboard columns (?as=gm) keep showing the normal sheet — the
+    // GM runs combat from the main stage, so these editing iframes must NOT
+    // auto-flip to the combat overlay (otherwise collapsing combat would reveal
+    // combat overlays in every column instead of the players' sheets).
+    if (q.get('as') === 'gm') return;
+    var active = combatActive();
+    var btn = document.getElementById('cs-combat-btn');
+    if (active) {
+      if (!btn) {
+        btn = document.createElement('button');
+        btn.id = 'cs-combat-btn';
+        btn.textContent = '◆ COMBAT';
+        btn.style.cssText = 'position:fixed;right:14px;bottom:14px;z-index:9000;background:#c0392b;color:#fff;border:2px solid #7e2419;font-family:var(--head,sans-serif);letter-spacing:2px;font-size:14px;padding:10px 18px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.4);';
+        btn.onclick = openCombatOverlay;
+        document.body.appendChild(btn);
+      }
+      if (!combatWasActive) openCombatOverlay(); // auto-transition on combat start
+    } else {
+      if (btn) btn.parentNode.removeChild(btn);
+      closeCombatOverlay();
+    }
+    combatWasActive = active;
+  }
+  function openCombatOverlay() {
+    if (document.getElementById('cs-combat-overlay') || !window.CombatUI) return;
+    var ov = document.createElement('div');
+    ov.id = 'cs-combat-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9500;background:var(--bg,#efefef);display:flex;flex-direction:column;';
+    ov.innerHTML = '<div style="background:#111;color:#fff;display:flex;align-items:center;gap:12px;padding:8px 14px;flex-shrink:0;">' +
+      '<span style="font-family:var(--head,sans-serif);letter-spacing:3px;font-size:14px;color:#e07b6f">◆ COMBAT</span>' +
+      '<span style="font-size:11px;color:#999;letter-spacing:1px">campaign "' + campaign + '"</span>' +
+      '<button id="cs-combat-collapse" style="margin-left:auto;font-family:var(--mono,monospace);font-size:12px;padding:5px 12px;border:1px solid #555;background:#1a1a1a;color:#ddd;cursor:pointer">▾ Back to my sheet</button></div>' +
+      '<div id="cs-combat-mount" style="flex:1;min-height:0"></div>';
+    document.body.appendChild(ov);
+    combatUI = window.CombatUI.mount(document.getElementById('cs-combat-mount'), { camp: camp, role: 'player', selfSheetId: sheetId });
+    document.getElementById('cs-combat-collapse').onclick = closeCombatOverlay;
+  }
+  function closeCombatOverlay() {
+    if (combatUI) { try { combatUI.destroy(); } catch (e) {} combatUI = null; }
+    var ov = document.getElementById('cs-combat-overlay'); if (ov) ov.parentNode.removeChild(ov);
   }
 
   function showPaused(paused) {
