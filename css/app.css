@@ -43,7 +43,7 @@ body { background:var(--bg); color:var(--text); font-family:var(--mono); display
 
 /* ── App nav (operator bar) ── */
 #app-shell { flex:1; min-height:0; display:flex; flex-direction:column; }
-#app-nav { background:var(--ink); color:#fff; display:flex; align-items:center; gap:12px; padding:0 14px; height:46px; flex-shrink:0; box-shadow:inset 0 -2px 0 #000; transition:box-shadow .16s ease; }
+#app-nav { background:#0c0c0e; color:#fff; display:flex; align-items:center; gap:12px; padding:0 14px; height:46px; flex-shrink:0; box-shadow:inset 0 -2px 0 #000; transition:box-shadow .16s ease; }
 #app-logo { height:60px; width:auto; }
 #app-title { font-family:var(--head); font-size:16px; letter-spacing:3px; }
 .app-live { display:none; color:var(--acc-live-2); font-size:10px; letter-spacing:2px; border:1px solid var(--acc-live); padding:2px 8px; }
@@ -84,7 +84,11 @@ body { background:var(--bg); color:var(--text); font-family:var(--mono); display
 .cmp-new:hover { border-color:var(--acc); color:var(--acc); transform:none; box-shadow:none; }
 
 /* ── Campaign detail ── */
-.cd-head { display:flex; align-items:center; gap:16px; margin-bottom:16px; }
+/* Sub-top bar: a charcoal band distinct from the black nav above and the light
+   content below — the second tier of the visual hierarchy. */
+.cd-head { display:flex; align-items:center; gap:16px; margin-bottom:16px; background:#1b1d20; border-bottom:2px solid #000; }
+.cd-head .app-kicker { margin-bottom:2px; }
+.cd-head .app-h { color:#fff; }
 .cd-back { flex-shrink:0; align-self:flex-start; }
 .cd-titlewrap .app-h { margin:0; }
 .app-btn-go { border-color:var(--acc-live); color:var(--acc-live-2); font-family:var(--head); letter-spacing:2px; padding:9px 16px; }
@@ -208,19 +212,79 @@ body { background:var(--bg); color:var(--text); font-family:var(--mono); display
 .sess-col-frame { flex:1; width:100%; border:none; }
 
 /* tab mode */
-.sess-tabbar { display:flex; gap:0; padding:6px 12px 0; border-bottom:2px solid var(--border); flex-shrink:0; flex-wrap:wrap; }
-.sess-tab { padding:7px 16px; cursor:pointer; font-family:var(--mono); font-size:13px; color:var(--text2); border:1px solid transparent; border-bottom:none; transition:background .12s, color .12s; }
-.sess-tab:hover { color:var(--ink); }
+/* Tab mode: tabs share the full page width (like the site's default sheet menu) */
+.sess-tabbar { display:flex; gap:0; border-bottom:2px solid var(--ink); flex-shrink:0; }
+.sess-tab { flex:1; text-align:center; padding:9px 12px; cursor:pointer; font-family:var(--mono); font-size:13px; color:var(--text2); border-right:1px solid var(--border); transition:background .12s, color .12s; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sess-tab:last-child { border-right:none; }
+.sess-tab:hover { color:var(--ink); background:rgba(0,0,0,.04); }
 .sess-tab.active { color:#fff; background:var(--ink); }
 .sess-tabbody { flex:1; min-height:0; display:flex; }
 .sess-tabbody .sess-col-frame { flex:1; }
 
+/* ════ Campaign Prep board ════ */
+/* :not([hidden]) so the ID rule doesn't beat .app-view[hidden]{display:none}
+   (otherwise the detail view stays on top of the campaigns list, blocking clicks). */
+#view-campaign:not([hidden]) { padding:0; overflow:hidden; display:flex; flex-direction:column; }
+#view-campaign .cd-head { padding:14px 22px 12px; margin:0; }
+.cd-shell { flex:1; min-height:0; }
+/* Content tier: a flex column — top bars span full width, board sidebars run
+   flush to the edges and full height; only inner scroll regions are padded. */
+.cd-shell > .sess-content { padding:0; overflow:hidden; display:flex; flex-direction:column; }
+.cd-scroll { flex:1; min-height:0; overflow:auto; padding:22px 26px; }
+.cd-board { flex:1; min-height:0; display:flex; }
+.cd-board > .sq-side, .cd-board > .ev-list { flex-shrink:0; overflow:auto; align-self:stretch; }
+.cd-boardmain { flex:1; min-width:0; min-height:0; overflow:auto; padding:18px 22px; }
+.cd-secbar { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+/* Drop the "// CATEGORY" kickers from section bars — the sidebar already names them. */
+.cd-secbar > .app-kicker, .sess-secbar > .app-kicker { display:none; }
+.cd-secbody { max-width:760px; }
+.cd-stats { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+.cd-stats .ov-chip { color:#555; border-color:var(--border); }
+.cd-stats .ov-chip b { color:var(--acc); }
+.prep-list { display:flex; flex-direction:column; gap:10px; max-width:880px; }
+.prep-card { border:1px solid var(--border); border-left:3px solid var(--acc); background:var(--bg1); padding:10px 12px; }
+.prep-card.done { opacity:.55; }
+.prep-row { display:flex; align-items:center; gap:8px; }
+.prep-idx { font-family:var(--mono); color:var(--acc); min-width:20px; text-align:center; }
+.prep-tag { color:var(--acc); }
+.prep-name { font-family:var(--head); letter-spacing:1px; font-size:14px; }
+.prep-sub { font-size:11px; color:var(--text2); }
+.prep-title { flex:1; min-width:0; border:1px solid #ccc; padding:6px 8px; font-family:var(--mono); font-size:13px; }
+.prep-dist { width:130px; border:1px solid #ccc; padding:6px 8px; font-family:var(--mono); font-size:12px; }
+.prep-notes { width:100%; box-sizing:border-box; margin-top:6px; border:1px solid #ddd; padding:6px 8px; font-family:var(--mono); font-size:12px; min-height:46px; resize:vertical; }
+.prep-mini { background:#1a1a1a; color:#ddd; border:1px solid #555; cursor:pointer; font-size:12px; padding:3px 8px; }
+.prep-mini:hover { background:#000; color:#fff; }
+.prep-mini.prep-del { color:#e07b6f; border-color:#7a2a22; }
+.prep-members { display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; }
+.prep-m { font-size:11px; border:1px solid var(--border); padding:2px 7px; background:var(--bg); }
+.prep-eb { color:var(--acc); font-size:12px; }
+.prep-eb-in { width:96px; border:1px solid #ccc; padding:6px; font-family:var(--mono); font-size:12px; }
+.clock-val { font-family:var(--mono); font-size:13px; min-width:50px; text-align:center; }
+.clock-bar { height:8px; background:#eee; border:1px solid #ccc; margin-top:8px; overflow:hidden; }
+.clock-bar span { display:block; height:100%; }
+/* session RUN panel (reveal scenes/clocks, assign loot) */
+.run-row { display:flex; align-items:center; gap:6px; padding:4px 0; border-bottom:1px dotted #e3e3e3; }
+.run-name { flex:1; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.run-cval { font-family:var(--mono); font-size:11px; color:var(--acc); }
+.run-sel { font-family:var(--mono); font-size:11px; padding:2px 4px; border:1px solid var(--ink); }
+.prep-mini.on { background:var(--acc-live); color:#fff; border-color:var(--acc-live); }
+.run-clock { margin-bottom:7px; }
+.run-crow { display:flex; justify-content:space-between; font-size:12px; margin-bottom:3px; }
+
+/* encounter builder */
+.eb-add { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:8px 0; }
+.eb-add select, .eb-add input { font-family:var(--mono); font-size:12px; padding:5px 7px; border:1px solid var(--ink); }
+.eb-members { display:flex; flex-direction:column; gap:4px; margin:6px 0; }
+.eb-mrow { display:flex; justify-content:space-between; align-items:center; font-size:12px; border:1px solid var(--border); padding:4px 9px; background:var(--bg1); }
+.eb-mrow a { color:var(--acc-danger); cursor:pointer; }
+
 /* ════ Session shell (4-section sidebar) ════ */
-.sess-top { display:flex; align-items:center; gap:12px; padding:9px 16px; background:#fbfbfb; border-bottom:2px solid var(--ink); flex-shrink:0; }
-.sess-headact { font-size:11px; letter-spacing:1px; color:var(--acc-danger); }
+.sess-top { display:flex; align-items:center; gap:12px; padding:9px 16px; background:#1b1d20; border-bottom:2px solid #000; flex-shrink:0; }
+.sess-top .sess-title { color:#fff; }
+.sess-headact { font-size:11px; letter-spacing:1px; color:#e07b6f; }
 .sess-shell { flex:1; min-height:0; display:flex; }
 /* Sidebar mirrors the site's #cat-nav / .cat look (css/main.css). */
-.sess-side { flex:0 0 172px; background:#111; border-right:2px solid #000; display:flex; flex-direction:column; gap:4px; padding:8px; }
+.sess-side { flex:0 0 172px; background:#16181b; border-right:2px solid #000; display:flex; flex-direction:column; gap:4px; padding:8px; }
 .sess-nav { text-align:center; background:#1d1d1d; border:1px solid #383838; color:#8a8a8a; cursor:pointer; font-family:var(--head); font-size:13px; letter-spacing:.5px; padding:10px 4px; text-transform:lowercase; transition:color .12s, border-color .12s, background .12s; }
 .sess-nav:hover { color:#fff; border-color:#666; }
 .sess-nav.active { color:#fff; background:#000; border-color:#fff; }
@@ -291,6 +355,101 @@ body { background:var(--bg); color:var(--text); font-family:var(--mono); display
 .files-view { flex:1; min-width:0; border-left:2px solid var(--border); }
 .files-if { width:100%; height:100%; border:none; }
 
+/* ════ Prep Overview (banner + briefing + stats) ════ */
+.cd-ovbanner { margin-bottom:18px; }
+.cd-ovgrid { display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap; }
+.cd-ovmain { flex:2 1 380px; display:flex; flex-direction:column; gap:14px; }
+.cd-ovside { flex:1 1 240px; display:flex; flex-direction:column; gap:14px; }
+.cd-ovstats { flex:1 1 250px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; align-content:start; }
+.cd-stat { border:1px solid var(--border); border-top:3px solid var(--acc); background:var(--bg1); padding:12px 14px; display:flex; flex-direction:column; gap:4px; }
+.cd-stat b { font-family:var(--head); font-size:24px; color:var(--ink); line-height:1; }
+.cd-stat span { font-size:10px; letter-spacing:1px; color:var(--text2); text-transform:uppercase; }
+.cd-stat-hot { border-top-color:var(--acc-live); grid-column:1 / -1; }
+.cd-stat-hot b { color:var(--acc-live); font-size:30px; }
+.cd-ovdesc { min-height:170px; }
+
+/* ════ Sessions (records + journal) ════ */
+.sess-rec { cursor:pointer; transition:border-color .12s, transform .1s; }
+.sess-rec:hover { border-left-color:var(--acc-live); transform:translateX(2px); }
+.sess-rec.live { border-left-color:var(--acc-live); }
+.sess-rec-live { font-size:9px; letter-spacing:1px; color:#fff; background:var(--acc-live); padding:1px 6px; }
+.sess-rec-recap { font-size:12px; color:var(--text2); margin-top:6px; line-height:1.5; max-height:3em; overflow:hidden; }
+.ses-name { font-family:var(--head); font-size:22px; letter-spacing:1px; background:transparent; border:none; border-bottom:1px solid #444; color:#fff; width:100%; box-sizing:border-box; padding:2px 0; }
+.ses-name:focus { outline:none; border-bottom-color:var(--acc); }
+.ses-date { margin-top:8px; background:#111; border:1px solid #444; color:#ccc; font-family:var(--mono); font-size:12px; padding:4px 6px; }
+.ses-attend { display:flex; flex-direction:column; gap:5px; }
+.ses-att { display:flex; align-items:center; gap:7px; font-size:12px; font-family:var(--mono); }
+.ses-log { display:flex; flex-direction:column; gap:0; max-height:340px; overflow:auto; }
+.ses-logrow { font-size:12px; line-height:1.5; border-bottom:1px dotted #e3e3e3; padding:5px 0; }
+.ses-logt { font-family:var(--mono); font-size:10px; color:var(--acc); margin-right:6px; }
+
+/* ════ Events editor (2-pane) ════ */
+.ev-editor { display:flex; gap:16px; align-items:flex-start; max-width:1000px; }
+.ev-list { flex:0 0 220px; display:flex; flex-direction:column; gap:6px; }
+.ev-li { display:flex; align-items:center; gap:7px; padding:9px 11px; border:1px solid var(--border); border-left:3px solid var(--acc); background:var(--bg1); cursor:pointer; }
+.ev-li.active { background:var(--ink); color:#fff; border-left-color:var(--acc-live); }
+.ev-li-name { flex:1; font-family:var(--mono); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ev-li-preset { font-size:9px; letter-spacing:1px; color:#999; }
+.ev-li.active .ev-li-preset { color:#bbb; }
+.ev-canvas { flex:1; min-width:0; border:1px solid var(--border); background:var(--bg1); padding:16px; }
+.ev-title { color:var(--ink); border-bottom:1px solid #ccc; margin-bottom:12px; }
+.ev-row { margin-bottom:14px; }
+.ev-presets { display:flex; flex-wrap:wrap; gap:6px; }
+.ev-preset { font-family:var(--mono); font-size:12px; padding:6px 11px; border:1px solid #bbb; background:#fff; cursor:pointer; }
+.ev-preset.active { background:var(--ink); color:#fff; border-color:var(--ink); }
+.ev-media { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.ev-thumb { width:64px; height:64px; object-fit:cover; border:1px solid #999; }
+.ev-noimg { font-size:11px; color:#aaa; font-style:italic; }
+.ev-up { position:relative; overflow:hidden; }
+.ev-media select { font-family:var(--mono); font-size:12px; padding:5px 7px; border:1px solid var(--ink); }
+.ev-text { min-height:90px; }
+.ev-trig { font-size:12px; color:#555; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.ev-trig select, .ev-trig input { font-family:var(--mono); font-size:12px; padding:4px 6px; border:1px solid var(--ink); }
+
+/* ════ Drag-drop board (Squads + Loot share this) ════ */
+.sq-board { display:flex; gap:16px; align-items:flex-start; }
+.sq-side { flex:0 0 230px; position:sticky; top:0; }
+.sq-palette { display:flex; flex-direction:column; gap:6px; margin-top:6px; }
+.sq-pchip { font-family:var(--mono); font-size:12px; padding:7px 10px; border:1px solid var(--border); border-left:3px solid var(--acc); background:var(--bg1); cursor:grab; transition:border-color .12s, transform .08s; }
+.sq-pchip:hover { border-left-color:var(--ink); transform:translateX(2px); }
+.sq-pchip:active { cursor:grabbing; }
+.sq-pchip.sq-arch { border-left-color:var(--acc-live); }
+.sq-pchip.sq-pc { border-left-color:#2980b9; }
+.sq-bins { flex:1; min-width:0; display:flex; flex-direction:column; gap:12px; }
+.sq-bin { border:1px solid var(--border); background:var(--bg1); }
+.sq-bin-head { display:flex; align-items:center; gap:8px; background:var(--ink); padding:7px 10px; }
+.sq-bin-head .prep-title { background:#fff; }
+.sq-bin-head .run-sel, .sq-bin-head select { font-family:var(--mono); font-size:11px; padding:3px 5px; border:1px solid #555; background:#222; color:#ddd; }
+.sq-name { flex:1; }
+.sq-members { display:flex; flex-wrap:wrap; gap:6px; padding:12px; min-height:42px; transition:background .12s; }
+.sq-m { display:flex; align-items:center; gap:5px; font-size:12px; border:1px solid var(--border); border-left:3px solid var(--acc); background:#fff; padding:4px 8px; }
+.sq-mc { color:var(--acc); font-size:11px; }
+.sq-drop-hint { width:100%; }
+.dnd-over { background:#f0fff4 !important; outline:2px dashed var(--acc-live); outline-offset:-4px; }
+
+/* ════ Loot tree ════ */
+.loot-palfix { margin-bottom:8px; }
+.loot-search { margin-top:6px; }
+.loot-results { display:flex; flex-direction:column; gap:5px; margin-top:8px; max-height:340px; overflow:auto; }
+.loot-res { border-left-color:#7a5ab8; }
+.loot-box .loot-tree { padding:12px; display:flex; flex-direction:column; gap:7px; }
+.loot-node { display:flex; align-items:center; gap:7px; flex-wrap:wrap; border:1px solid var(--border); border-left:3px solid var(--acc); background:#fff; padding:6px 9px; }
+.loot-node.loot-cont { display:block; border-left-color:#7a5ab8; background:#faf8ff; }
+.loot-cont .loot-cname { width:auto; }
+.loot-ico { color:var(--acc); font-family:var(--mono); font-size:12px; min-width:22px; }
+.loot-cat { font-size:9px; letter-spacing:1px; color:#7a5ab8; border:1px solid #d6ccec; padding:1px 5px; text-transform:uppercase; }
+.loot-amt { width:84px; font-family:var(--mono); padding:4px 6px; border:1px solid #ccc; }
+.loot-form { width:90px; font-family:var(--mono); font-size:12px; padding:4px 6px; border:1px solid #ccc; }
+.loot-iname, .loot-cname { flex:1; min-width:120px; font-family:var(--mono); font-size:13px; padding:4px 6px; border:1px solid #ccc; }
+.loot-share { background:#eee; color:#555; border-color:#bbb; min-width:60px; }
+.loot-share.on { background:var(--acc); color:#111; border-color:var(--acc); }
+.loot-sub { margin-top:8px; padding:8px; border:1px dashed #cbb9e8; background:#fff; display:flex; flex-direction:column; gap:6px; }
+.loot-hint { font-size:11px; color:#aaa; font-style:italic; }
+
+/* Full-bleed embedded tools (Locations prep section) — fill the whole content area */
+.cd-shell > .sess-content.cd-bleed { padding:0; overflow:hidden; }
+.cd-ncframe-full { position:absolute; inset:0; width:100%; height:100%; border:none; display:block; }
+
 /* Player connect */
 .pc-card { max-width:520px; border:1px solid var(--border); background:var(--bg1); padding:18px; }
 .pc-l { display:block; font-size:11px; color:#666; margin:10px 0 3px; }
@@ -299,3 +458,127 @@ body { background:var(--bg); color:var(--text); font-family:var(--mono); display
 .pc-row { display:flex; gap:10px; } .pc-row > div { flex:1; }
 .pc-go { width:100%; margin-top:16px; padding:12px; font-family:var(--head); letter-spacing:2px; }
 .pc-err { color:var(--acc-danger); font-size:12px; margin-top:10px; min-height:1em; }
+
+/* ════ Adjustments: defined top bars + sidebars, dark mode bar, embeds ════ */
+/* Section top bar with a clear separator + title (Events/Squads/Loot/Files) */
+.cd-topbar { display:flex; align-items:center; gap:10px; margin:0; padding:11px 26px; border-bottom:2px solid var(--ink); background:var(--bg1); flex-shrink:0; }
+.cd-sectitle { font-family:var(--head); font-size:18px; letter-spacing:1px; color:var(--ink); }
+/* Flush, full-height board sidebars (no rounded gap to the edge/top bar) */
+.cd-board > .sq-side, .cd-board > .ev-list { position:static; border:none; border-right:1px solid #000; padding-bottom:14px; }
+
+/* Defined dark sidebars with a header (palette / timeline) */
+.sq-side, .ev-list { background:#1b1d20; border:1px solid #000; padding:0 0 12px; align-self:stretch; gap:0; }
+.cd-side-head { font-family:var(--head); font-size:13px; letter-spacing:2px; color:#fff; background:#0e0e10; padding:11px 13px; }
+.cd-side-sub { font-size:10px; color:#9a9a9a; padding:9px 13px 2px; letter-spacing:1px; text-transform:uppercase; }
+.sq-palette { padding:6px 12px 0; gap:8px; }
+.sq-pchip { font-size:13px; padding:10px 13px; }
+.loot-palfix { padding-top:4px; }
+.loot-search { margin:8px 12px 0; width:calc(100% - 24px); box-sizing:border-box; }
+.loot-results { margin:8px 12px 0; }
+
+/* Events list (timeline) — bigger rows, clock divider */
+.ev-list .ev-li { margin:7px 12px 0; }
+.ev-li { padding:10px 12px; gap:9px; }
+.ev-li-ico { color:var(--acc); width:16px; text-align:center; }
+.ev-li-clk .ev-li-ico { color:#7a5ab8; }
+.ev-li-div { font-size:9px; letter-spacing:2px; color:#9a9a9a; padding:12px 13px 2px; }
+.ev-canvas { padding:18px; }
+.ev-colors { display:flex; gap:8px; }
+.ev-color { width:26px; height:26px; border:2px solid #fff; box-shadow:0 0 0 1px #999; cursor:pointer; }
+.ev-color.active { box-shadow:0 0 0 2px var(--ink); transform:scale(1.08); }
+.ev-linked { display:flex; flex-wrap:wrap; gap:6px; }
+.ev-linkchip { font-size:11px; border:1px solid var(--border); padding:3px 8px; background:var(--bg1); }
+
+/* Players: dark mode bar + full-bleed sheets */
+.sess-sec-bleed { padding:0; }
+.pl-bar { display:flex; align-items:center; gap:12px; background:#1b1d20; border-bottom:2px solid #000; padding:8px 14px; flex-shrink:0; }
+.pl-bar-title { font-family:var(--head); letter-spacing:2px; font-size:13px; color:#fff; }
+.sess-modes { display:inline-flex; border:1px solid #555; }
+.sess-mode { font-family:var(--mono); font-size:12px; padding:6px 15px; border:none; border-right:1px solid #555; background:#111; color:#bbb; cursor:pointer; transition:background .12s, color .12s; }
+.sess-mode:last-child { border-right:none; }
+.sess-mode:hover { color:#fff; }
+.sess-mode.active { background:var(--acc); color:#111; }
+.sess-sec-bleed .pl-grid { padding:16px; }
+
+/* Inline full-bleed doc editor (Files section) */
+.cd-embed { position:absolute; inset:0; display:flex; flex-direction:column; background:var(--bg); }
+.cd-embed-bar { display:flex; align-items:center; gap:12px; background:#1b1d20; padding:8px 14px; flex-shrink:0; border-bottom:2px solid #000; }
+.cd-embed-name { font-family:var(--mono); font-size:13px; color:#fff; }
+.cd-embed-frame, .cd-embed-ta { flex:1; width:100%; border:none; min-height:0; }
+.cd-embed-ta { padding:16px; font-family:var(--mono); font-size:14px; resize:none; box-sizing:border-box; }
+
+/* Loot tree cleanup — a touch more room */
+.loot-node { padding:8px 11px; gap:8px; }
+
+/* Event block composer */
+.ev-blocks { display:flex; flex-direction:column; gap:10px; }
+.evb { border:1px solid var(--border); border-left:3px solid var(--acc); background:var(--bg1); padding:10px 12px; }
+.evb-head { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.evb-type { font-family:var(--head); letter-spacing:1px; font-size:12px; color:var(--ink); }
+.evb-l { font-size:11px; color:#666; display:inline-flex; align-items:center; gap:4px; }
+.evb-head select { font-family:var(--mono); font-size:11px; padding:2px 4px; border:1px solid var(--ink); }
+.ev-addrow { display:flex; gap:8px; margin-top:10px; }
+.ev-cap { font-family:var(--mono); font-size:12px; padding:5px 7px; border:1px solid #ccc; flex:1; min-width:120px; }
+
+/* Event preview host (in the block composer) */
+.ev-preview { margin-top:4px; }
+.ev-prev-hint { font-size:9px; color:#999; letter-spacing:0; }
+
+/* ════════════ Unified workspace design system (campaign ⇄ session) ════════════
+   One coherent shell for PREP and LIVE: mode-aware top band, grouped icon rail,
+   consistent section headers, entity cards, status chips, live context bar. */
+
+/* Top band — mode identity (PREP amber / LIVE green) */
+.ws-top { display:flex; align-items:center; gap:12px; padding:10px 20px; background:#1b1d20; border-bottom:2px solid #000; flex-shrink:0; }
+.ws-top .ws-title, .ws-top .app-h { color:#fff; margin:0; font-family:var(--head); font-size:18px; letter-spacing:1px; }
+.ws-mode { font-family:var(--mono); font-size:10px; letter-spacing:2px; padding:4px 10px; border:1px solid; flex-shrink:0; }
+.ws-mode-prep { color:var(--acc); border-color:var(--acc); }
+.ws-mode-live { color:var(--acc-live-2); border-color:var(--acc-live); background:rgba(26,122,46,.15); }
+.ws-top-live { box-shadow:inset 0 -2px 0 var(--acc-live); }
+.cd-titlewrap { min-width:0; }
+.cd-titlewrap .ws-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* Left rail — grouped, icon + label */
+.ws-rail { flex:0 0 190px; background:#141517; border-right:2px solid #000; display:flex; flex-direction:column; gap:2px; padding:10px 8px; overflow:auto; }
+.ws-rail-grp { font-family:var(--mono); font-size:9px; letter-spacing:2px; color:#6a6a6a; padding:13px 8px 4px; }
+.ws-rail-grp:first-child { padding-top:2px; }
+.ws-nav { display:flex; align-items:center; gap:10px; text-align:left; background:transparent; border:1px solid transparent; color:#9a9a9a; cursor:pointer; font-family:var(--head); font-size:13px; letter-spacing:.5px; padding:9px 10px; text-transform:none; transition:background .12s, color .12s, border-color .12s; }
+.ws-nav:hover { color:#fff; background:#1f2124; }
+.ws-nav.active { color:#fff; background:#000; border-left:2px solid var(--acc); }
+.ws-nav-ic { width:18px; text-align:center; color:var(--acc); font-size:13px; flex-shrink:0; }
+
+/* Live context bar (combat / turn) */
+.ws-livebar { display:flex; align-items:center; gap:10px; padding:7px 20px; background:#0e1a10; border-bottom:1px solid var(--acc-live); color:#bfe9c8; font-family:var(--mono); font-size:12px; flex-shrink:0; }
+.ws-livebar[hidden] { display:none; }
+.ws-livebar b { color:#fff; }
+
+/* Consistent section header (kicker/title + actions + separator) */
+.section-head { display:flex; align-items:center; gap:12px; padding:0 0 12px; margin-bottom:16px; border-bottom:2px solid var(--ink); }
+.section-head .sh-title { font-family:var(--head); font-size:18px; letter-spacing:1px; color:var(--ink); }
+.section-head .sh-actions { margin-left:auto; display:flex; gap:8px; }
+
+/* Status chips */
+.chip { font-family:var(--mono); font-size:10px; letter-spacing:1px; padding:2px 7px; border:1px solid var(--border); color:var(--text2); }
+.chip-live { color:#fff; background:var(--acc-live); border-color:var(--acc-live); }
+.chip-pub { color:#111; background:var(--acc); border-color:var(--acc); }
+.chip-warn { color:#fff; background:var(--acc-danger); border-color:var(--acc-danger); }
+
+/* Entity card scaffolding (shared across object types) */
+.entity-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px; }
+.entity-card { position:relative; border:1px solid var(--border); border-left:3px solid var(--acc); background:var(--bg1); padding:12px 14px; cursor:pointer; transition:border-color .12s, transform .1s, box-shadow .12s; }
+.entity-card:hover { border-color:var(--ink); transform:translateY(-2px); box-shadow:0 5px 0 rgba(0,0,0,.08); }
+.entity-ic { color:var(--acc); font-size:16px; }
+.entity-name { font-family:var(--head); letter-spacing:.5px; font-size:14px; color:var(--ink); }
+.entity-meta { font-size:11px; color:var(--text2); margin-top:3px; }
+
+/* Live prep editors render full-bleed inside their session panel */
+.sess-sec-prep { padding:0; overflow:hidden; }
+
+/* Rail: expandable Tools sub-menu (quick tool switching in session) */
+.ws-nav-exp { margin-left:auto; color:#888; padding:0 4px; font-size:11px; cursor:pointer; }
+.ws-nav-exp:hover { color:#fff; }
+.ws-subnav { display:flex; flex-direction:column; gap:1px; margin:2px 0 6px 16px; border-left:1px solid #2a2d30; }
+.ws-subnav[hidden] { display:none; }
+.ws-subnav-item { display:flex; align-items:center; gap:8px; text-align:left; background:transparent; border:none; color:#8a8a8a; cursor:pointer; font-family:var(--mono); font-size:12px; padding:6px 8px; transition:background .12s, color .12s; }
+.ws-subnav-item:hover { color:#fff; background:#1f2124; }
+.ws-subnav-item .ws-nav-ic { color:var(--acc-live-2); font-size:12px; }

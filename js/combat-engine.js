@@ -174,9 +174,18 @@
     if (v && typeof v === 'object') v = v.current != null ? v.current : v.base; // CS sometimes nests
     return +v || 0;
   }
+  // Cyberware bonuses (CS schema: cyberware[].bonuses / options[].bonuses, each
+  // { type:'stat'|'skill', target, value }). flatCyber already includes options.
+  function cyberBonus(sheet, type, target) {
+    var t = low(target), sum = 0;
+    flatCyber(sheet).forEach(function (c) {
+      ((c && c.bonuses) || []).forEach(function (b) { if (b && b.type === type && low(b.target) === t) sum += parseInt(b.value, 10) || 0; });
+    });
+    return sum;
+  }
   function fullStats(sheet) {
     var keys = ['INT', 'REF', 'TECH', 'COOL', 'ATT', 'LUCK', 'MA', 'BODY', 'EMP'], out = {};
-    keys.forEach(function (k) { out[k] = statOf(sheet, k); });
+    keys.forEach(function (k) { out[k] = statOf(sheet, k) + cyberBonus(sheet, 'stat', k); }); // chrome boosts stats
     return out;
   }
 
@@ -188,6 +197,12 @@
     else if (s && typeof s === 'object') Object.keys(s).forEach(function (k) { out[low(k)] = { name: k, val: +s[k] || 0 }; });
     var cs = sheet && sheet.customSkills;
     if (Array.isArray(cs)) cs.forEach(function (x) { if (x && x.name) out[low(x.name)] = { name: x.name, val: +(x.val != null ? x.val : x.level) || 0 }; });
+    // Chipware / neural bonuses grant or raise skills (chips you don't otherwise have appear here).
+    flatCyber(sheet).forEach(function (c) {
+      ((c && c.bonuses) || []).forEach(function (b) {
+        if (b && b.type === 'skill') { var k = low(b.target), v = parseInt(b.value, 10) || 0; if (out[k]) out[k].val += v; else out[k] = { name: b.target, val: v }; }
+      });
+    });
     return out;
   }
   function skillVal(map, name) { var e = map[low(name)]; return e ? e.val : 0; }
@@ -411,7 +426,8 @@
       name: opts.name || sheet.handle || sheet.name || sheet.role || 'Combatant',
       role: sheet.role || opts.roleLabel || '',
       stats: stats,
-      ref: stats.REF, body: stats.BODY, ma: stats.MA, btm: btmFor(stats.BODY),
+      // Action REF = chromed REF minus armor encumbrance value (EV).
+      ref: Math.max(0, stats.REF - (armor.ev || 0)), body: stats.BODY, ma: stats.MA, btm: btmFor(stats.BODY),
       initBonus: (+opts.initBonus || 0) + cc.initBonus, // speedware (Kerenzikov, reflex…)
       cyberFx: { smartgun: cc.smartgun, scope: cc.scope, painEditor: cc.painEditor },
       activatables: cc.activatables,      // Sandevistan / Adrenal — activatable in combat

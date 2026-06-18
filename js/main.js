@@ -782,6 +782,7 @@ function makeBlankCS() {
   DB.skills.forEach(function(s) { sk[s.name] = 0; });
   return {
     name: '', handle: '', role: '', age: '', sa: '', photo: '', money: 0,
+    pending: [],           // unpaid purchases tray (catalog buys awaiting debit)
     stats: { INT: 0, REF: 0, TECH: 0, COOL: 0, ATT: 0, LUCK: 0, MA: 0, BODY: 0, EMP: 0 },
     skillPoints: 40,
     ip: 0,
@@ -1131,24 +1132,29 @@ function _cyberRefresh() { renderCyber(); renderStats(); renderSkills(); updateD
 function addCyber(item) {
   var sub = (item.subtype || '').toUpperCase();
   if (sub !== 'OPTION') {
-    CS.cyberware.push(_makeCyberItem(item));
+    var ci = _makeCyberItem(item);
+    CS.cyberware.push(ci);
+    pendPurchase(ci, 'cyberware', item.cost);
     _cyberRefresh();
     return;
   }
-  // OPTION: route to compatible parent
+  // OPTION: route to compatible parent (pend the option object once attached).
   var parents = findCompatibleParents(item);
   if (parents.length === 0) {
     var needed = ATTACH_TO_LIMB.indexOf(item.type.toUpperCase()) >= 0 ? 'CYBERLIMB' : item.type;
     alert('Install a ' + needed + ' first.');
     return;
   }
-  if (parents.length === 1) {
-    addOptionTo(parents[0].idx, item);
-  } else {
+  var pidx = null;
+  if (parents.length === 1) { pidx = parents[0].idx; addOptionTo(pidx, item); }
+  else {
     var msg = 'Attach to which item?\n' + parents.map(function(p, i) { return i + ' — ' + p.name; }).join('\n');
-    var choice = prompt(msg);
-    var n = parseInt(choice);
-    if (!isNaN(n) && parents[n]) addOptionTo(parents[n].idx, item);
+    var n = parseInt(prompt(msg));
+    if (!isNaN(n) && parents[n]) { pidx = parents[n].idx; addOptionTo(pidx, item); }
+  }
+  if (pidx != null) {
+    var par = CS.cyberware[pidx]; var opt = par && par.options && par.options[par.options.length - 1];
+    if (opt) pendPurchase(opt, 'cyberware', item.cost);
   }
 }
 
@@ -1454,6 +1460,7 @@ function _removeLinkedGear(uid) {
 function addWeapon(item) {
   var w = { uid: _bankUid(), name: item.name, type: item.type || '', category: item.category || '', damage: item.damage || '', ammo: item.ammo || '', shots: item.shots || 0, currentAmmo: item.shots || 0, rof: item.rof || 1, rel: item.rel || '', range: item.range || 0, cost: item.cost || 0, wa: item.wa || 0, conc: item.conc || '', avail: item.avail || '', description: '' };
   CS.weapons.push(w);
+  pendPurchase(w, 'weapon');
   _weaponToNotStored(w);
   renderWeapons();
 }
@@ -1697,8 +1704,8 @@ function _makeOutfitItem(w) {
     description: w.description || '' };
 }
 
-function addOutfit(item)  { CS.wardrobe.push(_makeWardrobeItem(item, false)); renderWardrobe(); }
-function addArmor(item)   { CS.wardrobe.push(_makeWardrobeItem(item, true));  renderWardrobe(); }
+function addOutfit(item)  { var it = _makeWardrobeItem(item, false); CS.wardrobe.push(it); pendPurchase(it, 'clothing', item.cost); renderWardrobe(); }
+function addArmor(item)   { var it = _makeWardrobeItem(item, true);  CS.wardrobe.push(it); pendPurchase(it, 'armor', item.cost); renderWardrobe(); }
 function addCustomToWardrobe() {
   var name = prompt('Name:'); if (!name) return;
   var spStr = prompt('SP (0 for clothing):'); if (spStr === null) return;
@@ -2295,7 +2302,9 @@ function renderFashion() {
 
 /* ─── Gear ─── */
 function addGear(item) {
-  CS.gear.push({ name: item.name, category: item.category || '', cost: item.cost || 0, wt: item.wt || 0, notes: item.notes || '', description: '' });
+  var g = { name: item.name, category: item.category || '', cost: item.cost || 0, wt: item.wt || 0, notes: item.notes || '', description: '' };
+  CS.gear.push(g);
+  pendPurchase(g, 'gear');
   renderGear();
 }
 function addCustomGear() {
@@ -2775,6 +2784,94 @@ function _accCanDebit(acc, amt) {
 function _ledgerPush(acc, type, label, amount) {
   acc.ledger = acc.ledger || [];
   acc.ledger.unshift({ id: _bankUid(), type: type, label: label || '', amount: amount });
+}
+
+/* ══ Purchases tray ══
+   Catalog buys (weapons/gear/cyber/armor/clothing/vehicles) drop a pending line
+   here, linked to the inventory object via a shared buyId. A tab peeks from the
+   right wall; the panel debits all or a selected subset from cash or any bank
+   account, or clears without paying. Removing the item drops its line too. */
+function pendPurchase(obj, kind, costOverride) {
+  var cost = Math.round(parseFloat(costOverride != null ? costOverride : (obj && obj.cost)) || 0);
+  if (!cost || cost <= 0) return;                 // only priced catalog buys
+  if (!Array.isArray(CS.pending)) CS.pending = [];
+  var id = _bankUid();
+  if (obj && typeof obj === 'object') obj.buyId = id;   // link line ↔ inventory item
+  CS.pending.push({ id: id, buyId: id, name: (obj && obj.name) || 'Item', cost: cost, kind: kind || '' });
+  try { _csPersist(); } catch (e) {}
+  renderPending();
+}
+// All buyIds still present in the inventory (incl. cyber options).
+function _inventoryBuyIds() {
+  var ids = {};
+  function scan(arr) { (arr || []).forEach(function (x) { if (x && x.buyId) ids[x.buyId] = 1; if (x && x.options) x.options.forEach(function (o) { if (o && o.buyId) ids[o.buyId] = 1; }); }); }
+  scan(CS.weapons); scan(CS.gear); scan(CS.cyberware); scan(CS.wardrobe); scan(CS.vehicles);
+  return ids;
+}
+function _csCash() { var ls = CS.lifestyle || {}; return parseFloat(ls.cash != null ? ls.cash : (CS.money || 0)) || 0; }
+function _pendSelected() {
+  var box = document.getElementById('buytray'); if (!box) return [];
+  return Array.prototype.slice.call(box.querySelectorAll('input[data-pid]:checked')).map(function (c) { return c.getAttribute('data-pid'); });
+}
+window.pendToggleTray = function () { var b = document.getElementById('buytray'); if (b) b.classList.toggle('open'); };
+window.pendClear = function (all) {
+  var ids = all ? (CS.pending || []).map(function (p) { return p.id; }) : _pendSelected();
+  if (!ids.length) return;
+  CS.pending = (CS.pending || []).filter(function (p) { return ids.indexOf(p.id) < 0; });
+  try { _csPersist(); } catch (e) {} renderPending();
+};
+window.pendDebit = function (all) {
+  var ids = all ? (CS.pending || []).map(function (p) { return p.id; }) : _pendSelected();
+  if (!ids.length) { alert('Select purchases to debit, or use “Debit all”.'); return; }
+  var items = (CS.pending || []).filter(function (p) { return ids.indexOf(p.id) >= 0; });
+  var sum = items.reduce(function (t, p) { return t + (p.cost || 0); }, 0);
+  var sel = document.getElementById('buytray-src'); var src = sel ? sel.value : 'cash';
+  var label = 'Purchases (' + items.length + ')';
+  if (src === 'cash') {
+    CS.lifestyle = CS.lifestyle || {};
+    CS.lifestyle.cash = _csCash() - sum;
+  } else {
+    var acc = _accById(src); if (!acc) { alert('Account not found.'); return; }
+    acc.balance = (parseFloat(acc.balance) || 0) - sum;
+    _ledgerPush(acc, 'expense', label, sum);
+  }
+  CS.pending = (CS.pending || []).filter(function (p) { return ids.indexOf(p.id) < 0; });
+  try { applyCS(); } catch (e) {} try { renderCsTabs(); } catch (e) {} try { _csPersist(); } catch (e) {}
+  renderPending();
+};
+function renderPending() {
+  if (!document.querySelector('.cs')) return;     // only on the character sheet
+  // Reconcile: drop lines whose linked item was removed from the inventory.
+  if (CS && Array.isArray(CS.pending) && CS.pending.length) {
+    var have = _inventoryBuyIds();
+    CS.pending = CS.pending.filter(function (p) { return !p.buyId || have[p.buyId]; });
+  }
+  var box = document.getElementById('buytray');
+  var list = (CS && CS.pending) || [];
+  if (!list.length) { if (box) box.parentNode.removeChild(box); return; }
+  if (!box) { box = document.createElement('div'); box.id = 'buytray'; document.body.appendChild(box); }
+  var total = list.reduce(function (t, p) { return t + (p.cost || 0); }, 0);
+  var accs = ((CS.lifestyle && CS.lifestyle.accounts) || []).filter(function (a) { return !a.closed; });
+  var srcOpts = '<option value="cash">Cash (' + _csCash().toLocaleString() + 'eb)</option>' +
+    accs.map(function (a) { return '<option value="' + a.id + '">' + _esc(a.name) + ' (' + (parseFloat(a.balance) || 0).toLocaleString() + 'eb)</option>'; }).join('');
+  box.innerHTML =
+    '<button class="buytray-tab" onclick="pendToggleTray()">🛒 ' + list.length + ' · ' + total.toLocaleString() + 'eb</button>' +
+    '<div class="buytray-panel">' +
+      '<div class="buytray-head">UNPAID PURCHASES</div>' +
+      '<div class="buytray-list">' + list.map(function (p) {
+        return '<label class="buytray-row"><input type="checkbox" data-pid="' + p.id + '" checked>' +
+          '<span class="buytray-name">' + _esc(p.name) + (p.kind ? ' <i>' + _esc(p.kind) + '</i>' : '') + '</span>' +
+          '<span class="buytray-cost">' + (p.cost || 0).toLocaleString() + 'eb</span></label>';
+      }).join('') + '</div>' +
+      '<div class="buytray-total">Total <b>' + total.toLocaleString() + 'eb</b></div>' +
+      '<div class="buytray-pay">Pay from <select id="buytray-src">' + srcOpts + '</select></div>' +
+      '<div class="buytray-acts">' +
+        '<button class="buytray-btn buytray-go" onclick="pendDebit(false)">Debit selected</button>' +
+        '<button class="buytray-btn buytray-go" onclick="pendDebit(true)">Debit all</button>' +
+        '<button class="buytray-btn buytray-clr" onclick="pendClear(false)">Remove sel.</button>' +
+        '<button class="buytray-btn buytray-clr" onclick="pendClear(true)">Clear all</button>' +
+      '</div>' +
+    '</div>';
 }
 
 /* ── Regular INPUTs (popup add) ── */
@@ -3789,7 +3886,7 @@ function _makeVeh(item) {
   };
 }
 
-function addVehicle(item) { CS.vehicles.push(_makeVeh(item)); renderVehicles(); renderFashion(); }
+function addVehicle(item) { var v = _makeVeh(item); CS.vehicles.push(v); pendPurchase(v, 'vehicle', item.cost || item.bookcost); renderVehicles(); renderFashion(); }
 function addCustomVehicle() {
   var name = prompt('Name:'); if (!name) return;
   CS.vehicles.push({ name: name, type: '', topspeed: 0, accelerate: 0, decelerate: 0,
@@ -5420,6 +5517,7 @@ function _csSaveScroll() { var el = _csScrollEl(); if (el && CS) _csScroll.set(C
 function _csRestoreScroll() { var el = _csScrollEl(); if (el) el.scrollTop = _csScroll.get(CS) || 0; }
 function _csPersist() {
   if (document.getElementById('cs-name')) collectState();
+  try { renderPending(); } catch (e) {}   // reconcile the buy tray on any change (incl. removals)
   // Joined mode / file-bridge: the campaign (hub) is the source of truth, so we
   // must NOT write the bound sheet into shared localStorage. cs-join.js (live) or
   // campaign-doc.js (file) handles persistence instead.
@@ -5434,6 +5532,7 @@ function renderCsTabs() {
       (SHEETS.length > 1 ? '<span class="cs-tab-close" onclick="event.stopPropagation();csCloseTab(' + i + ')" title="Close">✕</span>' : '') +
     '</div>';
   }).join('') + '<div class="cs-tab-add" onclick="csNewTab()" title="New character">＋</div>';
+  try { renderPending(); } catch (e) {}
 }
 function csSwitchTab(i) {
   if (i < 0 || i >= SHEETS.length || i === csActiveIdx) return;

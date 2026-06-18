@@ -1,0 +1,101 @@
+/* filmwindow.css — The Silver Case "Film Window": a full-page reveal overlay
+   composed of framed image/text BLOCKS over a dark veil with orange/blue data
+   bars, a top header (clock · tabs · chapter) and a bottom dialogue strip.
+   Image frames hug their image (no empty letterbox) and are bounded per size. */
+.fw-ov { position:fixed; inset:0; z-index:11000; background:#0a0a0c; overflow:hidden; animation:fw-in .18s ease both; }
+@keyframes fw-in { from { opacity:0; } to { opacity:1; } }
+
+/* Background data bars + faint scanlines (decorative) */
+.fw-bg { position:absolute; inset:0; pointer-events:none; overflow:hidden; }
+.fw-bg::before, .fw-bg::after { content:''; position:absolute; left:-5%; width:110%; height:14px; opacity:.45; }
+.fw-bg::before { top:30%; background:repeating-linear-gradient(90deg,#1f6f9c 0 80px,transparent 80px 120px,#1f6f9c 120px 180px,transparent 180px 320px); }
+.fw-bg::after { top:64%; background:repeating-linear-gradient(90deg,#b8860b 0 60px,transparent 60px 140px,#b8860b 140px 170px,transparent 170px 380px); }
+.fw-scan { position:absolute; inset:0; pointer-events:none; background:repeating-linear-gradient(0deg, rgba(255,255,255,.03) 0 1px, transparent 1px 3px); }
+
+/* Page: header + stage + dialogue, filling the viewport */
+.fw-page { position:absolute; inset:0; display:flex; flex-direction:column; padding:0 4vw 3vh; box-sizing:border-box; }
+.fw-page-anim { animation:fw-mat .34s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes fw-mat {
+  0% { opacity:0; clip-path:inset(46% 0 46% 0); }
+  55% { opacity:1; clip-path:inset(0 0 0 0); }
+  62% { transform:translateX(-4px); } 70% { transform:translateX(3px); }
+  100% { transform:none; clip-path:inset(0 0 0 0); }
+}
+
+/* Header: clock · location tabs · chapter chip */
+.fw-top { display:flex; align-items:center; gap:12px; padding:14px 0 16px; flex-shrink:0; }
+.fw-clock { font-family:var(--mono,monospace); font-size:20px; color:#cfcfcf; letter-spacing:1px; }
+.fw-tabs { display:flex; gap:8px; flex-wrap:wrap; }
+.fw-tab { font-family:var(--head,sans-serif); font-size:12px; letter-spacing:1px; color:#111; background:#d7791b; padding:6px 14px; box-shadow:0 0 12px rgba(215,121,27,.5); }
+.fw-chapter { margin-left:auto; font-family:var(--head,sans-serif); font-size:18px; letter-spacing:2px; color:#111; background:#d7791b; padding:10px 26px; box-shadow:0 0 16px rgba(215,121,27,.55); }
+.fw-x { background:transparent; border:1px solid #555; color:#ddd; cursor:pointer; font-size:13px; padding:4px 10px; margin-left:12px; }
+.fw-x:hover { background:#fff; color:#000; }
+
+/* Stage: blocks wrap and centre; each block sizes to its content/size class */
+.fw-stage { flex:1; min-height:0; display:flex; flex-wrap:wrap; gap:2.4vw; align-items:center; align-content:center; justify-content:center; overflow:auto; padding:6px 0; }
+.fw-block { position:relative; border:2px solid #e8e8e0; background:#0c0c0e; box-shadow:0 0 0 1px #000, 0 18px 50px rgba(0,0,0,.6); }
+.fw-block::before, .fw-block::after { content:''; position:absolute; width:9px; height:9px; background:#d7791b; border-radius:50%; box-shadow:0 0 8px #d7791b; z-index:3; }
+.fw-block::before { top:-5px; left:-5px; } .fw-block::after { top:-5px; right:-5px; }
+.fw-al-left { margin-right:auto; } .fw-al-right { margin-left:auto; }
+
+/* Image block — the frame hugs the image (width/height auto), bounded by size */
+.fw-block-img { flex:0 0 auto; line-height:0; max-width:92vw; }
+.fw-block-img img { display:block; width:auto; height:auto; object-fit:contain; }
+.fw-block-img.fw-sz-s img   { max-height:22vh; max-width:26vw; }
+.fw-block-img.fw-sz-m img   { max-height:34vh; max-width:36vw; }
+.fw-block-img.fw-sz-l img   { max-height:50vh; max-width:46vw; }
+.fw-block-img.fw-sz-xl img  { max-height:64vh; max-width:62vw; }
+.fw-block-img.fw-sz-full img{ max-height:80vh; max-width:90vw; }
+.fw-cam { position:absolute; top:8px; left:8px; font-family:var(--mono,monospace); font-size:11px; letter-spacing:1px; color:#e07b6f; background:rgba(0,0,0,.6); padding:2px 7px; z-index:2; }
+.fw-rec { position:absolute; top:10px; right:10px; width:10px; height:10px; border-radius:50%; background:#e23b3b; box-shadow:0 0 8px #e23b3b; animation:fw-blink 1.2s steps(1) infinite; z-index:2; }
+@keyframes fw-blink { 50% { opacity:.2; } }
+
+/* Text panel block — width by size, scrolls if long */
+.fw-block-text { flex:0 1 auto; box-sizing:border-box; padding:22px 26px; overflow:auto; }
+.fw-block-text.fw-sz-s  { width:24vw; max-height:30vh; }
+.fw-block-text.fw-sz-m  { width:34vw; max-height:42vh; }
+.fw-block-text.fw-sz-l  { width:46vw; max-height:58vh; }
+.fw-block-text.fw-sz-xl { width:60vw; max-height:74vh; }
+.fw-block-text.fw-sz-full { width:84vw; max-height:80vh; }
+.fw-speaker { font-family:var(--mono,monospace); font-size:11px; letter-spacing:2px; color:#3ec46a; margin-bottom:8px; }
+.fw-block-text .fw-type { font-family:var(--mono,monospace); font-size:clamp(15px,1.7vw,21px); line-height:1.85; letter-spacing:2px; color:#e6e6de; white-space:pre-wrap; word-break:break-word; }
+
+/* Bottom dialogue strip */
+.fw-dialogue { flex-shrink:0; margin-top:2.2vh; border:2px solid #e8e8e0; background:#0c0c0e; padding:12px 18px; position:relative; }
+.fw-dlabel { font-family:var(--mono,monospace); font-size:10px; letter-spacing:2px; color:#3ec46a; display:block; margin-bottom:5px; }
+.fw-dialogue .fw-type { font-family:var(--mono,monospace); font-size:clamp(15px,1.7vw,20px); line-height:1.6; color:#f0f0e8; white-space:pre-wrap; min-height:1.6em; }
+.fw-dialogue .fw-type::after { content:'▮'; color:#d7791b; }
+
+/* Re-open pill (dismissed) */
+.fw-pill { position:fixed; right:16px; bottom:16px; z-index:10800; background:#b8860b; color:#111; border:2px solid #7a5a0a; font-family:var(--head,sans-serif); letter-spacing:2px; font-size:13px; padding:9px 16px; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.4); }
+.fw-pill:hover { background:#caa022; }
+
+/* ── Inline preview (event editor): a 16:9 container that maps the fullscreen
+   vh/vw sizing to container-query units, so blocks scale to the small box. ── */
+.fw-prev { container-type:size; position:relative; width:100%; max-width:560px; aspect-ratio:16/9; background:#0a0a0c; overflow:hidden; border:1px solid #000; }
+.fw-prev .fw-page { padding:0 4cqw 3cqh; }
+.fw-prev .fw-x { display:none; }
+.fw-prev .fw-top { padding:2cqh 0; gap:1.5cqw; }
+.fw-prev .fw-clock { font-size:2.8cqw; }
+.fw-prev .fw-tab { font-size:1.7cqw; padding:1cqh 1.4cqw; box-shadow:none; }
+.fw-prev .fw-chapter { font-size:2.2cqw; padding:1.4cqh 2.4cqw; box-shadow:none; }
+.fw-prev .fw-stage { gap:2.2cqw; padding:0; }
+.fw-prev .fw-block { border-width:1px; box-shadow:0 0 0 1px #000; }
+.fw-prev .fw-block::before, .fw-prev .fw-block::after { width:1.2cqw; height:1.2cqw; top:-0.6cqw; box-shadow:none; }
+.fw-prev .fw-block-img.fw-sz-s img   { max-height:22cqh; max-width:26cqw; }
+.fw-prev .fw-block-img.fw-sz-m img   { max-height:34cqh; max-width:36cqw; }
+.fw-prev .fw-block-img.fw-sz-l img   { max-height:50cqh; max-width:46cqw; }
+.fw-prev .fw-block-img.fw-sz-xl img  { max-height:64cqh; max-width:62cqw; }
+.fw-prev .fw-block-img.fw-sz-full img{ max-height:80cqh; max-width:90cqw; }
+.fw-prev .fw-block-text { padding:1.5cqh 2cqw; }
+.fw-prev .fw-block-text.fw-sz-s  { width:24cqw; max-height:30cqh; }
+.fw-prev .fw-block-text.fw-sz-m  { width:34cqw; max-height:42cqh; }
+.fw-prev .fw-block-text.fw-sz-l  { width:46cqw; max-height:58cqh; }
+.fw-prev .fw-block-text.fw-sz-xl { width:60cqw; max-height:74cqh; }
+.fw-prev .fw-block-text.fw-sz-full { width:84cqw; max-height:80cqh; }
+.fw-prev .fw-type { font-size:2.1cqw; line-height:1.45; letter-spacing:.5px; }
+.fw-prev .fw-speaker, .fw-prev .fw-dlabel { font-size:1.7cqw; margin-bottom:0.6cqh; }
+.fw-prev .fw-cam { font-size:1.6cqw; padding:0.4cqh 1cqw; }
+.fw-prev .fw-rec { width:1.4cqw; height:1.4cqw; }
+.fw-prev .fw-dialogue { margin-top:1.6cqh; padding:1cqh 1.6cqw; border-width:1px; }
+.fw-prev .fw-dialogue .fw-type::after { content:''; }
