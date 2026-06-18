@@ -57,6 +57,7 @@
 .nc-entry-addr { font-family:var(--mono, monospace); font-size:12px; font-weight:bold; color:#111; }
 .nc-entry-name { font-family:var(--mono, monospace); font-size:12px; color:#222; }
 .nc-entry-sec { font-family:var(--mono, monospace); font-size:10px; color:#c0392b; }
+.nc-entry-pub { font-family:var(--mono, monospace); font-size:9px; letter-spacing:1px; color:#fff; background:#1a7a2e; padding:1px 5px; }
 .nc-entry-act-wrap { margin-left:auto; }
 .nc-entry-act { font-family:var(--mono, monospace); font-size:11px; color:#2980b9; cursor:pointer; }
 .nc-entry-act:hover { text-decoration:underline; }
@@ -142,3 +143,34 @@ body[data-nc-mode="gm"] #dv-sec { display:none; }
 .nc-modal-pin { font-family:var(--mono, monospace); font-size:11px; color:#555; background:#f3f3f3; border:1px solid #ddd; padding:5px 8px; margin-bottom:10px; display:flex; align-items:center; gap:10px; }
 
 @media (max-width:760px) { .nc-atlas-wrap { flex-direction:column; } .nc-atlas-legend { width:100%; } }
+
+/* ── Custom maps & off-NC lists (Inc 3) ── */
+#nc-maps-bar { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:8px 12px; background:#f3f3f3; border-bottom:2px solid #111; }
+.nc-mtab { font-family:var(--head,sans-serif); font-size:11px; letter-spacing:1px; padding:5px 11px; border:2px solid #111; background:#fff; color:#111; cursor:pointer; display:flex; align-items:center; gap:6px; }
+.nc-mtab.active { background:#111; color:#fff; }
+.nc-mtab-mv { font-size:10px; color:#888; padding:0 2px; cursor:pointer; }
+.nc-mtab.active .nc-mtab-mv { color:#bbb; }
+.nc-mtab-mv:hover { color:#1a7a2e; }
+.nc-mtab-add { font-family:var(--mono,monospace); font-size:11px; padding:5px 9px; border:1px dashed #999; background:#fff; color:#555; cursor:pointer; }
+.nc-mtab-add:hover { border-color:#111; color:#111; }
+#view-custom { padding:16px; }
+.nc-cm-head { display:flex; align-items:center; gap:10px; margin-bottom:12px; border-bottom:2px solid #111; padding-bottom:8px; }
+.nc-cm-name { font-family:var(--head,sans-serif); font-size:18px; letter-spacing:1px; border:1px solid #ccc; padding:4px 8px; flex:1; }
+.nc-cm-title { font-family:var(--head,sans-serif); font-size:18px; letter-spacing:1px; flex:1; }
+.nc-cm-stage { display:flex; gap:16px; align-items:flex-start; }
+.nc-cm-imgwrap { position:relative; flex:1; min-width:0; border:2px solid #111; cursor:crosshair; background:#f8f8f8; line-height:0; }
+.nc-cm-imgwrap img { width:100%; display:block; }
+.nc-cm-pin { position:absolute; transform:translate(-50%,-50%); width:22px; height:22px; border-radius:50%; background:#c0392b; color:#fff; border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; font-family:var(--head,sans-serif); font-size:10px; cursor:pointer; }
+.nc-cm-pin.ro { background:#1a7a2e; }
+.nc-cm-pin.pub { outline:2px solid #b8860b; }
+.nc-cm-side { flex:0 0 280px; max-height:calc(100vh - 220px); overflow:auto; }
+.nc-cm-listonly { max-width:680px; }
+.nc-cm-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; border-bottom:1px solid #eee; padding:6px 0; font-size:12px; }
+.nc-cm-rname { flex:1; font-family:var(--head,sans-serif); letter-spacing:.5px; }
+.nc-cm-rnotes { flex-basis:100%; font-size:11px; color:#666; line-height:1.5; padding-left:26px; }
+.nc-cm-ro { font-size:9px; letter-spacing:1px; color:#fff; background:#1a7a2e; padding:1px 5px; }
+.nc-cm-empty { font-size:11px; color:#999; font-style:italic; padding:8px 0; }
+
+/* Embedded in the app (gm/player): drop the reference topic label, tighten chrome */
+body[data-nc-mode="gm"] #overview > div:first-child h2,
+body[data-nc-mode="player"] #overview > div:first-child h2 { display:none; }

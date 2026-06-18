@@ -483,6 +483,12 @@
       }
       selectedId = order[ti]; // follow the new active when YOU advanced
     }
+    // Wound penalty auto-applied to action REF (CP2020: Serious −2; Critical ½; Mortal ⅓).
+    function woundRef(c) {
+      var idx = E.woundState(c.wounds || 0).idx, r = c.ref || 0;
+      if (idx === 1) r -= 2; else if (idx === 2) r = Math.floor(r / 2); else if (idx >= 3) r = Math.floor(r / 3);
+      return Math.max(0, r);
+    }
     function doRoll(c) {
       if (!act.targetId) { var t0 = combatants().filter(function (t) { return t.id !== c.id && !t.status.dead; })[0]; if (!t0) return; act.targetId = t0.id; }
       var modObjs = E.MODIFIERS.filter(function (m) { return (act.mods || []).indexOf(m.key) >= 0; });
@@ -493,10 +499,10 @@
         // cyberware aids: smartgun link +2, targeting scope +1 (ranged only)
         if (c.cyberFx && c.cyberFx.smartgun) extra += 2;
         if (c.cyberFx && c.cyberFx.scope) extra += 1;
-        act.tohit = E.rangedAttack({ ref: c.ref, skill: act.skill || 0, wmod: (act.weapon.wa || 0) + extra, band: act.band || 'close', mods: modObjs });
+        act.tohit = E.rangedAttack({ ref: woundRef(c), skill: act.skill || 0, wmod: (act.weapon.wa || 0) + extra, band: act.band || 'close', mods: modObjs });
       } else {
         var t = get(act.targetId);
-        var mm = E.meleeAttack({ ref: c.ref, skill: act.skill || 0, mod: modObjs.reduce(function (s, x) { return s + x.mod; }, 0) }, { ref: t ? t.ref : 0, skill: 0 });
+        var mm = E.meleeAttack({ ref: woundRef(c), skill: act.skill || 0, mod: modObjs.reduce(function (s, x) { return s + x.mod; }, 0) }, { ref: t ? woundRef(t) : 0, skill: 0 });
         act.tohit = { total: mm.attacker.total, roll: mm.attacker.roll, def: mm.defender.total, hit: mm.hit, fumble: mm.fumble };
       }
       act.step = 'tohit'; render();

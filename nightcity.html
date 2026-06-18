@@ -120,16 +120,18 @@ body{font-family:var(--mono);background:var(--bg);color:var(--text);font-size:12
 <div id="nc-ctxbar"></div>
 <div id="app">
   <div id="content">
+    <div id="nc-maps-bar" style="display:none"></div>
+    <div id="view-custom" style="display:none"></div>
     <div id="overview">
       <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;border-bottom:3px solid #111;padding-bottom:6px">
         <h2 style="font-family:var(--head);font-size:20px;letter-spacing:3px;margin:0">Topic: Controlled Urban Zones</h2>
         <div style="margin-left:auto;display:flex;gap:0">
-          <button class="view-toggle active" id="btn-map" onclick="ncSetView('map')" style="font-family:var(--head);font-size:11px;letter-spacing:1px;padding:4px 12px;border:2px solid #111;background:#111;color:#fff;cursor:pointer">MAP</button>
+          <button class="view-toggle active" id="btn-atlas" onclick="ncSetView('atlas')" style="font-family:var(--head);font-size:11px;letter-spacing:1px;padding:4px 12px;border:2px solid #111;background:#111;color:#fff;cursor:pointer">CITY</button>
+          <button class="view-toggle" id="btn-map" onclick="ncSetView('map')" style="font-family:var(--head);font-size:11px;letter-spacing:1px;padding:4px 12px;border:2px solid #111;border-left:none;background:#fff;color:#111;cursor:pointer">MAP</button>
           <button class="view-toggle" id="btn-grid" onclick="ncSetView('grid')" style="font-family:var(--head);font-size:11px;letter-spacing:1px;padding:4px 12px;border:2px solid #111;border-left:none;background:#fff;color:#111;cursor:pointer">GRID</button>
-          <button class="view-toggle" id="btn-atlas" onclick="ncSetView('atlas')" style="font-family:var(--head);font-size:11px;letter-spacing:1px;padding:4px 12px;border:2px solid #111;border-left:none;background:#fff;color:#111;cursor:pointer">CITY</button>
         </div>
       </div>
-      <div id="view-map">
+      <div id="view-map" style="display:none">
         <div id="map-container">
           <img src="img/maps/overview.png" alt="Night City Overview" id="map-img">
           <canvas id="map-hitcanvas" style="display:none"></canvas>
@@ -139,7 +141,7 @@ body{font-family:var(--mono);background:var(--bg);color:var(--text);font-size:12
       <div id="view-grid" style="display:none">
         <div id="grid"></div>
       </div>
-      <div id="view-atlas" style="display:none">
+      <div id="view-atlas">
         <div id="nc-atlas"></div>
       </div>
     </div>

@@ -52,25 +52,84 @@
 
   /* ─── State ─── */
   var NC_MODE = 'ref';                                  // 'ref' | 'player' | 'gm'
-  var PLAYER = { entries: [], home: null, gmLayers: [], districtExtras: {} }; // single player notebook
-  var GM = { list: [], active: 0 };                      // multiple GM notebooks (tabs)
+  var PLAYER = { entries: [], home: null, gmLayers: [], districtExtras: {}, maps: [], mapOrder: ['nc'] }; // single player notebook
+  var GM = { list: [], active: 0, maps: [], order: ['nc'] };  // notebooks (tabs) + custom maps
+  var _surface = 'nc';                                   // active map surface: 'nc' | <customMapId>
+  // Custom-map places share the full Night City place shape (photos, security…).
+  function _migrateCustomPlace(p) { var m = _migratePlace(p || {}); m.pin = (p && p.pin && typeof p.pin.x === 'number') ? { x: p.pin.x, y: p.pin.y } : (m.pin || null); return m; }
+  function _migrateMap(m) {
+    m = m || {};
+    return { id: m.id || _uid(), name: m.name || 'Map', kind: m.kind === 'list' ? 'list' : 'map',
+      image: m.image || null, w: m.w || 0, h: m.h || 0, entries: Array.isArray(m.entries) ? m.entries.map(_migrateCustomPlace) : [] };
+  }
   var ncCurrentDistrict = null;
   var NC_GRID_ORDER = ['A1','A2','A3','A4','A5','A6','B1','B2','B3','B4','B5','B6','C1','C2','C3','C4','C5','C6'];
   var _LS_PLAYER = 'bartmoss_nc_player';
   var _LS_GM = 'bartmoss_nc_gm';
+  // App-embed: ?campaign=<id>&ncrole=gm|player. GM stores its plan in the
+  // campaign (so it persists per-campaign and syncs); player keeps a local log.
+  var _NCQS = new URLSearchParams(location.search);
+  var _CAMPAIGN = _NCQS.get('campaign');
+  var _NCROLE = _NCQS.get('ncrole');
+  var _GM_API = !!_CAMPAIGN && _NCROLE === 'gm';
+  function _campDocUrl() { return '/__api/campaigns/' + encodeURIComponent(_CAMPAIGN) + '/nightcity/_campaign.json'; }
+  function _publicPlaces() { var nb = GM.list[GM.active]; return nb ? (nb.entries || []).filter(function (e) { return e.public; }) : []; }
+  function _publicMaps() {   // public maps in the GM-chosen order
+    _ncEnsureOrder();
+    var byId = {}; GM.maps.forEach(function (m) { byId[m.id] = m; });
+    var out = [];
+    GM.order.forEach(function (id) {
+      if (id === 'nc') return;
+      var m = byId[id]; if (!m) return;
+      var pub = (m.entries || []).filter(function (e) { return e.public; });
+      if (pub.length) out.push({ id: m.id, name: m.name, kind: m.kind, image: m.image, w: m.w, h: m.h, gmEntries: pub });
+    });
+    return out;
+  }
+  function _postPublic() {
+    if (window.parent === window) return;
+    var maps = _publicMaps(), pubIds = maps.map(function (m) { return m.id; });
+    var order = (GM.order || ['nc']).filter(function (id) { return id === 'nc' || pubIds.indexOf(id) >= 0; });
+    try { window.parent.postMessage({ type: 'nc-gm-public', campaign: _CAMPAIGN, places: _publicPlaces(), maps: maps, order: order }, '*'); } catch (e) {}
+  }
 
   /* ─── Persistence (debounced, quota-safe) ─── */
   var _saveTimer = null;
   function _schedSave() { clearTimeout(_saveTimer); _saveTimer = setTimeout(_flushSave, 600); }
   function _flushSave() {
+    if (_GM_API) {
+      try { fetch(_campDocUrl(), { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ _kind: 'nc-campaign-gm', GM: GM }) }); } catch (e) {}
+      _postPublic();   // live-update players with the current public locations
+      return;
+    }
     try {
-      localStorage.setItem(_LS_PLAYER, JSON.stringify(PLAYER));
+      // Don't persist live session-synced data (re-pushed each session): synced
+      // GM layers, and synced public pins (gmEntries) on custom maps.
+      var persist = Object.assign({}, PLAYER, {
+        gmLayers: PLAYER.gmLayers.filter(function (L) { return !L.synced; }),
+        maps: (PLAYER.maps || []).map(function (m) { return Object.assign({}, m, { gmEntries: [] }); })
+      });
+      localStorage.setItem(_LS_PLAYER, JSON.stringify(persist));
       localStorage.setItem(_LS_GM, JSON.stringify(GM));
     } catch (e) {
       if (e && (e.name === 'QuotaExceededError' || e.code === 22)) {
         alert('Local storage is full (likely from imported map/photo images).\nExport your log/notebook to JSON to keep it safe, then remove some images.');
       }
     }
+  }
+  function _loadCampaignGM(cb) {
+    fetch(_campDocUrl()).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }).then(function (d) {
+      var g = d && d.GM;
+      if (g && Array.isArray(g.list) && g.list.length) {
+        GM.list = g.list.map(function (nb) { return { id: nb.id || _uid(), name: nb.name || 'Plan', entries: (nb.entries || []).map(_migratePlace), districtExtras: (nb.districtExtras && typeof nb.districtExtras === 'object') ? nb.districtExtras : {} }; });
+        GM.active = Math.min(Math.max(0, g.active || 0), GM.list.length - 1);
+        GM.maps = Array.isArray(g.maps) ? g.maps.map(_migrateMap) : [];
+        GM.order = Array.isArray(g.order) ? g.order : ['nc'];
+      }
+      if (!GM.list.length) GM.list = [{ id: _uid(), name: 'Plan 1', entries: [], districtExtras: {} }];
+      _ncEnsureOrder();
+      cb();
+    });
   }
   function _load() {
     try {
@@ -81,6 +140,8 @@
         PLAYER.gmLayers = Array.isArray(p.gmLayers) ? p.gmLayers : [];
         PLAYER.gmLayers.forEach(function (L) { L.entries = (L.entries || []).map(_migratePlace); if (L.hidden == null) L.hidden = false; });
         PLAYER.districtExtras = (p.districtExtras && typeof p.districtExtras === 'object') ? p.districtExtras : {};
+        PLAYER.maps = Array.isArray(p.maps) ? p.maps.map(function (m) { var mm = _migrateMap(m); mm.gmEntries = Array.isArray(m.gmEntries) ? m.gmEntries.map(_migrateCustomPlace) : []; return mm; }) : [];
+        PLAYER.mapOrder = Array.isArray(p.mapOrder) ? p.mapOrder : ['nc'];
       }
     } catch (e) { /* keep defaults */ }
     try {
@@ -88,9 +149,12 @@
       if (g && Array.isArray(g.list)) {
         GM.list = g.list.map(function (nb) { return { id: nb.id || _uid(), name: nb.name || 'Plan', entries: (nb.entries || []).map(_migratePlace), districtExtras: (nb.districtExtras && typeof nb.districtExtras === 'object') ? nb.districtExtras : {} }; });
         GM.active = Math.min(Math.max(0, g.active || 0), Math.max(0, GM.list.length - 1));
+        GM.maps = Array.isArray(g.maps) ? g.maps.map(_migrateMap) : [];
+        GM.order = Array.isArray(g.order) ? g.order : ['nc'];
       }
     } catch (e) { /* keep defaults */ }
     if (!GM.list.length) GM.list = [{ id: _uid(), name: 'Plan 1', entries: [], districtExtras: {} }];
+    _ncEnsureOrder();
   }
   /* District-scoped extras (Other tab) for the active doc: { notes, people:[{id,name,desc}] } */
   function activeExtrasStore() {
@@ -109,7 +173,7 @@
   /* ─── Place factory / migration ─── */
   function makePlace(districtCode) {
     return { id: _uid(), district: districtCode || '', building: '', floor: '', name: '', type: 'other',
-      notes: '', security: '', photos: [], hackedMaps: [], visited: false, createdAt: Date.now() };
+      notes: '', security: '', photos: [], hackedMaps: [], visited: false, public: false, createdAt: Date.now() };
   }
   function _migratePlace(p) {
     if (!p || typeof p !== 'object') return makePlace('');
@@ -124,6 +188,7 @@
     if (!Array.isArray(p.photos)) p.photos = [];
     if (!Array.isArray(p.hackedMaps)) p.hackedMaps = [];
     if (p.visited == null) p.visited = false;
+    if (p.public == null) p.public = false;
     if (p.createdAt == null) p.createdAt = Date.now();
     return p;
   }
@@ -147,6 +212,7 @@
     ncApplyModeToDistrictView();
     ncRenderCtxBar();
     ncRenderSidePanel();
+    ncRenderMapsBar();
     ncRefreshDistrict();
     // atlas legend depends on mode
     var atlas = document.getElementById('view-atlas');
@@ -355,6 +421,7 @@
         '<span class="nc-entry-addr">' + addr + '</span>' +
         '<span class="nc-entry-name">' + (isHome ? '⌂ ' : '') + _esc(e.name || '(unnamed)') + '</span>' +
         (e.security !== '' && e.security != null ? '<span class="nc-entry-sec">SEC ' + _esc(e.security) + '</span>' : '') +
+        (!readonly && NC_MODE === 'gm' && e.public ? '<span class="nc-entry-pub">PUBLIC</span>' : '') +
         '<span class="nc-entry-act-wrap">' + actions + '</span>' +
       '</div>' +
       (e.notes ? '<div class="nc-entry-notes">' + _esc(e.notes) + '</div>' : '') +
@@ -363,10 +430,11 @@
   }
 
   /* ═══ ENTRY MODAL ═══ */
-  var _modalEntryId = null, _modalDistrict = null, _modalDraft = null;
+  var _modalEntryId = null, _modalDistrict = null, _modalDraft = null, _modalMapId = null, _modalReadonly = false;
   window.ncEntryModal = function (districtCode, entryId, pin) {
     _modalDistrict = districtCode;
     _modalEntryId = entryId || null;
+    _modalMapId = null; _modalReadonly = false;
     var existing = entryId ? findEntry(activeEntries(), entryId) : null;
     _modalDraft = existing ? JSON.parse(JSON.stringify(existing)) : makePlace(districtCode);
     if (pin && !existing) _modalDraft.pin = { x: pin.x, y: pin.y };
@@ -375,33 +443,37 @@
   window.ncModalClearPin = function () { if (_modalDraft) { _captureModal(); delete _modalDraft.pin; _renderModal(); } };
   function _renderModal() {
     var e = _modalDraft;
+    var custom = !!_modalMapId, ro = !!_modalReadonly, isPlayer = NC_MODE === 'player';
     var code = _modalDistrict;
-    var g = (typeof DATA !== 'undefined' && DATA.grid[code]) ? DATA.grid[code] : null;
-    var locs = (typeof DATA !== 'undefined' && DATA.districts[code]) ? DATA.districts[code].locations : [];
+    var locs = (!custom && typeof DATA !== 'undefined' && DATA.districts[code]) ? DATA.districts[code].locations : [];
     var dlOpts = (locs || []).map(function (l) { return '<option value="' + l.id + '">' + _esc(l.name) + '</option>'; }).join('');
     var typeOpts = TYPES.map(function (t) { return '<option value="' + t.key + '"' + (e.type === t.key ? ' selected' : '') + '>' + t.label + '</option>'; }).join('');
     var isCustomType = !typeMeta(e.type);
     typeOpts += '<option value="__custom"' + (isCustomType ? ' selected' : '') + '>+ custom…</option>';
-
     var photos = (e.photos || []).map(function (src, i) { return '<div class="nc-mthumb"><img src="' + src + '"><span onclick="ncModalRmImg(\'p\',' + i + ')">✕</span></div>'; }).join('');
     var maps = (e.hackedMaps || []).map(function (m, i) { return '<div class="nc-mthumb"><img src="' + m.dataUrl + '"><span onclick="ncModalRmImg(\'m\',' + i + ')">✕</span></div>'; }).join('');
-
-    var isPlayer = NC_MODE === 'player';
-    var distOpts = NC_GRID_ORDER.map(function (dc) {
-      var dn = (typeof DATA !== 'undefined' && DATA.grid[dc]) ? DATA.grid[dc].name : '';
-      return '<option value="' + dc + '"' + (dc === code ? ' selected' : '') + '>' + dc + ' — ' + _esc(dn) + '</option>';
-    }).join('');
-    var pinRow = e.pin
-      ? '<div class="nc-modal-pin">📍 Pinned on city map (' + Math.round(e.pin.x * 100) + '%, ' + Math.round(e.pin.y * 100) + '%) <span class="nc-entry-act" onclick="ncModalClearPin()">clear pin</span></div>'
-      : '';
-    var body =
-      '<label class="nc-modal-lbl">District<select id="nc-m-district" onchange="ncModalDistrictChange()">' + distOpts + '</select></label>' +
-      pinRow +
-      '<div class="nc-modal-grid">' +
-        '<label class="nc-modal-lbl">Building #<input id="nc-m-building" list="nc-m-buildings" value="' + _esc(e.building) + '" placeholder="e.g. 5"></label>' +
-        '<datalist id="nc-m-buildings">' + dlOpts + '</datalist>' +
-        '<label class="nc-modal-lbl">Floor<input id="nc-m-floor" value="' + _esc(e.floor) + '" placeholder="opt."></label>' +
-      '</div>' +
+    // Location header: districts/building on Night City; pin coords on custom maps.
+    var locHeader;
+    if (custom) {
+      locHeader = e.pin ? '<div class="nc-modal-pin">📍 On map (' + Math.round(e.pin.x * 100) + '%, ' + Math.round(e.pin.y * 100) + '%)</div>' : '';
+    } else {
+      var distOpts = NC_GRID_ORDER.map(function (dc) {
+        var dn = (typeof DATA !== 'undefined' && DATA.grid[dc]) ? DATA.grid[dc].name : '';
+        return '<option value="' + dc + '"' + (dc === code ? ' selected' : '') + '>' + dc + ' — ' + _esc(dn) + '</option>';
+      }).join('');
+      var pinRow = e.pin
+        ? '<div class="nc-modal-pin">📍 Pinned on city map (' + Math.round(e.pin.x * 100) + '%, ' + Math.round(e.pin.y * 100) + '%) <span class="nc-entry-act" onclick="ncModalClearPin()">clear pin</span></div>'
+        : '';
+      locHeader =
+        '<label class="nc-modal-lbl">District<select id="nc-m-district" onchange="ncModalDistrictChange()">' + distOpts + '</select></label>' + pinRow +
+        '<div class="nc-modal-grid">' +
+          '<label class="nc-modal-lbl">Building #<input id="nc-m-building" list="nc-m-buildings" value="' + _esc(e.building) + '" placeholder="e.g. 5"></label>' +
+          '<datalist id="nc-m-buildings">' + dlOpts + '</datalist>' +
+          '<label class="nc-modal-lbl">Floor<input id="nc-m-floor" value="' + _esc(e.floor) + '" placeholder="opt."></label>' +
+        '</div>';
+    }
+    var fields =
+      locHeader +
       '<label class="nc-modal-lbl">Name<input id="nc-m-name" value="' + _esc(e.name) + '" placeholder="location name"></label>' +
       '<div class="nc-modal-grid">' +
         '<label class="nc-modal-lbl">Type<select id="nc-m-type" onchange="ncModalTypeChange()">' + typeOpts + '</select></label>' +
@@ -410,18 +482,21 @@
       (NC_MODE === 'gm' ? '<label class="nc-modal-lbl">Security<input id="nc-m-sec" value="' + _esc(e.security) + '" placeholder="0–10 / note"></label>' : '') +
       '<label class="nc-modal-lbl">Notes<textarea id="nc-m-notes" rows="4" placeholder="legend / details…">' + _esc(e.notes) + '</textarea></label>' +
       (isPlayer ? '<label class="nc-modal-check"><input type="checkbox" id="nc-m-visited"' + (e.visited ? ' checked' : '') + '> Visited</label>' : '') +
-      (isPlayer ? '<label class="nc-modal-check"><input type="checkbox" id="nc-m-home"' + (PLAYER.home === e.id ? ' checked' : '') + '> Set as home (⌂)</label>' : '') +
+      (isPlayer && !custom ? '<label class="nc-modal-check"><input type="checkbox" id="nc-m-home"' + (PLAYER.home === e.id ? ' checked' : '') + '> Set as home (⌂)</label>' : '') +
+      (NC_MODE === 'gm' ? '<label class="nc-modal-check"><input type="checkbox" id="nc-m-public"' + (e.public ? ' checked' : '') + '> Public — visible to players in session</label>' : '') +
       '<div class="nc-modal-imgs"><div class="nc-modal-imgs-row">' +
         '<label class="nc-btn nc-file nc-btn-sm">＋ Photo<input type="file" accept="image/*" onchange="ncModalAddImg(\'p\',event)"></label>' +
         '<label class="nc-btn nc-file nc-btn-sm">＋ Hacked map<input type="file" accept="image/*" onchange="ncModalAddImg(\'m\',event)"></label>' +
-      '</div><div class="nc-mthumbs">' + photos + maps + '</div></div>' +
+      '</div><div class="nc-mthumbs">' + photos + maps + '</div></div>';
+    var actions =
       '<div class="nc-modal-actions">' +
-        (_modalEntryId ? '<button class="nc-btn nc-btn-danger" onclick="ncDeleteEntry()">Delete</button>' : '') +
+        ((_modalEntryId && !ro) ? '<button class="nc-btn nc-btn-danger" onclick="ncDeleteEntry()">Delete</button>' : '') +
         '<span style="flex:1"></span>' +
-        '<button class="nc-btn" onclick="ncModalClose()">Cancel</button>' +
-        '<button class="nc-btn nc-btn-cy" onclick="ncSaveEntry()">Save</button>' +
+        '<button class="nc-btn" onclick="ncModalClose()">' + (ro ? 'Close' : 'Cancel') + '</button>' +
+        (ro ? '' : '<button class="nc-btn nc-btn-cy" onclick="ncSaveEntry()">Save</button>') +
       '</div>';
-    _ncModalOpen((_modalEntryId ? 'Edit location' : 'New location'), body);
+    var body = (ro ? '<fieldset disabled style="border:none;margin:0;padding:0">' + fields + '</fieldset>' : fields) + actions;
+    _ncModalOpen((_modalEntryId ? (ro ? 'Location' : 'Edit location') : 'New location'), body);
   }
   window.ncModalTypeChange = function () {
     var sel = document.getElementById('nc-m-type');
@@ -439,6 +514,7 @@
     var s = get('nc-m-sec'); if (s !== undefined) e.security = s.trim();
     var no = get('nc-m-notes'); if (no !== undefined) e.notes = no;
     var visEl = document.getElementById('nc-m-visited'); if (visEl) e.visited = visEl.checked;
+    var pubEl = document.getElementById('nc-m-public'); if (pubEl) e.public = pubEl.checked;
     var d = get('nc-m-district'); if (d !== undefined) { e.district = d; _modalDistrict = d; }
   }
   window.ncModalDistrictChange = function () { _captureModal(); _renderModal(); };
@@ -464,9 +540,17 @@
     _renderModal();
   };
   window.ncSaveEntry = function () {
+    if (_modalReadonly) { ncModalClose(); return; }
     _captureModal();
     var e = _modalDraft;
-
+    if (_modalMapId) {   // custom map: save to that map's own entries
+      var m = _findMap(_modalMapId); if (!m) { ncModalClose(); return; }
+      if (!Array.isArray(m.entries)) m.entries = [];
+      var mi = m.entries.findIndex(function (x) { return x.id === e.id; });
+      if (mi >= 0) m.entries[mi] = e; else m.entries.push(e);
+      _schedSave(); ncModalClose(); ncRenderCustomMap(_modalMapId); ncRenderMapsBar();
+      return;
+    }
     var arr = activeEntries();
     if (_modalEntryId) {
       var idx = arr.findIndex(function (x) { return x.id === _modalEntryId; });
@@ -484,6 +568,10 @@
   window.ncDeleteEntry = function () {
     if (!_modalEntryId) return;
     if (!confirm('Delete this location?')) return;
+    if (_modalMapId) {
+      var cm = _findMap(_modalMapId); if (cm) cm.entries = (cm.entries || []).filter(function (x) { return x.id !== _modalEntryId; });
+      _schedSave(); ncModalClose(); ncRenderCustomMap(_modalMapId); return;
+    }
     var arr = activeEntries();
     var idx = arr.findIndex(function (x) { return x.id === _modalEntryId; });
     if (idx >= 0) arr.splice(idx, 1);
@@ -741,15 +829,189 @@
     }
   }
 
+  /* ═══ CUSTOM MAPS (image + normalized pins) & off-NC LISTS ═══ */
+  function _ncEnsureOrder() {
+    if (!Array.isArray(GM.order)) GM.order = ['nc'];
+    if (GM.order.indexOf('nc') < 0) GM.order.unshift('nc');
+    GM.maps.forEach(function (m) { if (GM.order.indexOf(m.id) < 0) GM.order.push(m.id); });
+    GM.order = GM.order.filter(function (id) { return id === 'nc' || GM.maps.some(function (m) { return m.id === id; }); });
+  }
+  function _mapSource() { return NC_MODE === 'gm' ? GM.maps : PLAYER.maps; }
+  function _mapOrder() { return NC_MODE === 'gm' ? GM.order : (PLAYER.mapOrder || ['nc']); }
+  function _findMap(id) { return (_mapSource() || []).filter(function (m) { return m.id === id; })[0] || null; }
+  function _findPlace(m, id) { return (((m && m.entries) || []).concat((m && m.gmEntries) || [])).filter(function (p) { return p.id === id; })[0] || null; }
+  function _allMapPlaces(m) {
+    var gm = (m.gmEntries || []).map(function (p) { var c = Object.assign({}, p); c._ro = true; return c; });
+    return gm.concat(m.entries || []);
+  }
+  function _perspectiveMaps() {
+    var src = _mapSource() || [], byId = {}; src.forEach(function (m) { byId[m.id] = m; });
+    var order = (_mapOrder() || []).slice(); if (order.indexOf('nc') < 0) order.unshift('nc');
+    src.forEach(function (m) { if (order.indexOf(m.id) < 0) order.push(m.id); });
+    var out = [];
+    order.forEach(function (id) { if (id === 'nc') out.push({ id: 'nc', name: 'Night City', kind: 'nc' }); else if (byId[id]) out.push({ id: id, name: byId[id].name, kind: byId[id].kind }); });
+    return out;
+  }
+  function ncRenderMapsBar() {
+    var bar = document.getElementById('nc-maps-bar'); if (!bar) return;
+    var gm = NC_MODE === 'gm', player = NC_MODE === 'player';
+    if (!gm && !player) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+    var maps = _perspectiveMaps();
+    if (!gm && maps.length <= 1) { bar.style.display = 'none'; bar.innerHTML = ''; return; }   // player: only show if there are custom maps
+    var tabs = maps.map(function (m) {
+      var on = m.id === _surface;
+      var ico = m.kind === 'list' ? '☰' : (m.id === 'nc' ? '◰' : '▦');
+      var mv = (gm && m.id !== 'nc') ? '<span class="nc-mtab-mv" onclick="event.stopPropagation();ncMoveMap(\'' + m.id + '\',-1)">◂</span><span class="nc-mtab-mv" onclick="event.stopPropagation();ncMoveMap(\'' + m.id + '\',1)">▸</span>' : '';
+      return '<div class="nc-mtab' + (on ? ' active' : '') + '" onclick="ncSelectMap(\'' + m.id + '\')">' + ico + ' ' + _esc(m.name) + mv + '</div>';
+    }).join('');
+    var add = gm ? '<button class="nc-mtab-add" onclick="ncAddMap(\'map\')">＋ Map</button><button class="nc-mtab-add" onclick="ncAddMap(\'list\')">＋ List</button>' : '';
+    bar.style.display = 'flex'; bar.innerHTML = tabs + add;
+  }
+  window.ncSelectMap = function (id) {
+    _surface = id;
+    var ov = document.getElementById('overview'), dv = document.getElementById('district-view'), vc = document.getElementById('view-custom');
+    // The Night City district sidebar belongs to NC only — hide it on custom maps.
+    var sb = document.getElementById('sidebar'); if (sb) sb.style.display = (id === 'nc') ? '' : 'none';
+    if (id === 'nc') {
+      if (vc) vc.style.display = 'none';
+      if (dv) dv.style.display = 'none';
+      if (ov) ov.style.display = '';
+      ncCurrentDistrict = null;
+    } else {
+      if (ov) ov.style.display = 'none';
+      if (dv) dv.style.display = 'none';
+      if (vc) vc.style.display = 'block';
+      ncRenderCustomMap(id);
+    }
+    ncRenderMapsBar();
+  };
+  window.ncAddMap = function (kind) {
+    if (kind === 'list') {
+      var m = { id: _uid(), name: 'List ' + (GM.maps.length + 1), kind: 'list', image: null, w: 0, h: 0, entries: [] };
+      GM.maps.push(m); _ncEnsureOrder(); _schedSave(); ncSelectMap(m.id); return;
+    }
+    var inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+    inp.onchange = function () {
+      var f = inp.files[0]; if (!f) return;
+      var r = new FileReader();
+      r.onload = function (e) {
+        var img = new Image();
+        img.onload = function () {
+          var m = { id: _uid(), name: 'Map ' + (GM.maps.length + 1), kind: 'map', image: e.target.result, w: img.naturalWidth, h: img.naturalHeight, entries: [] };
+          GM.maps.push(m); _ncEnsureOrder(); _schedSave(); ncSelectMap(m.id);
+        };
+        img.src = e.target.result;
+      };
+      r.readAsDataURL(f);
+    };
+    inp.click();
+  };
+  window.ncMoveMap = function (id, dir) {
+    _ncEnsureOrder();
+    var i = GM.order.indexOf(id), j = i + dir;
+    if (i < 0 || j < 0 || j >= GM.order.length) return;
+    var t = GM.order[i]; GM.order[i] = GM.order[j]; GM.order[j] = t;
+    _schedSave(); ncRenderMapsBar();
+  };
+  window.ncRenameMap = function (id, name) { var m = _findMap(id); if (m) { m.name = name; _schedSave(); ncRenderMapsBar(); } };
+  window.ncDeleteMap = function (id) {
+    if (!confirm('Delete this map and its locations?')) return;
+    GM.maps = GM.maps.filter(function (m) { return m.id !== id; }); _ncEnsureOrder();
+    _schedSave(); ncSelectMap('nc');
+  };
+  function _customListHtml(mapId, m) {
+    var gm = NC_MODE === 'gm';
+    var places = _allMapPlaces(m);
+    var rows = places.length ? places.map(function (p, i) {
+      var ed = p._ro ? '<span class="nc-entry-act" onclick="ncCustomPlaceModal(\'' + mapId + '\',\'' + p.id + '\')">view</span>' : '<span class="nc-entry-act" onclick="ncCustomPlaceModal(\'' + mapId + '\',\'' + p.id + '\')">edit</span>';
+      return '<div class="nc-cm-row"><span class="legend-num">' + (i + 1) + '</span><span class="nc-cm-rname">' + _esc(p.name || '(unnamed)') + '</span>' +
+        (gm && p.public ? '<span class="nc-entry-pub">PUBLIC</span>' : '') + (p._ro ? '<span class="nc-cm-ro">GM</span>' : '') + ed +
+        (p.notes ? '<div class="nc-cm-rnotes">' + _esc(p.notes) + '</div>' : '') + '</div>';
+    }).join('') : '<div class="nc-cm-empty">No locations yet.</div>';
+    var add = (NC_MODE !== 'ref') ? '<button class="nc-btn nc-btn-sm" onclick="ncCustomPlaceModal(\'' + mapId + '\',null)">＋ Add location</button>' : '';
+    return rows + '<div style="margin-top:8px">' + add + '</div>';
+  }
+  function ncRenderCustomMap(id) {
+    var vc = document.getElementById('view-custom'); if (!vc) return;
+    var m = _findMap(id);
+    if (!m) { vc.innerHTML = '<div class="nc-cm-empty">Map not found.</div>'; return; }
+    var gm = NC_MODE === 'gm';
+    var head = '<div class="nc-cm-head">' +
+      (gm ? '<input class="nc-cm-name" value="' + _esc(m.name) + '" onchange="ncRenameMap(\'' + id + '\',this.value)">' : '<span class="nc-cm-title">' + _esc(m.name) + '</span>') +
+      (gm ? '<button class="nc-btn nc-btn-sm nc-btn-danger" onclick="ncDeleteMap(\'' + id + '\')">Delete</button>' : '') + '</div>';
+    var body;
+    if (m.kind === 'list' || !m.image) {
+      body = '<div class="nc-cm-listonly">' + _customListHtml(id, m) + '</div>';
+    } else {
+      var pins = _allMapPlaces(m).filter(function (p) { return p.pin; }).map(function (p, i) {
+        return '<div class="nc-cm-pin' + (p._ro ? ' ro' : '') + (p.public ? ' pub' : '') + '" style="left:' + (p.pin.x * 100) + '%;top:' + (p.pin.y * 100) + '%" onclick="event.stopPropagation();ncCustomPlaceModal(\'' + id + '\',\'' + p.id + '\')"><span>' + (i + 1) + '</span></div>';
+      }).join('');
+      body = '<div class="nc-cm-stage"><div class="nc-cm-imgwrap" onclick="ncCustomMapClick(\'' + id + '\',event)"><img src="' + m.image + '">' + pins + '</div>' +
+        '<div class="nc-cm-side">' + _customListHtml(id, m) + '</div></div>';
+    }
+    vc.innerHTML = head + body;
+  }
+  window.ncCustomMapClick = function (id, ev) {
+    if (NC_MODE === 'ref') return;
+    if (ev.target.closest && ev.target.closest('.nc-cm-pin')) return;
+    var wrap = ev.currentTarget, img = wrap.querySelector('img'); if (!img) return;
+    var r = img.getBoundingClientRect();
+    var x = (ev.clientX - r.left) / r.width, y = (ev.clientY - r.top) / r.height;
+    if (x < 0 || x > 1 || y < 0 || y > 1) return;
+    ncCustomPlaceModal(id, null, { x: x, y: y });
+  };
+  // Custom-map locations reuse the full Night City place modal (same fields:
+  // type, security, notes, photos, hacked maps, public). Read-only for players
+  // viewing a synced GM pin.
+  window.ncCustomPlaceModal = function (mapId, placeId, pin) {
+    var m = _findMap(mapId);
+    var ex = placeId ? _findPlace(m, placeId) : null;
+    var own = ex && (m.entries || []).some(function (p) { return p.id === placeId; });
+    _modalMapId = mapId; _modalDistrict = ''; _modalEntryId = placeId || null;
+    _modalReadonly = !!ex && !own;
+    _modalDraft = ex ? JSON.parse(JSON.stringify(ex)) : makePlace('');
+    if (pin && !ex) _modalDraft.pin = { x: pin.x, y: pin.y };
+    _renderModal();
+  };
+
   /* ═══ INIT ═══ */
-  function init() {
-    _load();
+  function _afterLoad() {
     _installHooks();
+    // App-embed: lock to the given role and hide the mode switcher.
+    if (_NCROLE === 'gm' || _NCROLE === 'player') {
+      NC_MODE = _NCROLE;
+      var mb = document.getElementById('nc-modebar'); if (mb) mb.style.display = 'none';
+      var back = document.querySelector('#nav .back'); if (back) back.style.display = 'none';
+    }
     document.body.setAttribute('data-nc-mode', NC_MODE);
     ncApplyModeToDistrictView();
     ncRenderCtxBar();
     ncRenderSidePanel();
+    ncRenderMapsBar();
+    if (typeof window.ncSetView === 'function') window.ncSetView('atlas');   // City view by default
+  }
+  function init() {
+    if (_GM_API) { _loadCampaignGM(_afterLoad); }
+    else { _load(); _afterLoad(); }
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
+
+  // Live session overlays: the app shell (player) pushes public campaign locations.
+  // They appear as a toggleable GM layer, not persisted to localStorage.
+  window.addEventListener('message', function (ev) {
+    var d = ev.data; if (!d || d.type !== 'nc-sync-layers') return;
+    PLAYER.gmLayers = PLAYER.gmLayers.filter(function (L) { return !L.synced; });
+    (d.layers || []).forEach(function (L) {
+      PLAYER.gmLayers.push({ id: L.id || _uid(), name: L.name || 'Campaign', hidden: false, synced: true, entries: (L.entries || []).map(_migratePlace) });
+    });
+    // Synced custom maps: keep the player's own pins, replace the GM public pins.
+    if (Array.isArray(d.maps)) {
+      var ownById = {}; (PLAYER.maps || []).forEach(function (m) { ownById[m.id] = m.entries || []; });
+      PLAYER.maps = d.maps.map(function (m) { var mm = _migrateMap(m); mm.gmEntries = (m.gmEntries || []).map(_migrateCustomPlace); mm.entries = ownById[m.id] || []; return mm; });
+      PLAYER.mapOrder = Array.isArray(d.order) && d.order.length ? d.order : ['nc'].concat(d.maps.map(function (m) { return m.id; }));
+    }
+    if (NC_MODE !== 'player') window.ncSetMode('player');
+    else { ncRenderSidePanel(); ncRenderMapsBar(); ncAfterChange(); if (_surface !== 'nc') ncRenderCustomMap(_surface); }
+  });
 })();

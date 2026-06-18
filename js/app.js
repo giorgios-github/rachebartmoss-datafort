@@ -173,51 +173,640 @@
 
   /* ── Campaign detail ── */
   function openCampaign(id) {
-    state.campaignId = id; state.type = 'sheets';
+    state.campaignId = id; state.type = 'sheets'; cdSessionOpen = null; cdHost = null;
     endSessionConn();
+    var vs = el('view-session'); if (vs) vs.innerHTML = '';   // drop stale live panels (avoid id clashes)
     setMode('manage');
     showView('view-campaign');
     el('app-crumbs').innerHTML = '<a id="crumb-home">Campaigns</a> <span class="crumb-sep">/</span> <span class="crumb-cur">' + esc(id) + '</span>';
     renderCampaignDetail();
   }
 
+  /* ── Campaign = Prep board (sidebar of prep modules) ── */
+  var cdData = null, cdSection = 'overview', cdSessionOpen = null, cdEventSel = null, cdLootSel = null;
+  function uid(p) { return (p || 'x') + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36); }
+  function prep() {
+    if (!cdData.meta) cdData.meta = {};
+    var p = cdData.meta.prep || (cdData.meta.prep = {});
+    ['events', 'squads', 'locations', 'clocks', 'loot'].forEach(function (k) { if (!Array.isArray(p[k])) p[k] = []; });
+    // Migrate v1 → v2: agenda scenes → events; encounters → squads; flat loot → tree.
+    if (Array.isArray(p.agenda) && !p.events.length) {
+      p.events = p.agenda.map(function (s) { return { id: s.id || uid('ev'), title: s.title || '', preset: 'imagetext', image: '', text: s.notes || '', portrait: '', npcRef: '', trigger: null }; });
+      delete p.agenda;
+    }
+    if (Array.isArray(p.encounters) && !p.squads.length) {
+      p.squads = p.encounters.map(function (e) { return { id: e.id || uid('sq'), name: e.name || 'Squad', members: e.members || [], lootId: null, settings: e.settings }; });
+      delete p.encounters;
+    }
+    p.loot.forEach(function (g) { if (!Array.isArray(g.nodes)) { g.nodes = (g.items || []).map(function (it) { return { id: uid('ln'), type: 'item', cat: 'custom', name: it, share: 'shared' }; }); if (g.eb) g.nodes.unshift({ id: uid('ln'), type: 'money', amount: g.eb, form: 'eddies', share: 'shared' }); } });
+    return p;
+  }
+  function savePrep(then) { return saveCampaignMeta(state.campaignId, { prep: prep() }).then(then || function () {}); }
+  // Persistent session records (journal). Distinct from the live meta.session.
+  function sessions() {
+    if (!cdData.meta) cdData.meta = {};
+    if (!Array.isArray(cdData.meta.sessions)) cdData.meta.sessions = [];
+    return cdData.meta.sessions;
+  }
+  function saveSessions(then) { return saveCampaignMeta(state.campaignId, { sessions: sessions() }).then(then || function () {}); }
+  function newSession() { var n = sessions().length + 1; return { id: uid('ses'), name: 'Session ' + n, date: new Date().toISOString().slice(0, 10), notes: '', recap: '', log: [], attendance: [], createdAt: Date.now() }; }
+  function fmtTime(ts) { try { return new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } }
+
+  var CD_SECTIONS = [
+    { k: 'overview', label: 'Overview' }, { k: 'sessions', label: 'Sessions' }, { k: 'players', label: 'Players' },
+    { k: 'locations', label: 'Locations' }, { k: 'events', label: 'Events' }, { k: 'squads', label: 'Squads' },
+    { k: 'loot', label: 'Loot' }, { k: 'files', label: 'Files' },
+  ];
+  // Unified workspace: section identity (icon + group) shared by PREP and LIVE rails.
+  var SECTION_META = {
+    overview: { icon: '◎', grp: 'PLAY' }, sessions: { icon: '◷', grp: 'PLAY' }, players: { icon: '◈', grp: 'PLAY' },
+    locations: { icon: '◰', grp: 'PLAY' }, events: { icon: '▸', grp: 'PLAY' }, squads: { icon: '⚔', grp: 'PLAY' },
+    loot: { icon: '◆', grp: 'PLAY' }, livesheet: { icon: '◈', grp: 'PLAY' },
+    tools: { icon: '⚙', grp: 'LIBRARY' }, files: { icon: '▤', grp: 'LIBRARY' },
+  };
+  function wsRail(sections, activeKey) {
+    var order = [], byGrp = {};
+    sections.forEach(function (s) { var g = (SECTION_META[s.k] && SECTION_META[s.k].grp) || 'PLAY'; if (!byGrp[g]) { byGrp[g] = []; order.push(g); } byGrp[g].push(s); });
+    return order.map(function (g) {
+      return '<div class="ws-rail-grp">' + g + '</div>' + byGrp[g].map(function (s) {
+        var ic = (SECTION_META[s.k] && SECTION_META[s.k].icon) || '·';
+        var btn = '<button class="sess-nav ws-nav' + (s.k === activeKey ? ' active' : '') + '" data-sec="' + s.k + '"><span class="ws-nav-ic">' + ic + '</span>' + esc(s.label) +
+          (s.subs ? '<span class="ws-nav-exp" data-railexp="' + s.k + '">' + (sess.toolsExp ? '▾' : '▸') + '</span>' : '') + '</button>';
+        if (s.subs) {
+          btn += '<div class="ws-subnav" id="ws-sub-' + s.k + '"' + (sess.toolsExp ? '' : ' hidden') + '>' + s.subs.map(function (sub) {
+            var act = (sub.kind === 'section' && sub.k === activeKey) ? ' active' : '';
+            var attr = sub.kind === 'section' ? 'data-railsec="' + sub.k + '"' : 'data-railtool="' + esc(sub.kind === 'combat' ? 'combat' : (sub.url || '')) + '" data-raillabel="' + esc(sub.label) + '"';
+            return '<button class="ws-subnav-item' + act + '" ' + attr + '><span class="ws-nav-ic">' + (sub.icon || '·') + '</span>' + esc(sub.label) + '</button>';
+          }).join('') + '</div>';
+        }
+        return btn;
+      }).join('');
+    }).join('');
+  }
   function renderCampaignDetail() {
     var id = state.campaignId;
     api('GET', 'campaigns/' + encodeURIComponent(id)).then(function (d) {
-      var meta = (d && d.meta) || {};
-      var tabs = TYPES.map(function (t) {
-        var n = (d.docs && d.docs[t.key] ? d.docs[t.key].length : 0);
-        return '<div class="cd-tab' + (t.key === state.type ? ' active' : '') + '" data-type="' + t.key + '">' +
-          '<span class="cd-tab-ico">' + t.icon + '</span>' + t.label + ' <span class="cd-count">' + n + '</span></div>';
-      }).join('');
+      cdData = d; var meta = (d && d.meta) || {};
       el('view-campaign').innerHTML =
-        '<div class="cd-head">' +
-          '<button class="app-btn cd-back" id="cd-back">← CAMPAIGNS</button>' +
-          '<div class="cd-titlewrap"><div class="app-kicker">// CAMPAIGN</div><h2 class="app-h">' + esc(meta.name || id) + '</h2></div>' +
+        '<div class="cd-head ws-top ws-top-prep">' +
+          '<button class="app-btn cd-back" id="cd-back">← Campaigns</button>' +
+          '<span class="ws-mode ws-mode-prep">PREP</span>' +
+          '<div class="cd-titlewrap"><h2 class="app-h ws-title">' + esc(meta.name || id) + '</h2></div>' +
           '<span style="flex:1"></span>' +
           '<button class="app-btn app-btn-go" id="cd-session" title="Host the sheets for players">▶ GO LIVE</button></div>' +
-        '<div class="cd-tabs">' + tabs + '</div>' +
-        '<div id="cd-body"></div>';
+        '<div class="sess-shell cd-shell"><nav class="sess-side ws-rail">' + wsRail(CD_SECTIONS, cdSection) + '</nav><div class="sess-content" id="cd-content"></div></div>';
       var crumb = el('crumb-home'); if (crumb) crumb.onclick = renderCampaigns;
       el('cd-back').onclick = renderCampaigns;
-      el('view-campaign').querySelectorAll('.cd-tab').forEach(function (t) {
-        t.onclick = function () {
-          state.type = t.getAttribute('data-type');
-          // Move the active highlight to the clicked tab (was stuck because the
-          // tab strip wasn't re-rendered on a type switch).
-          el('view-campaign').querySelectorAll('.cd-tab').forEach(function (x) { x.classList.remove('active'); });
-          t.classList.add('active');
-          renderType(d);
-        };
-      });
-      el('cd-session').onclick = function () { startSessionPicker(id, (d.docs && d.docs.sheets) || [], (meta.session && meta.session.order) || []); };
-      renderType(d);
+      el('cd-session').onclick = function () { goLive(id); };
+      el('view-campaign').querySelectorAll('.sess-nav').forEach(function (b) { b.onclick = function () { cdSessionOpen = null; cdGoto(b.getAttribute('data-sec')); }; });
+      cdGoto(cdSection);
     });
+  }
+  // Section renderers route through a HOST element so the same editors render in
+  // both the PREP board (#cd-content) and a live session panel (workspace unity).
+  var cdHost = null;
+  function cdRenderSection(key, c) {
+    if (!c) return;
+    c.classList.toggle('cd-bleed', key === 'locations');   // full-bleed embedded tools
+    if (key === 'overview') return cdOverview(c);
+    if (key === 'sessions') return cdSessions(c);
+    if (key === 'players') return cdPlayers(c);
+    if (key === 'events') return cdEvents(c);
+    if (key === 'squads') return cdSquads(c);
+    if (key === 'locations') return cdLocations(c);
+    if (key === 'loot') return cdLoot(c);
+    if (key === 'files') return cdFiles(c);
+  }
+  function cdGoto(key) {
+    cdSection = key; cdHost = el('cd-content'); if (!cdHost) return;
+    el('view-campaign').querySelectorAll('.sess-nav').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-sec') === key); });
+    cdRenderSection(key, cdHost);
+  }
+
+  function statCard(value, label, hot) {
+    return '<div class="cd-stat' + (hot ? ' cd-stat-hot' : '') + '"><b>' + value + '</b><span>' + esc(label) + '</span></div>';
+  }
+  function cdOverview(c) {
+    var id = state.campaignId, meta = cdData.meta || {};
+    var n = cdData.docs || {}, p = prep();
+    var played = sessions().length;
+    c.innerHTML =
+      '<div class="cd-scroll">' +
+      '<div class="ov-banner cd-ovbanner">' +
+        '<div class="ov-banner-main"><div class="app-kicker">// CAMPAIGN</div><h2 class="ov-title">' + esc(meta.name || id) + '</h2></div>' +
+        '<div class="ov-chips"><span class="ov-chip ov-chip-live"><b>' + played + '</b> session' + (played === 1 ? '' : 's') + ' played</span></div>' +
+      '</div>' +
+      '<div class="cd-ovgrid">' +
+        '<div class="cd-ovmain"><div class="ov-block"><div class="ov-lbl">BRIEFING</div>' +
+          '<textarea class="ov-edit cd-ovdesc" id="cd-desc" placeholder="What is this campaign about? (shown to players in the session Overview)…">' + esc(meta.description || '') + '</textarea></div></div>' +
+        '<div class="cd-ovstats">' +
+          statCard(played, 'sessions played', true) +
+          statCard((n.sheets || []).length, 'sheets') +
+          statCard((n.npcs || []).length, 'NPCs') +
+          statCard((n.orgs || []).length, 'orgs') +
+          statCard(p.locations.length, 'locations') +
+          statCard(p.squads.length, 'squads') +
+          statCard(p.loot.length, 'loot') +
+          statCard(p.events.length, 'events') +
+          statCard(p.clocks.length, 'clocks') +
+        '</div>' +
+      '</div></div>';
+    el('cd-desc').onchange = function () { saveCampaignMeta(id, { description: el('cd-desc').value }); };
+  }
+
+  // Players — the campaign's player sheets; click one to edit it full-bleed (the
+  // full Character Sheet, in-place).
+  function cdPlayers(c) {
+    var sheets = (cdData.docs && cdData.docs.sheets) || [];
+    var cards = sheets.length ? sheets.map(function (d) {
+      return '<button class="pl-card" data-sheet="' + esc(d.name) + '"><div class="pl-photo">◈</div><div class="pl-name">' + esc(idOf(d.name)) + '</div></button>';
+    }).join('') : '<div class="cd-empty">No player sheets yet. Add one here or in Files.</div>';
+    c.innerHTML = '<div class="cd-topbar"><div class="cd-sectitle">Players</div><span style="flex:1"></span><button class="app-btn app-btn-go" id="cd-newpc">+ Sheet</button></div>' +
+      '<div class="cd-scroll"><div class="pl-grid pl-grid-prep">' + cards + '</div></div>';
+    el('cd-newpc').onclick = function () {
+      prompt1('New character', 'Name', 'name', function (name) {
+        name = (name || '').trim(); if (!name) return; if (!/\.json$/i.test(name)) name += '.json';
+        api('POST', 'campaigns/' + encodeURIComponent(state.campaignId) + '/sheets', { name: name, json: {} }).then(function () { cdOpenDocInline('sheets', name); });
+      });
+    };
+    c.querySelectorAll('[data-sheet]').forEach(function (b) { b.onclick = function () { cdOpenDocInline('sheets', b.getAttribute('data-sheet')); }; });
+  }
+  // Files — every campaign file (player sheets, NPCs, orgs, Night City, documents).
+  // Editing a doc opens it full-bleed in the section (Character Sheet, etc.).
+  function cdFiles(c) {
+    if (['sheets', 'npcs', 'orgs', 'nightcity', 'documents'].indexOf(state.type) < 0) state.type = 'sheets';
+    var tabs = TYPES.map(function (t) {
+      var n = (cdData.docs && cdData.docs[t.key] ? cdData.docs[t.key].length : 0);
+      return '<div class="cd-tab' + (t.key === state.type ? ' active' : '') + '" data-type="' + t.key + '"><span class="cd-tab-ico">' + t.icon + '</span>' + t.label + ' <span class="cd-count">' + n + '</span></div>';
+    }).join('');
+    c.innerHTML = '<div class="cd-topbar"><div class="cd-sectitle">Files</div></div><div class="cd-scroll"><div class="cd-tabs">' + tabs + '</div><div id="cd-body"></div></div>';
+    c.querySelectorAll('.cd-tab').forEach(function (t) {
+      t.onclick = function () { state.type = t.getAttribute('data-type'); c.querySelectorAll('.cd-tab').forEach(function (x) { x.classList.remove('active'); }); t.classList.add('active'); renderType(cdData); };
+    });
+    renderType(cdData);
+  }
+  // Open a campaign doc full-bleed inside the Files section (vs the old overlay).
+  function cdOpenDocInline(type, name) {
+    var id = state.campaignId, c = el('cd-content'); if (!c) return;
+    c.classList.add('cd-bleed');
+    function back() { renderCampaignDetail(); }
+    if (type === 'documents') {
+      var docPath = 'campaigns/' + encodeURIComponent(id) + '/documents/' + encodeURIComponent(name);
+      c.innerHTML = '<div class="cd-embed"><div class="cd-embed-bar"><button class="app-btn" id="cde-back">← Files</button><span class="cd-embed-name">' + esc(name) + '</span></div><textarea class="cd-embed-ta" id="cde-ta"></textarea></div>';
+      fetch('/__api/' + docPath).then(function (r) { return r.text(); }).then(function (txt) { var ta = el('cde-ta'); ta.value = txt; var to; ta.oninput = function () { clearTimeout(to); to = setTimeout(function () { fetch('/__api/' + docPath, { method: 'PUT', body: ta.value }); }, 400); }; });
+      el('cde-back').onclick = function () { var ta = el('cde-ta'); Promise.resolve(ta ? fetch('/__api/' + docPath, { method: 'PUT', body: ta.value }) : null).catch(function () {}).then(back); };
+      return;
+    }
+    var tool = TOOL_FOR[type]; if (!tool) return;
+    var url = tool + '?cdoc=1&cid=' + encodeURIComponent(id) + '&ctype=' + type + '&cname=' + encodeURIComponent(name);
+    c.innerHTML = '<div class="cd-embed"><div class="cd-embed-bar"><button class="app-btn" id="cde-back">← Files</button><span class="cd-embed-name">' + esc(name) + '</span></div><iframe class="cd-embed-frame" id="cde-frame" src="' + esc(url) + '"></iframe></div>';
+    el('cde-back').onclick = function () {
+      var fr = el('cde-frame'), win = fr && fr.contentWindow, ad = win && win.__cdocAdapter, obj;
+      try { obj = ad && ad.serialize(); } catch (e) { obj = null; }
+      if (obj == null) return back();
+      api('PUT', 'campaigns/' + encodeURIComponent(id) + '/' + type + '/' + encodeURIComponent(name), obj).then(back, back);
+    };
+  }
+  // Re-render the current section into its current host (PREP container or live panel).
+  function cdRerender() { if (cdHost) cdRenderSection(cdSection, cdHost); else cdGoto(cdSection); }
+
+  /* Sessions — persistent records with a live journal. List → session page. */
+  function cdSessions(c) {
+    if (cdSessionOpen) return cdSessionPage(c, cdSessionOpen);
+    var ss = sessions().slice().reverse();
+    var live = cdData.meta.session || {};
+    var activeId = (live.active && live.activeId) || null;
+    c.innerHTML = '<div class="cd-topbar"><div class="cd-sectitle">Sessions</div><span style="flex:1"></span><button class="app-btn app-btn-go" id="cd-add">+ Session</button></div>' +
+      '<div class="cd-scroll"><div class="prep-list">' + (ss.length ? ss.map(function (s) {
+        var isLive = activeId === s.id;
+        return '<div class="prep-card sess-rec' + (isLive ? ' live' : '') + '" data-open="' + s.id + '">' +
+          '<div class="prep-row"><span class="prep-tag">' + (isLive ? '●' : '◷') + '</span>' +
+          '<span class="prep-name">' + esc(s.name || 'Session') + '</span>' +
+          (s.date ? '<span class="prep-sub">' + esc(s.date) + '</span>' : '') +
+          (isLive ? '<span class="sess-rec-live">LIVE</span>' : '') +
+          '<span style="flex:1"></span><span class="prep-sub">' + (s.log || []).length + ' log · ' + (s.attendance || []).length + ' present</span>' +
+          '<button class="prep-mini prep-del" data-del="' + s.id + '">✕</button></div>' +
+          (s.recap ? '<div class="sess-rec-recap">' + esc(s.recap) + '</div>' : '') + '</div>';
+      }).join('') : '<div class="cd-empty">No sessions yet. Each GO LIVE lets you resume one or start a new one — recaps, attendance and a live journal live here.</div>') + '</div></div>';
+    el('cd-add').onclick = function () { var s = newSession(); sessions().push(s); saveSessions(function () { cdSessionOpen = s.id; cdRerender(); }); };
+    c.querySelectorAll('[data-open]').forEach(function (card) { card.onclick = function (e) { if (e.target.hasAttribute('data-del')) return; cdSessionOpen = card.getAttribute('data-open'); cdRerender(); }; });
+    c.querySelectorAll('[data-del]').forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); var did = b.getAttribute('data-del'); confirm1('Delete this session record (notes, recap, journal)?', function () { cdData.meta.sessions = sessions().filter(function (x) { return x.id !== did; }); saveSessions(cdRerender); }); }; });
+  }
+  function attendHtml(s) {
+    var sheets = ((cdData.docs && cdData.docs.sheets) || []).map(function (d) { return idOf(d.name); });
+    if (!sheets.length) return '<span class="cd-empty">No sheets in this campaign.</span>';
+    var att = s.attendance || [];
+    return sheets.map(function (sid) { return '<label class="ses-att"><input type="checkbox" data-att="' + esc(sid) + '"' + (att.indexOf(sid) >= 0 ? ' checked' : '') + '> ' + esc(sid) + '</label>'; }).join('');
+  }
+  // A session page mirrors the Overview structure (banner + recap/notes + journal).
+  function cdSessionPage(c, sid) {
+    var s = item(sessions(), sid);
+    if (!s.id) { cdSessionOpen = null; return cdSessions(c); }
+    var log = s.log || [];
+    c.innerHTML =
+      '<div class="cd-topbar"><button class="app-btn cd-back" id="ses-back">← Sessions</button><div class="cd-sectitle">Session</div><span style="flex:1"></span></div>' +
+      '<div class="cd-scroll">' +
+      '<div class="ov-banner cd-ovbanner"><div class="ov-banner-main">' +
+        '<input class="ses-name" id="ses-name" value="' + esc(s.name || '') + '" placeholder="Session name">' +
+        '<input class="ses-date" id="ses-date" type="date" value="' + esc(s.date || '') + '"></div>' +
+        '<div class="ov-chips"><span class="ov-chip"><b>' + log.length + '</b> log</span><span class="ov-chip"><b>' + (s.attendance || []).length + '</b> present</span></div></div>' +
+      '<div class="cd-ovgrid"><div class="cd-ovmain">' +
+        '<div class="ov-block"><div class="ov-lbl">RECAP</div><textarea class="ov-edit ov-edit-sm" id="ses-recap" placeholder="One-paragraph recap (what happened last time)…">' + esc(s.recap || '') + '</textarea></div>' +
+        '<div class="ov-block"><div class="ov-lbl">PREP NOTES</div><textarea class="ov-edit" id="ses-notes" placeholder="Your private notes for this session…">' + esc(s.notes || '') + '</textarea></div>' +
+      '</div><div class="cd-ovside">' +
+        '<div class="ov-block"><div class="ov-lbl">ATTENDANCE</div><div class="ses-attend">' + attendHtml(s) + '</div></div>' +
+        '<div class="ov-block"><div class="ov-lbl">JOURNAL — LIVE LOG</div><div class="ses-log">' + (log.length ? log.slice().reverse().map(function (e) {
+          return '<div class="ses-logrow"><span class="ses-logt">' + esc(fmtTime(e.ts)) + '</span> ' + esc(e.msg) + '</div>';
+        }).join('') : '<span class="cd-empty">No entries yet. Going live records reveals, loot and combat here.</span>') + '</div></div>' +
+      '</div></div></div>';
+    el('ses-back').onclick = function () { cdSessionOpen = null; cdRerender(); };
+    el('ses-name').onchange = function () { s.name = el('ses-name').value; saveSessions(); };
+    el('ses-date').onchange = function () { s.date = el('ses-date').value; saveSessions(); };
+    el('ses-recap').onchange = function () { s.recap = el('ses-recap').value; saveSessions(); };
+    el('ses-notes').onchange = function () { s.notes = el('ses-notes').value; saveSessions(); };
+    c.querySelectorAll('[data-att]').forEach(function (cb) {
+      cb.onchange = function () {
+        var asid = cb.getAttribute('data-att'), att = s.attendance || (s.attendance = []);
+        if (cb.checked) { if (att.indexOf(asid) < 0) att.push(asid); }
+        else s.attendance = att.filter(function (x) { return x !== asid; });
+        saveSessions();
+      };
+    });
+  }
+  // GO LIVE — resume an existing session or start a new one, then pick sheets to host.
+  function goLive(id) {
+    var sheetDocs = (cdData.docs && cdData.docs.sheets) || [];
+    if (!sheetDocs.length) { alert('Add at least one sheet to the campaign first.'); return; }
+    var ssRev = sessions().slice().reverse();
+    modalClose();
+    var rows = ssRev.map(function (s, i) {
+      return '<label class="cbs-row"><input type="radio" name="golive-ses" value="' + esc(s.id) + '"' + (i === 0 ? ' checked' : '') + '> ' +
+        esc(s.name || 'Session') + (s.date ? ' · ' + esc(s.date) : '') + ' <span class="cbs-tag">' + (s.log || []).length + ' log</span></label>';
+    }).join('');
+    var ov = document.createElement('div'); ov.id = 'app-modal-ov'; ov.className = 'app-modal-ov';
+    ov.innerHTML = '<div class="app-modal"><div class="app-modal-head">▶ Go live — attach a session</div>' +
+      '<div class="app-modal-body">' +
+        (rows ? '<div class="app-kicker">// RESUME</div>' + rows : '') +
+        '<label class="cbs-row" style="margin-top:8px"><input type="radio" name="golive-ses" value="__new__"' + (ssRev.length ? '' : ' checked') + '> Start a new session</label>' +
+        '<input id="golive-newname" class="pc-in" value="Session ' + (sessions().length + 1) + '">' +
+      '</div>' +
+      '<div class="app-modal-actions"><button class="app-btn" data-x>Cancel</button><button class="app-btn app-modal-ok" data-ok>Continue ▸</button></div></div>';
+    ov.onclick = function (e) { if (e.target === ov) modalClose(); };
+    document.body.appendChild(ov);
+    ov.querySelector('[data-x]').onclick = modalClose;
+    ov.querySelector('[data-ok]').onclick = function () {
+      var pick = (ov.querySelector('input[name="golive-ses"]:checked') || {}).value;
+      var chosen;
+      if (pick === '__new__' || !pick) {
+        chosen = newSession(); var nm = (el('golive-newname').value || '').trim(); if (nm) chosen.name = nm;
+        sessions().push(chosen);
+      } else { chosen = item(sessions(), pick); }
+      saveSessions(function () {
+        modalClose();
+        startSessionPicker(id, sheetDocs, (cdData.meta.session && cdData.meta.session.order) || [], chosen.id);
+      });
+    };
+  }
+
+  function item(arr, id) { return arr.filter(function (x) { return x.id === id; })[0] || {}; }
+  function move(arr, id, d) { var i = arr.findIndex(function (x) { return x.id === id; }); var j = i + d; if (i < 0 || j < 0 || j >= arr.length) return; var t = arr[i]; arr[i] = arr[j]; arr[j] = t; }
+
+  /* Events — 2-pane editor: list + Silver Case preset canvas. Revealed live as a
+     Film Window; can auto-trigger when a linked clock drops below a threshold. */
+  // Events are a composition of BLOCKS (image/text). Quick layouts seed a set.
+  function _blImg(src, size, cam, align) { return { id: uid('bl'), type: 'image', src: src || '', cam: cam || '', size: size || 'm', align: align || 'center' }; }
+  function _blTxt(t, mode, size, speaker) { return { id: uid('bl'), type: 'text', text: t || '', mode: mode || 'panel', size: size || 'l', speaker: speaker || '', align: 'center' }; }
+  var EV_TEMPLATES = [
+    { k: 'imagetext', label: 'Image + dialogue', make: function () { return [_blImg('', 'l'), _blTxt('', 'dialogue', 'l')]; } },
+    { k: 'call', label: 'Incoming call', make: function () { return [_blImg('', 'l', 'CAM 03 ● LIVE'), _blImg('', 's', 'ID ● CALLER', 'left'), _blTxt('', 'dialogue', 'l', 'INCOMING CALL')]; } },
+    { k: 'dossier', label: 'Dossier', make: function () { return [_blImg('', 'l', 'ID ● FILE', 'left'), _blTxt('', 'panel', 'l')]; } },
+    { k: 'triptych', label: 'Triptych', make: function () { return [_blImg('', 'l', 'CAM 02', 'right'), _blTxt('', 'panel', 'm'), _blImg('', 's', 'ID', 'left')]; } },
+    { k: 'fullimage', label: 'Full image', make: function () { return [_blImg('', 'full')]; } },
+    { k: 'textonly', label: 'Text panel', make: function () { return [_blTxt('', 'panel', 'xl')]; } },
+  ];
+  // Ensure an event carries a blocks array (migrate legacy preset/image/text/portrait once).
+  function evBlocks(ev) {
+    if (Array.isArray(ev.blocks)) return ev.blocks;
+    var p = ev.preset, b = [];
+    if (p === 'fullimage') { if (ev.image) b.push(_blImg(ev.image, 'full')); }
+    else if (p === 'call') { if (ev.image) b.push(_blImg(ev.image, 'l', 'CAM 03 ● LIVE')); if (ev.portrait) b.push(_blImg(ev.portrait, 's', 'ID ● CALLER', 'left')); if (ev.text) b.push(_blTxt(ev.text, 'dialogue', 'l', 'INCOMING CALL')); }
+    else if (p === 'dossier') { if (ev.portrait || ev.image) b.push(_blImg(ev.portrait || ev.image, 'l', 'ID ● FILE', 'left')); if (ev.text) b.push(_blTxt(ev.text, 'panel', 'l')); }
+    else if (p === 'triptych') { if (ev.image) b.push(_blImg(ev.image, 'l', 'CAM 02', 'right')); if (ev.text) b.push(_blTxt(ev.text, 'panel', 'm')); if (ev.portrait) b.push(_blImg(ev.portrait, 's', 'ID', 'left')); }
+    else if (p === 'textonly') { if (ev.text) b.push(_blTxt(ev.text, 'panel', 'xl')); }
+    else { if (ev.image) b.push(_blImg(ev.image, 'l')); if (ev.text) b.push(_blTxt(ev.text, ev.image ? 'dialogue' : 'panel', 'l')); }
+    ev.blocks = b;
+    return b;
+  }
+  function readImage(file, cb) { var r = new FileReader(); r.onload = function () { cb(r.result); }; r.readAsDataURL(file); }
+  function cdEvents(c) {
+    var evs = prep().events, cls = prep().clocks;
+    if (cdEventSel && !item(evs, cdEventSel).id && !item(cls, cdEventSel).id) cdEventSel = null;
+    if (!cdEventSel) cdEventSel = (evs[0] && evs[0].id) || (cls[0] && cls[0].id) || null;
+    var evItems = evs.map(function (e) {
+      return '<div class="ev-li' + (e.id === cdEventSel ? ' active' : '') + '" data-sel="' + e.id + '"><span class="ev-li-ico">▸</span>' +
+        '<span class="ev-li-name">' + esc(e.title || '(untitled event)') + '</span>' +
+        '<span class="ev-li-preset">' + esc(e.preset || 'imagetext') + (e.trigger && e.trigger.clockId ? ' · ⏱' : '') + '</span>' +
+        '<button class="prep-mini prep-del" data-del="' + e.id + '">✕</button></div>';
+    }).join('');
+    var clkItems = cls.map(function (k) {
+      return '<div class="ev-li ev-li-clk' + (k.id === cdEventSel ? ' active' : '') + '" data-sel="' + k.id + '"><span class="ev-li-ico">⏱</span>' +
+        '<span class="ev-li-name">' + esc(k.label || '(clock)') + '</span>' +
+        '<span class="ev-li-preset">' + (k.value || 0) + '/' + (k.max || 6) + '</span>' +
+        '<button class="prep-mini prep-del" data-del="' + k.id + '">✕</button></div>';
+    }).join('');
+    var listItems = (evs.length || cls.length)
+      ? (evItems + (cls.length ? '<div class="ev-li-div">CLOCKS</div>' + clkItems : ''))
+      : '<div class="cd-empty">No events or clocks yet.</div>';
+    c.innerHTML = '<div class="cd-topbar"><div class="cd-sectitle">Events</div><span style="flex:1"></span>' +
+      '<button class="app-btn" id="cd-addclk">+ Clock</button><button class="app-btn app-btn-go" id="cd-add">+ Event</button></div>' +
+      '<div class="cd-board"><div class="ev-list"><div class="cd-side-head">Timeline</div>' + listItems + '</div><div class="cd-boardmain"><div class="ev-canvas" id="ev-canvas"></div></div></div>';
+    el('cd-add').onclick = function () { var e = { id: uid('ev'), title: '', preset: 'imagetext', image: '', text: '', portrait: '', npcRef: '', trigger: null }; evs.push(e); cdEventSel = e.id; savePrep(cdRerender); };
+    el('cd-addclk').onclick = function () { var k = { id: uid('clk'), label: '', max: 6, value: 0, color: CLOCK_COLORS[cls.length % 4] }; cls.push(k); cdEventSel = k.id; savePrep(cdRerender); };
+    c.querySelectorAll('[data-sel]').forEach(function (b) { b.onclick = function (e) { if (e.target.hasAttribute('data-del')) return; cdEventSel = b.getAttribute('data-sel'); cdRerender(); }; });
+    c.querySelectorAll('[data-del]').forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); var did = b.getAttribute('data-del'); cdData.meta.prep.events = evs.filter(function (x) { return x.id !== did; }); cdData.meta.prep.clocks = cls.filter(function (x) { return x.id !== did; }); if (cdEventSel === did) cdEventSel = null; savePrep(cdRerender); }; });
+    renderEventCanvas();
+  }
+  function renderEventCanvas() {
+    var box = el('ev-canvas'); if (!box) return;
+    var clk = item(prep().clocks, cdEventSel);
+    if (clk.id) return renderClockCanvas(box, clk);
+    var ev = item(prep().events, cdEventSel);
+    if (!ev.id) { box.innerHTML = '<div class="cd-empty">Select or add an event or clock.</div>'; return; }
+    var npcDocs = (cdData.docs && cdData.docs.npcs) || [];
+    var clocks = prep().clocks;
+    var blocks = evBlocks(ev);
+    var SZ = ['s', 'm', 'l', 'xl', 'full'], AL = ['left', 'center', 'right'];
+    var npcOpts = '<option value="">— NPC portrait —</option>' + npcDocs.map(function (d) { return '<option value="' + esc(d.name) + '">' + esc(idOf(d.name)) + '</option>'; }).join('');
+    function selOf(name, idx, opts, cur) { return '<select data-' + name + '="' + idx + '">' + opts.map(function (o) { return '<option value="' + o + '"' + (cur === o ? ' selected' : '') + '>' + o.toUpperCase() + '</option>'; }).join('') + '</select>'; }
+    function blockRow(b, i) {
+      var head = '<div class="evb-head"><span class="evb-type">' + (b.type === 'image' ? '▣ Image' : '¶ Text') + '</span><span style="flex:1"></span>' +
+        '<label class="evb-l">Size ' + selOf('bsize', i, SZ, b.size || 'm') + '</label>' +
+        '<label class="evb-l">Align ' + selOf('balign', i, AL, b.align || 'center') + '</label>' +
+        '<button class="prep-mini" data-bup="' + i + '" title="Up">▲</button><button class="prep-mini" data-bdn="' + i + '" title="Down">▼</button><button class="prep-mini prep-del" data-brm="' + i + '">✕</button></div>';
+      var body;
+      if (b.type === 'image') {
+        body = '<div class="ev-media">' + (b.src ? '<img class="ev-thumb" src="' + esc(b.src) + '">' : '<span class="ev-noimg">no image</span>') +
+          '<label class="app-btn ev-up">Upload<input type="file" accept="image/*" data-bimg="' + i + '" hidden></label>' +
+          '<select data-bnpc="' + i + '">' + npcOpts + '</select>' +
+          (b.src ? '<button class="app-btn" data-bclr="' + i + '">Clear</button>' : '') +
+          '<input class="ev-cap" data-bcam="' + i + '" value="' + esc(b.cam || '') + '" placeholder="caption (CAM 03…)"></div>';
+      } else {
+        body = '<textarea class="ov-edit ev-text" data-btext="' + i + '" placeholder="What the players read…">' + esc(b.text || '') + '</textarea>' +
+          '<div class="ev-media"><label class="evb-l">Mode <select data-bmode="' + i + '"><option value="panel"' + ((b.mode || 'panel') === 'panel' ? ' selected' : '') + '>Panel</option><option value="dialogue"' + (b.mode === 'dialogue' ? ' selected' : '') + '>Dialogue</option></select></label>' +
+          '<input class="ev-cap" data-bspk="' + i + '" value="' + esc(b.speaker || '') + '" placeholder="speaker (optional)"></div>';
+      }
+      return '<div class="evb">' + head + body + '</div>';
+    }
+    var tplBtns = EV_TEMPLATES.map(function (t) { return '<button class="ev-preset" data-tpl="' + t.k + '">' + esc(t.label) + '</button>'; }).join('');
+    box.innerHTML =
+      '<div class="ev-row"><div class="ov-lbl">PREVIEW <span class="ev-prev-hint">— how players will see it</span></div><div class="ev-preview" id="ev-preview"></div></div>' +
+      '<input class="ses-name ev-title" id="ev-title" value="' + esc(ev.title || '') + '" placeholder="Event title (e.g. INCOMING CALL)">' +
+      '<div class="ev-row"><div class="ov-lbl">QUICK LAYOUTS</div><div class="ev-presets">' + tplBtns + '</div></div>' +
+      '<div class="ev-row"><div class="ov-lbl">BLOCKS</div><div class="ev-blocks">' + (blocks.length ? blocks.map(blockRow).join('') : '<div class="cd-empty">No blocks yet. Add an image or text, or pick a quick layout.</div>') + '</div>' +
+        '<div class="ev-addrow"><button class="app-btn" id="ev-addimg">+ Image</button><button class="app-btn" id="ev-addtext">+ Text</button></div></div>' +
+      '<div class="ev-row"><div class="ov-lbl">AUTO-TRIGGER</div><div class="ev-trig">when clock ' +
+        '<select id="ev-clk"><option value="">— none —</option>' + clocks.map(function (k) { return '<option value="' + k.id + '"' + (ev.trigger && ev.trigger.clockId === k.id ? ' selected' : '') + '>' + esc(k.label || 'clock') + '</option>'; }).join('') + '</select>' +
+        ' drops below <input type="number" id="ev-below" min="0" style="width:56px" value="' + (ev.trigger ? (ev.trigger.below != null ? ev.trigger.below : 1) : 1) + '"></div></div>';
+    el('ev-title').onchange = function () { ev.title = el('ev-title').value; savePrep(cdRerender); };
+    box.querySelectorAll('[data-tpl]').forEach(function (b) { b.onclick = function () { var t = EV_TEMPLATES.filter(function (x) { return x.k === b.getAttribute('data-tpl'); })[0]; if (t) { ev.blocks = t.make(); savePrep(cdRerender); } }; });
+    el('ev-addimg').onclick = function () { blocks.push(_blImg('', 'm')); savePrep(cdRerender); };
+    el('ev-addtext').onclick = function () { blocks.push(_blTxt('', 'panel', 'l')); savePrep(cdRerender); };
+    function bi(node, attr) { return blocks[+node.getAttribute(attr)]; }
+    function refreshPreview() { if (window.FilmWindow && window.FilmWindow.preview) window.FilmWindow.preview(el('ev-preview'), eventReveal(ev)); }
+    box.querySelectorAll('[data-bsize]').forEach(function (s) { s.onchange = function () { bi(s, 'data-bsize').size = s.value; savePrep(cdRerender); }; });
+    box.querySelectorAll('[data-balign]').forEach(function (s) { s.onchange = function () { bi(s, 'data-balign').align = s.value; savePrep(cdRerender); }; });
+    box.querySelectorAll('[data-bup]').forEach(function (b) { b.onclick = function () { var i = +b.getAttribute('data-bup'); if (i > 0) { var t = blocks[i - 1]; blocks[i - 1] = blocks[i]; blocks[i] = t; savePrep(cdRerender); } }; });
+    box.querySelectorAll('[data-bdn]').forEach(function (b) { b.onclick = function () { var i = +b.getAttribute('data-bdn'); if (i < blocks.length - 1) { var t = blocks[i + 1]; blocks[i + 1] = blocks[i]; blocks[i] = t; savePrep(cdRerender); } }; });
+    box.querySelectorAll('[data-brm]').forEach(function (b) { b.onclick = function () { blocks.splice(+b.getAttribute('data-brm'), 1); savePrep(cdRerender); }; });
+    box.querySelectorAll('[data-bimg]').forEach(function (inp) { inp.onchange = function () { var f = inp.files[0]; if (f) readImage(f, function (u) { bi(inp, 'data-bimg').src = u; savePrep(cdRerender); }); }; });
+    box.querySelectorAll('[data-bclr]').forEach(function (b) { b.onclick = function () { bi(b, 'data-bclr').src = ''; savePrep(cdRerender); }; });
+    box.querySelectorAll('[data-bcam]').forEach(function (inp) { inp.onchange = function () { bi(inp, 'data-bcam').cam = inp.value; savePrep(); refreshPreview(); }; });
+    box.querySelectorAll('[data-btext]').forEach(function (ta) { ta.onchange = function () { bi(ta, 'data-btext').text = ta.value; savePrep(); refreshPreview(); }; });
+    box.querySelectorAll('[data-bmode]').forEach(function (s) { s.onchange = function () { bi(s, 'data-bmode').mode = s.value; savePrep(); refreshPreview(); }; });
+    box.querySelectorAll('[data-bspk]').forEach(function (inp) { inp.onchange = function () { bi(inp, 'data-bspk').speaker = inp.value; savePrep(); refreshPreview(); }; });
+    box.querySelectorAll('[data-bnpc]').forEach(function (sel) { sel.onchange = function () {
+      var nm = sel.value, b = bi(sel, 'data-bnpc'); if (!nm) return;
+      fetch('/__api/campaigns/' + encodeURIComponent(state.campaignId) + '/npcs/' + encodeURIComponent(nm)).then(function (r) { return r.json(); }).then(function (j) { b.src = (j && j.photo) || b.src || ''; if (!b.cam) b.cam = 'ID ● ' + idOf(nm); savePrep(cdRerender); }).catch(function () {});
+    }; });
+    function saveTrig() { var cid = el('ev-clk').value; ev.trigger = cid ? { clockId: cid, below: parseInt(el('ev-below').value, 10) || 0 } : null; savePrep(); }
+    el('ev-clk').onchange = saveTrig; el('ev-below').onchange = saveTrig;
+    if (window.FilmWindow && window.FilmWindow.preview) window.FilmWindow.preview(el('ev-preview'), eventReveal(ev));
+  }
+  function eventReveal(ev) { return { kind: 'event', title: ev.title || '', tabs: ev.tabs || null, blocks: evBlocks(ev), ts: Date.now() }; }
+  function linkedEventsHtml(k) {
+    var linked = (prep().events || []).filter(function (e) { return e.trigger && e.trigger.clockId === k.id; });
+    return linked.length
+      ? '<div class="ev-linked">' + linked.map(function (e) { return '<span class="ev-linkchip">▸ ' + esc(e.title || 'event') + ' · below ' + e.trigger.below + '</span>'; }).join('') + '</div>'
+      : '<span class="cd-empty">No events trigger from this clock yet. Set a clock trigger on an event.</span>';
+  }
+  // Clock editor in the Events canvas (clocks live alongside events — they link).
+  function renderClockCanvas(box, k) {
+    var pct = Math.round(((k.value || 0) / (k.max || 1)) * 100);
+    box.innerHTML =
+      '<input class="ses-name ev-title" id="clk-label" value="' + esc(k.label || '') + '" placeholder="Clock name (Alarm / Heat / Countdown…)">' +
+      '<div class="ev-row"><div class="ov-lbl">SEGMENTS (MAX)</div><div class="ev-trig"><button class="prep-mini" id="clk-maxm">−</button><span class="clock-val" id="clk-maxv">' + (k.max || 6) + '</span><button class="prep-mini" id="clk-maxp">+</button> &nbsp;segments</div></div>' +
+      '<div class="ev-row"><div class="ov-lbl">FILLED</div><div class="ev-trig"><button class="prep-mini" id="clk-valm">−</button><span class="clock-val">' + (k.value || 0) + ' / ' + (k.max || 6) + '</span><button class="prep-mini" id="clk-valp">+</button></div>' +
+        '<div class="clock-bar" style="margin-top:8px"><span style="width:' + pct + '%;background:' + (k.color || '#b8860b') + '"></span></div></div>' +
+      '<div class="ev-row"><div class="ov-lbl">COLOR</div><div class="ev-colors">' + CLOCK_COLORS.map(function (col) { return '<button class="ev-color' + (k.color === col ? ' active' : '') + '" data-col="' + col + '" style="background:' + col + '"></button>'; }).join('') + '</div></div>' +
+      '<div class="ev-row"><div class="ov-lbl">LINKED EVENTS</div>' + linkedEventsHtml(k) + '</div>';
+    el('clk-label').onchange = function () { k.label = el('clk-label').value; savePrep(cdRerender); };
+    el('clk-maxp').onclick = function () { k.max = (k.max || 6) + 1; savePrep(cdRerender); };
+    el('clk-maxm').onclick = function () { k.max = Math.max(1, (k.max || 6) - 1); if (k.value > k.max) k.value = k.max; savePrep(cdRerender); };
+    el('clk-valp').onclick = function () { k.value = Math.min(k.max || 6, (k.value || 0) + 1); savePrep(cdRerender); };
+    el('clk-valm').onclick = function () { k.value = Math.max(0, (k.value || 0) - 1); savePrep(cdRerender); };
+    box.querySelectorAll('[data-col]').forEach(function (b) { b.onclick = function () { k.color = b.getAttribute('data-col'); savePrep(cdRerender); }; });
+  }
+
+  function memberLabel(m) {
+    if (m.kind === 'pc-all') return 'All player characters';
+    if (m.kind === 'npcfile') return idOf(m.name);
+    if (m.kind === 'archetype') return (window.NPCGen && ((m.params.tier || '') + ' ' + m.params.archetype)) || 'archetype';
+    if (m.kind === 'mook') return (m.sheet && m.sheet.role) || 'mook';
+    return '?';
+  }
+  /* Reusable drag-drop helpers (palette → bins/containers). Shared by Squads + Loot. */
+  function makeDraggable(node, payload) {
+    node.setAttribute('draggable', 'true');
+    node.addEventListener('dragstart', function (e) { e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('text/plain', JSON.stringify(payload)); e.stopPropagation(); });
+  }
+  function makeDropZone(node, onDrop) {
+    node.addEventListener('dragover', function (e) { e.preventDefault(); e.stopPropagation(); node.classList.add('dnd-over'); });
+    node.addEventListener('dragleave', function () { node.classList.remove('dnd-over'); });
+    node.addEventListener('drop', function (e) {
+      e.preventDefault(); e.stopPropagation(); node.classList.remove('dnd-over');
+      var raw = e.dataTransfer.getData('text/plain'); if (!raw) return;
+      var obj; try { obj = JSON.parse(raw); } catch (x) { return; }
+      onDrop(obj);
+    });
+  }
+
+  /* Squads — palette (NPC files + archetypes + PCs) drag-dropped into squad bins.
+     Refs are resolved to combatants at combat launch. A squad can link a loot box. */
+  function cdSquads(c) {
+    var sq = prep().squads, npcDocs = (cdData.docs && cdData.docs.npcs) || [], loots = prep().loot;
+    var palItems = [{ cls: 'sq-pc', label: '◈ All PCs', payload: { kind: 'pc-all' } }]
+      .concat(npcDocs.map(function (d) { return { cls: '', label: '☗ ' + idOf(d.name), payload: { kind: 'npcfile', name: d.name, count: 1 } }; }))
+      .concat(window.NPCGen ? window.NPCGen.list().map(function (a) { return { cls: 'sq-arch', label: '◆ ' + a.label, payload: { kind: 'archetype', params: { archetype: a.id, tier: 'average' }, count: 1 } }; }) : []);
+    var palette = '<div class="cd-side-head">Palette</div><div class="cd-side-sub">Drag into a squad →</div><div class="sq-palette">' +
+      palItems.map(function (p, i) { return '<div class="sq-pchip ' + p.cls + '" data-pi="' + i + '">' + esc(p.label) + '</div>'; }).join('') + '</div>';
+    var bins = sq.length ? sq.map(function (s) {
+      var lootOpts = '<option value="">— link loot —</option>' + loots.map(function (g) { return '<option value="' + g.id + '"' + (s.lootId === g.id ? ' selected' : '') + '>' + esc(g.name || 'Loot') + '</option>'; }).join('');
+      return '<div class="sq-bin" data-bin="' + s.id + '">' +
+        '<div class="sq-bin-head"><input class="prep-title sq-name" data-sqn="' + s.id + '" value="' + esc(s.name || '') + '" placeholder="Squad name">' +
+          '<select class="run-sel" data-sqloot="' + s.id + '">' + lootOpts + '</select>' +
+          (window.NPCGen ? '<button class="prep-mini" data-sqarch="' + s.id + '">◆ tune</button>' : '') +
+          '<button class="prep-mini prep-del" data-sqdel="' + s.id + '">✕</button></div>' +
+        '<div class="sq-members">' + ((s.members || []).length ? s.members.map(function (m, i) {
+          return '<div class="sq-m"><span>' + esc(memberLabel(m)) + '</span>' + (m.kind !== 'pc-all' ? '<span class="sq-mc">×' + (m.count || 1) + '</span><button class="prep-mini" data-sqdec="' + s.id + ':' + i + '">−</button><button class="prep-mini" data-sqinc="' + s.id + ':' + i + '">+</button>' : '') +
+            '<button class="prep-mini prep-del" data-sqrm="' + s.id + ':' + i + '">✕</button></div>';
+        }).join('') : '<div class="cd-empty sq-drop-hint">Drop combatants here.</div>') + '</div></div>';
+    }).join('') : '<div class="cd-empty">No squads. Add one, then drag combatants in.</div>';
+    c.innerHTML = '<div class="cd-topbar"><div class="cd-sectitle">Squads</div><span style="flex:1"></span><button class="app-btn app-btn-go" id="cd-add">+ Squad</button></div>' +
+      '<div class="cd-board"><div class="sq-side">' + palette + '</div><div class="cd-boardmain"><div class="sq-bins" id="sq-bins">' + bins + '</div></div></div>';
+    el('cd-add').onclick = function () { sq.push({ id: uid('sq'), name: 'Squad ' + (sq.length + 1), members: [], lootId: null }); savePrep(cdRerender); };
+    c.querySelectorAll('[data-pi]').forEach(function (n) { makeDraggable(n, palItems[+n.getAttribute('data-pi')].payload); });
+    c.querySelectorAll('[data-bin]').forEach(function (bin) {
+      var s = item(sq, bin.getAttribute('data-bin'));
+      makeDropZone(bin, function (m) { if (m.kind === 'pc-all' && (s.members || []).some(function (x) { return x.kind === 'pc-all'; })) return; (s.members || (s.members = [])).push(m); savePrep(cdRerender); });
+    });
+    c.querySelectorAll('[data-sqn]').forEach(function (inp) { inp.onchange = function () { item(sq, inp.getAttribute('data-sqn')).name = inp.value; savePrep(); }; });
+    c.querySelectorAll('[data-sqloot]').forEach(function (sel) { sel.onchange = function () { item(sq, sel.getAttribute('data-sqloot')).lootId = sel.value || null; savePrep(); }; });
+    c.querySelectorAll('[data-sqdel]').forEach(function (b) { b.onclick = function () { cdData.meta.prep.squads = sq.filter(function (x) { return x.id !== b.getAttribute('data-sqdel'); }); savePrep(cdRerender); }; });
+    function memberAt(spec) { var p = spec.split(':'); return { s: item(sq, p[0]), i: +p[1] }; }
+    c.querySelectorAll('[data-sqrm]').forEach(function (b) { b.onclick = function () { var r = memberAt(b.getAttribute('data-sqrm')); r.s.members.splice(r.i, 1); savePrep(cdRerender); }; });
+    c.querySelectorAll('[data-sqinc]').forEach(function (b) { b.onclick = function () { var r = memberAt(b.getAttribute('data-sqinc')); var m = r.s.members[r.i]; m.count = Math.min(20, (m.count || 1) + 1); savePrep(cdRerender); }; });
+    c.querySelectorAll('[data-sqdec]').forEach(function (b) { b.onclick = function () { var r = memberAt(b.getAttribute('data-sqdec')); var m = r.s.members[r.i]; m.count = Math.max(1, (m.count || 1) - 1); savePrep(cdRerender); }; });
+    c.querySelectorAll('[data-sqarch]').forEach(function (b) { b.onclick = function () { var s = item(sq, b.getAttribute('data-sqarch')); archetypeGenModal({ onParams: function (p, count) { (s.members || (s.members = [])).push({ kind: 'archetype', params: p, count: count || 1 }); savePrep(cdRerender); } }); }; });
+  }
+
+  /* Locations — the Night City GM planner, campaign-scoped. Locations marked
+     "public" (in the planner's place editor) push live to players in session. */
+  function cdLocations(c) {
+    c.innerHTML = '<iframe class="cd-ncframe-full" src="nightcity.html?campaign=' + encodeURIComponent(state.campaignId) + '&ncrole=gm"></iframe>';
+  }
+  // Pull the campaign's public NC places and push them to players via the overview.
+  function pushCampaignLocations(id) {
+    fetch('/__api/campaigns/' + encodeURIComponent(id) + '/nightcity/_campaign.json').then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }).then(function (d) {
+      var g = d && d.GM, nb = g && g.list && g.list[Math.min(g.active || 0, (g.list.length || 1) - 1)];
+      var places = nb ? (nb.entries || []).filter(function (e) { return e.public; }) : [];
+      var byId = {}; ((g && g.maps) || []).forEach(function (m) { byId[m.id] = m; });
+      var ord = (g && Array.isArray(g.order) && g.order.length) ? g.order : ['nc'].concat(((g && g.maps) || []).map(function (m) { return m.id; }));
+      var maps = [];
+      ord.forEach(function (mid) { if (mid === 'nc') return; var m = byId[mid]; if (!m) return; var pub = (m.entries || []).filter(function (e) { return e.public; }); if (pub.length) maps.push({ id: m.id, name: m.name, kind: m.kind, image: m.image, w: m.w, h: m.h, gmEntries: pub }); });
+      var locOrder = ord.filter(function (mid) { return mid === 'nc' || maps.some(function (m) { return m.id === mid; }); });
+      if (sess.camp && sess.camp.setOverview) sess.camp.setOverview({ locations: places, locMaps: maps, locOrder: locOrder });
+    });
+  }
+  function openToolOverlay(url, title) {
+    var ov = document.createElement('div'); ov.className = 'cdoc-overlay'; ov.id = 'tool-overlay';
+    ov.innerHTML = '<div class="cdoc-bar"><span class="cdoc-title">' + esc(title) + '</span><button class="app-btn" id="tool-ov-close" style="margin-left:auto">Close</button></div><div style="flex:1;min-height:0"><iframe src="' + esc(url) + '" style="width:100%;height:100%;border:none"></iframe></div>';
+    document.body.appendChild(ov);
+    el('tool-ov-close').onclick = function () { ov.parentNode.removeChild(ov); };
+  }
+
+  /* Clocks live inside Events now (see renderClockCanvas). */
+  var CLOCK_COLORS = ['#c0392b', '#b8860b', '#1a7a2e', '#7a5ab8'];
+
+  /* Loot — palette (money / IP / objects from DBs / container) drag-dropped into
+     nested container boxes. Level-0 nodes (and money, not IP) are unique or shared. */
+  var LOOT_DBS = null;
+  function loadLootDBs() {
+    if (LOOT_DBS) return Promise.resolve(LOOT_DBS);
+    var files = [['data/cp2020weapons.json', 'weapon'], ['data/cyberware.json', 'cyberware'], ['data/cp2020gear.json', 'gear'], ['data/cp2020-vehicles.json', 'vehicle'], ['data/cp2020decks.json', 'deck'], ['data/cp2020programs.json', 'program']];
+    return Promise.all(files.map(function (f) { return fetch(f[0]).then(function (r) { return r.json(); }).catch(function () { return []; }); })).then(function (res) {
+      var out = [];
+      res.forEach(function (rows, i) { var cat = files[i][1]; (Array.isArray(rows) ? rows : (rows && rows.items) || []).forEach(function (row) { var nm = row.name || row.model || row.title; if (!nm) return; var c2 = (cat === 'gear' && row.category === 'ARMOR/CLOTHING') ? 'armor' : cat; out.push({ cat: c2, name: nm, data: Object.assign({ name: nm }, row) }); }); });
+      LOOT_DBS = out; return out;
+    });
+  }
+  function lootNodeLabel(n) {
+    if (n.type === 'money') return '€$' + (n.amount || 0) + (n.form && n.form !== 'eddies' ? ' ' + n.form : '');
+    if (n.type === 'ip') return (n.amount || 0) + ' IP';
+    if (n.type === 'container') return (n.name || 'Container') + ' (' + (n.children || []).length + ')';
+    return n.name || 'Item';
+  }
+  function findLootNode(arr, nid) { for (var i = 0; i < arr.length; i++) { if (arr[i].id === nid) return { arr: arr, i: i, node: arr[i] }; if (arr[i].children) { var r = findLootNode(arr[i].children, nid); if (r) return r; } } return null; }
+  function paletteToNode(pal, isTop) {
+    var n = { id: uid('ln') };
+    if (pal.kind === 'lootmoney') { n.type = 'money'; n.amount = 0; n.form = 'eddies'; }
+    else if (pal.kind === 'lootip') { n.type = 'ip'; n.amount = 0; return n; }
+    else if (pal.kind === 'lootcontainer') { n.type = 'container'; n.name = 'Container'; n.children = []; }
+    else if (pal.kind === 'lootcustom') { n.type = 'item'; n.cat = 'custom'; n.name = 'Item'; }
+    else { n.type = 'item'; n.cat = pal.cat; n.name = pal.name; n.data = pal.data; }
+    if (isTop) n.share = 'shared';
+    return n;
+  }
+  function lootNodeHtml(n, depth, boxId) {
+    var top = depth === 0, uniq = n.share === 'unique';
+    var shareBtn = (top && n.type !== 'ip') ? '<button class="prep-mini loot-share' + (uniq ? ' on' : '') + '" data-nshare="' + n.id + '" title="unique = one player; shared = everyone">' + (uniq ? 'UNIQUE' : 'shared') + '</button>' : '';
+    var del = '<button class="prep-mini prep-del" data-nrm="' + n.id + '">✕</button>';
+    if (n.type === 'money') return '<div class="loot-node"><span class="loot-ico">€$</span><input class="loot-amt" type="number" data-amt="' + n.id + '" value="' + (n.amount || 0) + '"><input class="loot-form" data-form="' + n.id + '" value="' + esc(n.form || 'eddies') + '" placeholder="form">' + shareBtn + del + '</div>';
+    if (n.type === 'ip') return '<div class="loot-node"><span class="loot-ico">IP</span><input class="loot-amt" type="number" data-amt="' + n.id + '" value="' + (n.amount || 0) + '">' + del + '</div>';
+    if (n.type === 'container') return '<div class="loot-node loot-cont"><span class="loot-ico">▣</span><input class="loot-cname" data-nname="' + n.id + '" value="' + esc(n.name || '') + '" placeholder="Container">' + shareBtn + del +
+      '<div class="loot-tree loot-sub" data-drop="node:' + n.id + '">' + ((n.children || []).map(function (ch) { return lootNodeHtml(ch, depth + 1, boxId); }).join('') || '<span class="loot-hint">drop items here</span>') + '</div></div>';
+    return '<div class="loot-node"><span class="loot-cat">' + esc(n.cat || 'item') + '</span><input class="loot-iname" data-nname="' + n.id + '" value="' + esc(n.name || '') + '">' + shareBtn + del + '</div>';
+  }
+  function cdLoot(c) {
+    var lt = prep().loot, events = prep().events, squads = prep().squads;
+    var boxes = lt.length ? lt.map(function (g) {
+      var evOpts = '<option value="">— event —</option>' + events.map(function (e) { return '<option value="' + e.id + '"' + (g.linkedEventId === e.id ? ' selected' : '') + '>' + esc(e.title || 'event') + '</option>'; }).join('');
+      var sqOpts = '<option value="">— squad —</option>' + squads.map(function (s) { return '<option value="' + s.id + '"' + (g.linkedSquadId === s.id ? ' selected' : '') + '>' + esc(s.name || 'squad') + '</option>'; }).join('');
+      return '<div class="sq-bin loot-box" data-box="' + g.id + '">' +
+        '<div class="sq-bin-head"><input class="prep-title" data-boxn="' + g.id + '" value="' + esc(g.name || '') + '" placeholder="Loot box name">' +
+          '<select class="run-sel" data-boxev="' + g.id + '">' + evOpts + '</select><select class="run-sel" data-boxsq="' + g.id + '">' + sqOpts + '</select>' +
+          '<button class="prep-mini prep-del" data-boxdel="' + g.id + '">✕</button></div>' +
+        '<div class="loot-tree" data-drop="box:' + g.id + '">' + ((g.nodes || []).map(function (n) { return lootNodeHtml(n, 0, g.id); }).join('') || '<span class="loot-hint">Drag money, IP, objects or a container here.</span>') + '</div></div>';
+    }).join('') : '<div class="cd-empty">No loot boxes. Add one, then drag rewards in.</div>';
+    c.innerHTML = '<div class="cd-topbar"><div class="cd-sectitle">Loot</div><span style="flex:1"></span><button class="app-btn app-btn-go" id="cd-add">+ Loot box</button></div>' +
+      '<div class="cd-board"><div class="sq-side" id="loot-pal">' +
+        '<div class="cd-side-head">Palette</div><div class="cd-side-sub">Drag into a box →</div><div class="sq-palette loot-palfix">' +
+          '<div class="sq-pchip" data-pal=\'{"kind":"lootmoney"}\'>€$ Money</div>' +
+          '<div class="sq-pchip" data-pal=\'{"kind":"lootip"}\'>IP</div>' +
+          '<div class="sq-pchip" data-pal=\'{"kind":"lootcontainer"}\'>▣ Container</div>' +
+          '<div class="sq-pchip" data-pal=\'{"kind":"lootcustom"}\'>＋ Custom item</div>' +
+        '</div><input class="pc-in loot-search" id="loot-search" placeholder="Search weapons, gear, cyber…"><div class="loot-results" id="loot-results"></div>' +
+      '</div><div class="cd-boardmain"><div class="sq-bins" id="loot-bins">' + boxes + '</div></div></div>';
+    el('cd-add').onclick = function () { lt.push({ id: uid('loot'), name: 'Loot ' + (lt.length + 1), linkedEventId: null, linkedSquadId: null, nodes: [] }); savePrep(cdRerender); };
+    c.querySelectorAll('#loot-pal [data-pal]').forEach(function (n) { makeDraggable(n, JSON.parse(n.getAttribute('data-pal'))); });
+    // Wire each box: header, drop zones (root + containers), node edits.
+    c.querySelectorAll('[data-box]').forEach(function (binEl) {
+      var g = item(lt, binEl.getAttribute('data-box'));
+      binEl.querySelectorAll('[data-drop]').forEach(function (zone) {
+        var spec = zone.getAttribute('data-drop'), isTop = spec.indexOf('box:') === 0;
+        makeDropZone(zone, function (pal) {
+          var target = isTop ? (g.nodes || (g.nodes = [])) : (findLootNode(g.nodes, spec.slice(5)).node.children);
+          target.push(paletteToNode(pal, isTop)); savePrep(cdRerender);
+        });
+      });
+    });
+    c.querySelectorAll('[data-boxn]').forEach(function (i) { i.onchange = function () { item(lt, i.getAttribute('data-boxn')).name = i.value; savePrep(); }; });
+    c.querySelectorAll('[data-boxev]').forEach(function (s) { s.onchange = function () { item(lt, s.getAttribute('data-boxev')).linkedEventId = s.value || null; savePrep(); }; });
+    c.querySelectorAll('[data-boxsq]').forEach(function (s) { s.onchange = function () { item(lt, s.getAttribute('data-boxsq')).linkedSquadId = s.value || null; savePrep(); }; });
+    c.querySelectorAll('[data-boxdel]').forEach(function (b) { b.onclick = function () { cdData.meta.prep.loot = lt.filter(function (x) { return x.id !== b.getAttribute('data-boxdel'); }); savePrep(cdRerender); }; });
+    function boxOf(binEl) { return item(lt, binEl.closest('[data-box]').getAttribute('data-box')); }
+    c.querySelectorAll('[data-nrm]').forEach(function (b) { b.onclick = function () { var g = boxOf(b), r = findLootNode(g.nodes, b.getAttribute('data-nrm')); if (r) r.arr.splice(r.i, 1); savePrep(cdRerender); }; });
+    c.querySelectorAll('[data-nshare]').forEach(function (b) { b.onclick = function () { var g = boxOf(b), r = findLootNode(g.nodes, b.getAttribute('data-nshare')); if (r) r.node.share = r.node.share === 'unique' ? 'shared' : 'unique'; savePrep(cdRerender); }; });
+    c.querySelectorAll('[data-amt]').forEach(function (i) { i.onchange = function () { var g = boxOf(i), r = findLootNode(g.nodes, i.getAttribute('data-amt')); if (r) r.node.amount = parseInt(i.value, 10) || 0; savePrep(); }; });
+    c.querySelectorAll('[data-form]').forEach(function (i) { i.onchange = function () { var g = boxOf(i), r = findLootNode(g.nodes, i.getAttribute('data-form')); if (r) r.node.form = i.value; savePrep(); }; });
+    c.querySelectorAll('[data-nname]').forEach(function (i) { i.onchange = function () { var g = boxOf(i), r = findLootNode(g.nodes, i.getAttribute('data-nname')); if (r) r.node.name = i.value; savePrep(); }; });
+    // Searchable DB palette.
+    var search = el('loot-search'), results = el('loot-results');
+    function renderResults(q) {
+      q = (q || '').toLowerCase().trim();
+      if (!q || !LOOT_DBS) { results.innerHTML = q ? '<span class="loot-hint">…</span>' : ''; return; }
+      var hits = LOOT_DBS.filter(function (e) { return e.name.toLowerCase().indexOf(q) >= 0; }).slice(0, 24);
+      // Index-based payloads: item names may contain quotes/apostrophes that would
+      // break a JSON-in-attribute and abort the drag wiring for items below.
+      results.innerHTML = hits.length ? hits.map(function (e, i) { return '<div class="sq-pchip loot-res" data-ri="' + i + '"><span class="loot-cat">' + esc(e.cat) + '</span>' + esc(e.name) + '</div>'; }).join('') : '<span class="loot-hint">no match</span>';
+      results.querySelectorAll('[data-ri]').forEach(function (n) { var e = hits[+n.getAttribute('data-ri')]; makeDraggable(n, { kind: 'lootitem', cat: e.cat, name: e.name, data: e.data }); });
+    }
+    loadLootDBs().then(function () { if (search && search.value) renderResults(search.value); });
+    if (search) search.oninput = function () { renderResults(search.value); };
   }
 
   function renderType(detail) {
     var id = state.campaignId, type = state.type;
-    var items = (detail.docs && detail.docs[type]) || [];
+    var items = ((detail.docs && detail.docs[type]) || []).filter(function (it) { return !/^_/.test(it.name); });
     var hasFolder = !!(window.bartmoss && window.bartmoss.pickFolderFiles);
     var editable = TOOL_FOR[type] || type === 'documents';
     var ico = typeIcon(type);
@@ -241,6 +830,7 @@
       '<div class="cd-actions">' +
         '<button class="app-btn" id="cd-new">+ New ' + type.replace(/s$/, '') + '</button>' +
         (type === 'npcs' && window.NPCGen ? '<button class="app-btn app-btn-go" id="cd-gen">◆ Generate from archetype</button>' : '') +
+        (type === 'orgs' && window.OrgGen ? '<button class="app-btn app-btn-go" id="cd-genorg">◆ Generate organisation</button>' : '') +
         (hasFolder ? '<button class="app-btn" id="cd-folder">Import a folder…</button>' : '') +
       '</div>' +
       '<div class="cd-drop" id="cd-drop"><span class="cd-drop-tag">IMPORT BAY</span> Drag &amp; drop ' + type + ' files here</div>' +
@@ -252,6 +842,9 @@
       el('cd-body').querySelectorAll('[data-arch]').forEach(function (t) {
         t.onclick = function () { archetypeGenModal({ preset: t.getAttribute('data-arch'), onSave: saveBack }); };
       });
+    }
+    if (type === 'orgs' && window.OrgGen) {
+      var go = el('cd-genorg'); if (go) go.onclick = function () { orgGenModal(id); };
     }
 
     el('cd-new').onclick = function () {
@@ -273,7 +866,7 @@
       s.onclick = function () { var nm = s.getAttribute('data-rm'); confirm1('Remove ' + nm + '?', function () { api('DELETE', 'campaigns/' + encodeURIComponent(id) + '/' + type + '/' + encodeURIComponent(nm)).then(renderCampaignDetail); }); };
     });
     el('cd-body').querySelectorAll('[data-edit]').forEach(function (s) {
-      s.onclick = function () { openDocEditor(id, type, s.getAttribute('data-edit')); };
+      s.onclick = function () { cdOpenDocInline(type, s.getAttribute('data-edit')); };
     });
     wireDrop(el('cd-drop'), id, type);
   }
@@ -340,7 +933,7 @@
 
   /* ── Sessions ── */
   var SESS_MODE_KEY = 'bartmoss_sess_mode';
-  var sess = { camp: null, id: null, role: 'gm', sheetId: null, section: 'overview', hosted: [], order: [], cols: {}, hub: null, mode: 'grid', active: null, panelOpen: true };
+  var sess = { camp: null, id: null, role: 'gm', sheetId: null, section: 'overview', hosted: [], order: [], cols: {}, hub: null, mode: 'grid', active: null, panelOpen: true, activeSessionId: null, toolsExp: true };
   try { var m = localStorage.getItem(SESS_MODE_KEY); if (m === 'grid' || m === 'tabs' || m === 'columns') sess.mode = m; } catch (e) {}
   function idOf(docName) { return String(docName).replace(/\.json$/i, ''); }
   function playerLink(sid) {
@@ -357,7 +950,7 @@
     });
   }
 
-  function startSessionPicker(id, sheetDocs, prevOrder) {
+  function startSessionPicker(id, sheetDocs, prevOrder, activeSessionId) {
     if (!sheetDocs.length) { alert('Add at least one sheet to the campaign first.'); return; }
     modalClose();
     var rows = sheetDocs.map(function (d) {
@@ -377,14 +970,14 @@
       if (!hosted.length) return;
       var order = (prevOrder || []).filter(function (x) { return hosted.indexOf(x) >= 0; });
       hosted.forEach(function (x) { if (order.indexOf(x) < 0) order.push(x); });
-      saveSessionMeta(id, { active: true, paused: false, hosted: hosted, order: order }).then(function () { openSession(id, hosted, order); });
+      saveSessionMeta(id, { active: true, paused: false, hosted: hosted, order: order, activeId: activeSessionId || null }).then(function () { openSession(id, hosted, order, activeSessionId || null); });
     };
   }
 
   /* ── Session shell (4-section sidebar, shared GM + player) ── */
+  // Night City lives in the Locations section now, so it's dropped from Tools.
   var SESS_TOOLS = [
     { tool: 'npcsheet', label: 'NPC Sheet', url: 'npc-sheet.html', icon: '☗' },
-    { tool: 'ncmap', label: 'Night City', url: 'nightcity.html', icon: '◰' },
     { tool: 'galmap', label: 'Galactic Map', url: 'galmap.html', icon: '✷' },
     { tool: 'orgs', label: 'Organisations', url: 'organisations.html', icon: '⬢' },
     { tool: 'outfit', label: 'Outfit Designer', url: 'outfit-designer.html', icon: '◈' },
@@ -397,15 +990,34 @@
     });
   }
 
-  function openSession(id, hosted, order) {
+  function openSession(id, hosted, order, activeSessionId) {
     sess.id = id; sess.role = 'gm'; sess.hosted = hosted; sess.order = order.slice(); sess.cols = {};
     sess.active = sess.order[0] || null; sess.section = 'overview';
+    sess.activeSessionId = activeSessionId || null;
+    // The GM keeps full prep powers in session: same campaign data + editors.
+    state.campaignId = id; cdHost = null; cdData = null;
+    var vc = el('view-campaign'); if (vc) vc.innerHTML = '';   // drop stale prep DOM (avoid id clashes)
+    api('GET', 'campaigns/' + encodeURIComponent(id)).then(function (d) { cdData = d; });
     setMode('active'); showView('view-session');
     el('app-crumbs').innerHTML = '<a id="crumb-home">Campaigns</a> <span class="crumb-sep">/</span> <a id="crumb-camp">' + esc(id) + '</a> <span class="crumb-sep">/</span> <span class="crumb-cur">session</span>';
     var crumbH = el('crumb-home'); if (crumbH) crumbH.onclick = function () { renderCampaigns(); };
     var crumbC = el('crumb-camp'); if (crumbC) crumbC.onclick = function () { openCampaign(id); };
     joinSession(id, { name: 'GM', role: 'gm' });
+    logSession('● Session went live — hosting ' + hosted.length + ' sheet' + (hosted.length === 1 ? '' : 's') + '.');
+    pushCampaignLocations(id);
     renderSessionShell();
+  }
+  // Append an entry to the live session's journal (meta.sessions[activeId].log).
+  function logSession(msg) {
+    if (!sess.activeSessionId || sess.role !== 'gm') return;
+    api('GET', 'campaigns/' + encodeURIComponent(sess.id)).then(function (d) {
+      var meta = (d && d.meta) || {}, ss = meta.sessions || [];
+      var s = ss.filter(function (x) { return x.id === sess.activeSessionId; })[0];
+      if (!s) return;
+      if (!Array.isArray(s.log)) s.log = [];
+      s.log.push({ ts: Date.now(), msg: msg });
+      api('PUT', 'campaigns/' + encodeURIComponent(sess.id), meta);
+    }).catch(function () {});
   }
   function openPlayerSession(id, sheetId) {
     sess.id = id; sess.role = 'player'; sess.sheetId = sheetId; sess.order = sheetId ? [sheetId] : [];
@@ -427,28 +1039,61 @@
       updateOverviewActions();
     });
     sess.camp.onStatus(function (st) { var e = el('app-status'); if (e) { e.textContent = st === 'connected' ? 'Hub · live' : st; e.className = 'app-status' + (st === 'connected' ? ' on' : ''); } });
-    if (sess.camp.onOverview) sess.camp.onOverview(function () { refreshOverviewText(); });
+    if (sess.camp.onOverview) sess.camp.onOverview(function () {
+      refreshOverviewText();
+      if (sess.role === 'player' && window.FilmWindow) window.FilmWindow.apply(ovGet().reveal);
+      if (sess.role === 'player') ncSyncToFrame();
+    });
+    // Apply any reveal already present when the player joins.
+    if (sess.role === 'player' && window.FilmWindow) setTimeout(function () { window.FilmWindow.apply(ovGet().reveal); }, 400);
   }
 
+  // GM keeps the full prep section set live (create/edit events, loot… mid-game).
+  var PREP_LIVE = { events: 1, squads: 1, loot: 1, locations: 1 };
   function sessSections() {
-    return sess.role === 'gm'
-      ? [{ k: 'overview', label: 'Overview' }, { k: 'players', label: 'Players' }, { k: 'tools', label: 'Tools' }, { k: 'files', label: 'Files' }]
-      : [{ k: 'overview', label: 'Overview' }, { k: 'livesheet', label: 'Live-sheet' }, { k: 'tools', label: 'Tools' }, { k: 'files', label: 'Files' }];
+    if (sess.role !== 'gm') return [{ k: 'overview', label: 'Overview' }, { k: 'locations', label: 'Locations' }, { k: 'livesheet', label: 'Live-sheet' }, { k: 'tools', label: 'Tools' }, { k: 'files', label: 'Files' }];
+    // GM Tools = quick access to the prep sections (edit live) + standalone tools + combat.
+    var subs = [
+      { kind: 'section', k: 'events', label: 'Events', icon: SECTION_META.events.icon },
+      { kind: 'section', k: 'squads', label: 'Squads', icon: SECTION_META.squads.icon },
+      { kind: 'section', k: 'loot', label: 'Loot', icon: SECTION_META.loot.icon },
+      { kind: 'section', k: 'locations', label: 'Locations', icon: SECTION_META.locations.icon },
+    ].concat(SESS_TOOLS.map(function (t) { return { kind: 'tool', url: t.url, label: t.label, icon: t.icon }; }))
+     .concat([{ kind: 'combat', label: 'Combat', icon: '◆' }]);
+    return [{ k: 'overview', label: 'Overview' }, { k: 'players', label: 'Players' }, { k: 'tools', label: 'Tools', subs: subs }, { k: 'files', label: 'Files' }];
+  }
+  function ensureCdData(cb) {
+    if (cdData && state.campaignId === sess.id) return cb();
+    state.campaignId = sess.id;
+    api('GET', 'campaigns/' + encodeURIComponent(sess.id)).then(function (d) { cdData = d; cb(); }).catch(function () {});
   }
   function renderSessionShell() {
     var paused = sess.camp && sess.camp.isPaused && sess.camp.isPaused();
-    var nav = sessSections().map(function (s) {
-      return '<button class="sess-nav' + (s.k === sess.section ? ' active' : '') + '" data-sec="' + s.k + '">' + s.label + '</button>';
-    }).join('');
+    var nav = wsRail(sessSections(), sess.section);
     var ctrls = sess.role === 'gm'
       ? '<button class="app-btn" id="sess-share">⇄ Share</button><button class="app-btn" id="sess-pause">' + (paused ? 'Resume' : 'Pause') + '</button><button class="app-btn app-btn-danger" id="sess-end">End</button>'
       : '<button class="app-btn app-btn-danger" id="sess-leave">Leave</button>';
     el('view-session').innerHTML =
-      '<div class="sess-top"><span class="sess-live">● LIVE</span><span class="sess-title">' + esc(sess.id) + '</span>' +
-        '<span class="sess-headact" id="sess-actions"></span><span style="flex:1"></span>' + ctrls + '</div>' +
+      '<div class="sess-top ws-top ws-top-live"><span class="ws-mode ws-mode-live">● LIVE</span><span class="sess-title ws-title">' + esc(sess.id) + '</span>' +
+        '<span style="flex:1"></span>' + ctrls + '</div>' +
+      '<div class="ws-livebar" id="ws-livebar" hidden></div>' +
       '<div id="sess-paused-bar">' + (paused ? '<div class="sess-paused">SESSION PAUSED — players see a PAUSED banner. Sync continues.</div>' : '') + '</div>' +
-      '<div class="sess-shell"><nav class="sess-side">' + nav + '</nav><div class="sess-content" id="sess-content"></div></div>';
+      '<div class="sess-shell"><nav class="sess-side ws-rail">' + nav + '</nav><div class="sess-content" id="sess-content"></div></div>';
     el('view-session').querySelectorAll('.sess-nav').forEach(function (b) { b.onclick = function () { gotoSection(b.getAttribute('data-sec')); }; });
+    // Tools rail: expand/collapse the quick-tool sub-list; jump straight to a tool.
+    el('view-session').querySelectorAll('[data-railexp]').forEach(function (s) {
+      s.onclick = function (e) { e.stopPropagation(); sess.toolsExp = !sess.toolsExp; var sub = el('ws-sub-' + s.getAttribute('data-railexp')); if (sub) sub.hidden = !sess.toolsExp; s.textContent = sess.toolsExp ? '▾' : '▸'; };
+    });
+    el('view-session').querySelectorAll('[data-railtool]').forEach(function (b) {
+      b.onclick = function () {
+        var tool = b.getAttribute('data-railtool'), lbl = b.getAttribute('data-raillabel');
+        gotoSection('tools');
+        if (tool === 'combat') sessCombat(); else openSessTool(tool, lbl);
+      };
+    });
+    el('view-session').querySelectorAll('[data-railsec]').forEach(function (b) {
+      b.onclick = function () { gotoSection(b.getAttribute('data-railsec')); };
+    });
     if (sess.role === 'gm') {
       el('sess-share').onclick = shareLinks;
       el('sess-pause').onclick = function () {
@@ -466,22 +1111,33 @@
   }
   function gotoSection(key) {
     sess.section = key;
+    // Active state: top-level rail buttons + section sub-items (in the Tools menu).
     el('view-session').querySelectorAll('.sess-nav').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-sec') === key); });
+    el('view-session').querySelectorAll('[data-railsec]').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-railsec') === key); });
     var content = el('sess-content'); if (!content) return;
-    sessSections().forEach(function (s) {
-      var pid = 'sec-' + s.k, panel = el(pid);
-      if (!panel) { panel = document.createElement('div'); panel.id = pid; panel.className = 'sess-sec'; content.appendChild(panel); }
-      panel.hidden = (s.k !== key);
-    });
+    // Ensure a panel for the active key (it may live only in the Tools sub-menu).
     var panel = el('sec-' + key);
+    if (!panel) { panel = document.createElement('div'); panel.id = 'sec-' + key; panel.className = 'sess-sec'; content.appendChild(panel); }
+    content.querySelectorAll('.sess-sec').forEach(function (p) { p.hidden = (p.id !== 'sec-' + key); });
     if (key === 'overview') renderOverview(panel);          // always refresh (dynamic)
-    else if (!panel.dataset.built) { buildSection(key, panel); panel.dataset.built = '1'; }
+    else if (PREP_LIVE[key] && sess.role === 'gm') {        // live prep editor (create/edit mid-game)
+      panel.classList.add('sess-sec-prep');
+      ensureCdData(function () { cdSection = key; cdHost = panel; cdRenderSection(key, panel); });
+    } else if (!panel.dataset.built) { buildSection(key, panel); panel.dataset.built = '1'; }
   }
   function buildSection(key, panel) {
     if (key === 'players') return renderPlayers(panel);
     if (key === 'livesheet') return renderLivesheet(panel);
+    if (key === 'locations') return renderLocationsSection(panel);
     if (key === 'tools') return renderTools(panel);
     if (key === 'files') return renderFiles(panel);
+  }
+  // Player Locations — campaign NC map in player mode; receives public pins live.
+  function renderLocationsSection(panel) {
+    if (!panel) return;
+    panel.classList.add('sess-sec-files');
+    panel.innerHTML = '<iframe class="sess-livesheet" src="nightcity.html?campaign=' + encodeURIComponent(sess.id) + '&ncrole=player"></iframe>';
+    var fr = panel.querySelector('iframe'); if (fr) fr.onload = ncSyncToFrame;
   }
 
   /* Overview — online players, actions in progress, campaign name/description,
@@ -529,16 +1185,160 @@
             '<div class="ov-block"><div class="ov-lbl">ONLINE</div><div id="ov-online" class="ov-online"></div></div>' +
             '<div class="ov-block"><div class="ov-lbl">IN PROGRESS</div><div id="ov-actions" class="ov-actions">—</div></div>' +
             '<div class="ov-block"><div class="ov-lbl">PINNED</div><div class="ov-pins" id="ov-pins">' + pinsHtml(pinned) + '</div></div>' +
+            buildRun(meta, gm, ov, d.docs || {}) +
           '</div>' +
         '</div>';
       if (gm) {
         // Edit → persist to meta.json AND push live to the synced overview.
         var dsc = el('ov-desc'); if (dsc) dsc.oninput = function () { saveCampaignMeta(id, { description: dsc.value }); sess.camp.setOverview({ description: dsc.value }); };
         var nts = el('ov-notes'); if (nts) nts.oninput = function () { saveCampaignMeta(id, { playerNotes: nts.value }); sess.camp.setOverview({ playerNotes: nts.value }); };
+        wireRun(panel, meta, id);
       }
       wirePins(panel);
       updatePresenceFromCamp(); updateOverviewActions();
     });
+  }
+  function playerClocksHtml(clocks) {
+    clocks = clocks || [];
+    return clocks.length ? clocks.map(function (k) {
+      var pct = Math.round(((k.value || 0) / (k.max || 1)) * 100);
+      return '<div class="run-clock"><div class="run-crow"><span>' + esc(k.label || 'Clock') + '</span><span class="run-cval">' + (k.value || 0) + '/' + (k.max || 6) + '</span></div>' +
+        '<div class="clock-bar"><span style="width:' + pct + '%;background:' + (k.color || '#b8860b') + '"></span></div></div>';
+    }).join('') : '<span class="cd-empty">—</span>';
+  }
+  // GM "run" panel (reveal events, advance/reveal clocks, give loot) or player clocks.
+  function buildRun(meta, gm, ov, docs) {
+    var p = (meta && meta.prep) || {}; docs = docs || {};
+    if (!gm) return '<div class="ov-block" id="ov-clocks"><div class="ov-lbl">CLOCKS</div>' + playerClocksHtml(ov.clocks) + '</div>';
+    var revIds = (ov.clocks || []).map(function (k) { return k.id; });
+    var events = (p.events || []).length ? (p.events || []).map(function (s) {
+      return '<div class="run-row"><span class="run-name">' + esc(s.title || '(untitled)') + '</span>' + (s.trigger && s.trigger.clockId ? '<span class="run-cval" title="auto-triggers">⏱</span>' : '') + '<button class="prep-mini" data-revevent="' + s.id + '">▸ reveal</button></div>';
+    }).join('') : '<span class="cd-empty">No events prepared.</span>';
+    var clocks = (p.clocks || []).length ? (p.clocks || []).map(function (k) {
+      var on = revIds.indexOf(k.id) >= 0;
+      return '<div class="run-row"><span class="run-name">' + esc(k.label || 'Clock') + '</span><span class="run-cval" id="runclkv-' + k.id + '">' + (k.value || 0) + '/' + (k.max || 6) + '</span>' +
+        '<button class="prep-mini" data-clkm="' + k.id + '">−</button><button class="prep-mini" data-clkp="' + k.id + '">+</button>' +
+        '<button class="prep-mini' + (on ? ' on' : '') + '" id="runclkrev-' + k.id + '" data-clkrev="' + k.id + '">' + (on ? '👁 shown' : 'reveal') + '</button></div>';
+    }).join('') : '<span class="cd-empty">No clocks.</span>';
+    var loot = (p.loot || []).length ? (p.loot || []).map(function (g) {
+      return '<div class="run-row"><span class="run-name">' + esc(g.name || 'Loot') + '</span><span class="run-cval">' + lootSummary(g) + '</span>' +
+        '<button class="prep-mini" data-lootgive="' + g.id + '">give</button></div>';
+    }).join('') : '<span class="cd-empty">No loot.</span>';
+    var npcs = (docs.npcs || []).length ? (docs.npcs || []).map(function (nf) {
+      return '<div class="run-row"><span class="run-name">' + esc(idOf(nf.name)) + '</span><button class="prep-mini" data-npcpresent="' + esc(nf.name) + '">▸ present</button></div>';
+    }).join('') : '<span class="cd-empty">No NPCs.</span>';
+    return '<div class="ov-block"><div class="ov-lbl">RUN — EVENTS</div>' + events + '</div>' +
+      '<div class="ov-block"><div class="ov-lbl">NPCS — present to players</div>' + npcs + '</div>' +
+      '<div class="ov-block"><div class="ov-lbl">CLOCKS</div>' + clocks + '</div>' +
+      '<div class="ov-block"><div class="ov-lbl">LOOT</div>' + loot + '</div>';
+  }
+  function wireRun(panel, meta, id) {
+    var p = (meta.prep = meta.prep || {});
+    function findIn(arr, idv) { return (arr || []).filter(function (x) { return x.id === idv; })[0]; }
+    panel.querySelectorAll('[data-revevent]').forEach(function (b) {
+      b.onclick = function () { var s = findIn(p.events, b.getAttribute('data-revevent')); if (!s) return; sess.camp.setOverview({ reveal: eventReveal(s) }); logSession('▸ Revealed event: ' + (s.title || 'Event')); b.textContent = '✓ sent'; setTimeout(function () { b.textContent = '▸ reveal'; }, 1000); };
+    });
+    function pushClocks() { sess.camp.setOverview({ clocks: (sess._revClocks || []) }); }
+    function ov() { return (sess.camp.getOverview && sess.camp.getOverview()) || {}; }
+    sess._revClocks = ov().clocks || [];
+    // Debounced meta save so rapid clock ticks don't fire a GET+PUT each time.
+    function saveClocksSoon() { clearTimeout(sess._clkSaveT); sess._clkSaveT = setTimeout(function () { saveCampaignMeta(id, { prep: p }); }, 600); }
+    panel.querySelectorAll('[data-clkrev]').forEach(function (b) {
+      b.onclick = function () {
+        var k = findIn(p.clocks, b.getAttribute('data-clkrev')); if (!k) return;
+        var cur = ov().clocks || []; var on = cur.some(function (x) { return x.id === k.id; });
+        sess._revClocks = on ? cur.filter(function (x) { return x.id !== k.id; }) : cur.concat([{ id: k.id, label: k.label, value: k.value, max: k.max, color: k.color }]);
+        pushClocks();   // instant (Yjs); no full re-render
+        b.classList.toggle('on', !on); b.textContent = !on ? '👁 shown' : 'reveal';
+      };
+    });
+    panel.querySelectorAll('[data-clkp],[data-clkm]').forEach(function (b) {
+      var idv = b.getAttribute('data-clkp') || b.getAttribute('data-clkm'), up = b.hasAttribute('data-clkp');
+      b.onclick = function () {
+        var k = findIn(p.clocks, idv); if (!k) return;
+        var before = k.value || 0;
+        k.value = up ? Math.min(k.max || 6, before + 1) : Math.max(0, before - 1);
+        saveClocksSoon();
+        // If this clock is revealed, update the synced copy so players see it live.
+        var cur = (ov().clocks || []).map(function (x) { return x.id === k.id ? { id: k.id, label: k.label, value: k.value, max: k.max, color: k.color } : x; });
+        sess._revClocks = cur; pushClocks();
+        var span = panel.querySelector('#runclkv-' + k.id); if (span) span.textContent = (k.value || 0) + '/' + (k.max || 6);
+        // Clock-threshold auto-trigger: an event reveals when its clock drops below x.
+        if (!up) (p.events || []).forEach(function (ev) {
+          if (ev.trigger && ev.trigger.clockId === k.id && k.value < ev.trigger.below && before >= ev.trigger.below) {
+            sess.camp.setOverview({ reveal: eventReveal(ev) }); logSession('⏱ Auto-revealed "' + (ev.title || 'Event') + '" (' + (k.label || 'clock') + ' < ' + ev.trigger.below + ')');
+          }
+        });
+      };
+    });
+    panel.querySelectorAll('[data-lootgive]').forEach(function (b) {
+      b.onclick = function () { var g = findIn(p.loot, b.getAttribute('data-lootgive')); if (g) grantLootBox(g, p, id, panel); };
+    });
+    // Present an NPC to players → a dossier Film Window (portrait + blurb).
+    panel.querySelectorAll('[data-npcpresent]').forEach(function (b) {
+      b.onclick = function () {
+        var nm = b.getAttribute('data-npcpresent');
+        fetch('/__api/campaigns/' + encodeURIComponent(id) + '/npcs/' + encodeURIComponent(nm)).then(function (r) { return r.json(); }).then(function (j) {
+          j = j || {};
+          var title = j.handle || j.role || idOf(nm);
+          sess.camp.setOverview({ reveal: { kind: 'event', preset: 'dossier', title: title, portrait: j.photo || '', text: j.notes || j.role || '', ts: Date.now() } });
+          logSession('▸ Presented NPC: ' + title);
+          b.textContent = '✓ sent'; setTimeout(function () { b.textContent = '▸ present'; }, 1000);
+        }).catch(function () {});
+      };
+    });
+  }
+  /* ── Loot grant (tree → player sheets) ── */
+  function flattenLoot(node) { return node.type === 'container' ? (node.children || []).reduce(function (a, ch) { return a.concat(flattenLoot(ch)); }, []) : [node]; }
+  function lootSummary(g) {
+    var money = 0, ip = 0, items = 0;
+    (g.nodes || []).forEach(function (n) { flattenLoot(n).forEach(function (x) { if (x.type === 'money') money += +x.amount || 0; else if (x.type === 'ip') ip += +x.amount || 0; else items++; }); });
+    var parts = []; if (money) parts.push('€$' + money); if (ip) parts.push(ip + ' IP'); if (items) parts.push(items + ' item' + (items === 1 ? '' : 's'));
+    return parts.join(' · ') || 'empty';
+  }
+  function connectedPlayers() { return sess.order.filter(function (sid) { var r = sess.camp.getSheet && sess.camp.getSheet(sid); return r && r.json; }); }
+  function applyLootToPlayer(sid, leaves, label) {
+    var rec = sess.camp.getSheet && sess.camp.getSheet(sid); if (!rec || !rec.json) return false;
+    var json = rec.json;
+    leaves.forEach(function (x) {
+      if (x.type === 'money') json.money = (parseInt(json.money, 10) || 0) + (+x.amount || 0);
+      else if (x.type === 'ip') json.ip = (parseInt(json.ip, 10) || 0) + (+x.amount || 0);
+      else {
+        var arr = x.cat === 'weapon' ? 'weapons' : x.cat === 'cyberware' ? 'cyberware' : x.cat === 'vehicle' ? 'vehicles' : x.cat === 'armor' ? 'armor' : 'gear';
+        if (!Array.isArray(json[arr])) json[arr] = [];
+        var obj = x.data ? JSON.parse(JSON.stringify(x.data)) : { name: x.name };
+        if (arr === 'gear') { obj.category = obj.category || 'LOOT'; obj.notes = (obj.notes ? obj.notes + ' · ' : '') + 'from ' + (label || 'loot'); }
+        json[arr].push(obj);
+      }
+    });
+    sess.camp.publishSheet(sid, json.handle || json.name || sid, json);
+    return true;
+  }
+  function grantLootBox(g, p, id, panel) {
+    var players = connectedPlayers();
+    if (!players.length) { alert('No players connected to receive loot.'); return; }
+    var units = (g.nodes || []).map(function (n) { return { node: n, share: n.type === 'ip' ? 'shared' : (n.share || 'shared'), leaves: flattenLoot(n) }; });
+    var uniques = units.filter(function (u) { return u.share === 'unique'; });
+    var shared = units.filter(function (u) { return u.share !== 'unique'; });
+    function doGrant(assign) {
+      shared.forEach(function (u) { players.forEach(function (sid) { applyLootToPlayer(sid, u.leaves, g.name); }); });
+      uniques.forEach(function (u, i) { var sid = assign[i]; if (sid) applyLootToPlayer(sid, u.leaves, g.name); });
+      logSession('Loot "' + (g.name || 'reward') + '" given — ' + lootSummary(g) + (uniques.length ? ' (' + uniques.length + ' unique)' : ''));
+    }
+    if (!uniques.length) { doGrant([]); return; }
+    // Unique items need a per-item player choice.
+    var rows = uniques.map(function (u, i) {
+      var opts = players.map(function (sid) { return '<option value="' + esc(sid) + '">' + esc(sid) + '</option>'; }).join('');
+      return '<label class="cbs-row">' + esc(lootNodeLabel(u.node)) + ' → <select data-uniq="' + i + '">' + opts + '</select></label>';
+    }).join('');
+    var ov = document.createElement('div'); ov.id = 'app-modal-ov'; ov.className = 'app-modal-ov';
+    ov.innerHTML = '<div class="app-modal"><div class="app-modal-head">Give "' + esc(g.name || 'Loot') + '" — assign unique items</div>' +
+      '<div class="app-modal-body">' + (shared.length ? '<p style="font-size:12px;color:#666;margin:0 0 8px">Shared items go to all ' + players.length + ' connected players.</p>' : '') + rows + '</div>' +
+      '<div class="app-modal-actions"><button class="app-btn" data-x>Cancel</button><button class="app-btn app-modal-ok" data-ok>Give</button></div></div>';
+    ov.onclick = function (e) { if (e.target === ov) modalClose(); };
+    document.body.appendChild(ov);
+    ov.querySelector('[data-x]').onclick = modalClose;
+    ov.querySelector('[data-ok]').onclick = function () { var assign = uniques.map(function (u, i) { var s = ov.querySelector('[data-uniq="' + i + '"]'); return s && s.value; }); modalClose(); doGrant(assign); };
   }
   function wirePins(scope) {
     (scope || document).querySelectorAll('[data-pin]').forEach(function (b) {
@@ -554,6 +1354,7 @@
     var dt = el('ov-desc'); if (dt && document.activeElement !== dt && ov.description != null) dt.value = ov.description;
     var nt = el('ov-notes'); if (nt && document.activeElement !== nt && ov.playerNotes != null) nt.value = ov.playerNotes;
     var pp = el('ov-pins'); if (pp && ov.pinned) { pp.innerHTML = pinsHtml(ov.pinned); wirePins(pp.parentNode); }
+    var oc = el('ov-clocks'); if (oc && sess.role === 'player') oc.innerHTML = '<div class="ov-lbl">CLOCKS</div>' + playerClocksHtml(ov.clocks);
   }
   function openPinnedDoc(type, name) { gotoSection('files'); /* Phase 2: open in reader; Phase 1: Files section */ }
   function updateOverviewActions() {
@@ -565,7 +1366,11 @@
       txt = '⚔ Combat — round ' + (m.round || 1) + (c ? ' · ' + (c.name || '') + "'s turn" : '');
     }
     var a = el('ov-actions'); if (a) a.textContent = txt;
-    var h = el('sess-actions'); if (h) h.textContent = m.active ? '⚔ COMBAT' : '';
+    var lb = el('ws-livebar');
+    if (lb) {
+      if (m.active) { lb.hidden = false; lb.innerHTML = '<span class="chip chip-warn">⚔ COMBAT</span> <b>Round ' + (m.round || 1) + '</b>' + (c ? ' · <b>' + esc(c.name || '') + "</b>'s turn" : '') + '<span style="flex:1"></span><button class="app-btn" id="ws-lb-combat">Open combat ▸</button>'; var cb = el('ws-lb-combat'); if (cb) cb.onclick = function () { if (sess.role === 'gm') openCombatStage(); }; }
+      else { lb.hidden = true; lb.innerHTML = ''; }
+    }
     var cc = el('ov-combat-chip'); if (cc) cc.hidden = !m.active;
   }
 
@@ -574,14 +1379,15 @@
   function sheetPhoto(sid) { var r = sess.camp && sess.camp.getSheet && sess.camp.getSheet(sid); return (r && r.json && r.json.photo) || ''; }
   function renderPlayers(panel) {
     if (!panel) return;
+    panel.classList.add('sess-sec-bleed');
     var mode = sess.mode || 'grid';
     if (sess.order.indexOf(sess.active) < 0) sess.active = sess.order[0] || null;
     var pad = function (n) { return (n < 10 ? '0' : '') + n; };
-    var bar = '<div class="sess-secbar"><div class="app-kicker">// PLAYERS</div><span style="flex:1"></span>' +
+    var bar = '<div class="pl-bar"><span class="pl-bar-title">PLAYERS</span><span style="flex:1"></span>' +
       '<div class="sess-modes">' +
-        '<button class="app-btn sess-mode' + (mode === 'grid' ? ' active' : '') + '" data-mode="grid">Grid</button>' +
-        '<button class="app-btn sess-mode' + (mode === 'tabs' ? ' active' : '') + '" data-mode="tabs">Tabs</button>' +
-        '<button class="app-btn sess-mode' + (mode === 'columns' ? ' active' : '') + '" data-mode="columns">Columns</button>' +
+        '<button class="sess-mode' + (mode === 'grid' ? ' active' : '') + '" data-mode="grid">Grid</button>' +
+        '<button class="sess-mode' + (mode === 'tabs' ? ' active' : '') + '" data-mode="tabs">Tabs</button>' +
+        '<button class="sess-mode' + (mode === 'columns' ? ' active' : '') + '" data-mode="columns">Columns</button>' +
       '</div></div>';
     var body;
     if (!sess.order.length) body = '<div class="cd-empty">No sheets hosted.</div>';
@@ -615,6 +1421,7 @@
   /* Live-sheet (player) — their own synced sheet; combat auto-overlay via cs-join. */
   function renderLivesheet(panel) {
     if (!panel) return;
+    panel.classList.add('sess-sec-files');   // full-bleed: the sheet fills the section
     panel.innerHTML = sess.sheetId
       ? '<iframe class="sess-livesheet" src="cs.html?campaign=' + encodeURIComponent(sess.id) + '&sheet=' + encodeURIComponent(sess.sheetId) + '"></iframe>'
       : '<div class="cd-empty">No sheet assigned. Ask your GM for your sheet link.</div>';
@@ -630,25 +1437,45 @@
     var combat = sess.role === 'gm'
       ? '<button class="tool-card tool-card-online" data-combat="1"><div class="tool-card-icon">◆</div><div class="tool-card-title" id="tool-combat-lbl">Combat</div><div class="tool-card-desc">Live · run a fight</div></button>'
       : '';
-    panel.innerHTML = '<div class="app-kicker">// TOOLS</div><div class="tool-menu-grid sess-tools-grid">' + combat + tiles + '</div>' +
+    panel.innerHTML = '<div class="tool-menu-grid sess-tools-grid">' + combat + tiles + '</div>' +
       '<div class="tools-frame" id="tools-frame" hidden>' +
         '<div class="tools-frame-bar"><span class="tools-frame-name" id="tools-frame-name"></span><button class="app-btn" id="tools-frame-close">✕ Close</button></div>' +
         '<div class="tools-frame-host" id="tools-frame-host"></div></div>';
     panel.querySelectorAll('[data-toolurl]').forEach(function (b) {
-      b.onclick = function () {
-        var url = b.getAttribute('data-toolurl'), name = b.querySelector('.tool-card-title').textContent;
-        el('tools-frame-name').textContent = name;
-        el('tools-frame-host').innerHTML = '<iframe src="' + esc(url) + '"></iframe>';
-        el('tools-frame').hidden = false;
-      };
+      b.onclick = function () { openSessTool(b.getAttribute('data-toolurl'), b.querySelector('.tool-card-title').textContent); };
     });
     // Close by removing the iframe node (setting src='about:blank' tripped an
     // Electron renderer debug scenario).
     el('tools-frame-close').onclick = function () { el('tools-frame-host').innerHTML = ''; el('tools-frame').hidden = true; };
     var cb = panel.querySelector('[data-combat]');
-    if (cb) cb.onclick = function () { var m = (sess.camp && sess.camp.combatMeta && sess.camp.combatMeta()) || {}; if (m.active) openCombatStage(); else openCombatSetup(); };
+    if (cb) cb.onclick = sessCombat;
     syncCombatBtn();
   }
+  // Open a tool iframe in the Tools section (used by the grid tiles AND the rail quick-links).
+  function openSessTool(url, name) {
+    var host = el('tools-frame-host'); if (!host) return;
+    if (/nightcity/.test(url)) url += '?campaign=' + encodeURIComponent(sess.id) + '&ncrole=' + sess.role;
+    el('tools-frame-name').textContent = name || '';
+    host.innerHTML = '<iframe src="' + esc(url) + '"></iframe>';
+    el('tools-frame').hidden = false;
+    if (sess.role === 'player' && /nightcity/.test(url)) { var fr = host.querySelector('iframe'); if (fr) fr.onload = ncSyncToFrame; }
+  }
+  function sessCombat() { var m = (sess.camp && sess.camp.combatMeta && sess.camp.combatMeta()) || {}; if (m.active) openCombatStage(); else openCombatSetup(); }
+
+  // Push synced public locations to any open player NC-map iframe (Locations
+  // section or Tools) as an overlay layer.
+  function ncSyncToFrame() {
+    if (sess.role !== 'player') return;
+    var vs = el('view-session'); if (!vs) return;
+    var locs = ovGet().locations || [];
+    var msg = { type: 'nc-sync-layers', layers: locs.length ? [{ id: 'sync-camp', name: 'Campaign locations', entries: locs }] : [], maps: ovGet().locMaps || [], order: ovGet().locOrder || [] };
+    vs.querySelectorAll('iframe').forEach(function (fr) { if (/nightcity/.test(fr.src || '') && fr.contentWindow) fr.contentWindow.postMessage(msg, '*'); });
+  }
+  // GM edits public locations/maps in the embedded NC planner → push to players live.
+  window.addEventListener('message', function (ev) {
+    var d = ev.data; if (!d || d.type !== 'nc-gm-public') return;
+    if (sess.role === 'gm' && sess.camp && sess.camp.setOverview && d.campaign === sess.id) sess.camp.setOverview({ locations: d.places || [], locMaps: d.maps || [], locOrder: d.order || [] });
+  });
 
   /* Files — the "Établi" sourcebook reader, fed from the hub's local books folder. */
   var readerInst = null;
@@ -769,7 +1596,7 @@
         '<label>Scope<select id="gen-scope">' + opt('one', 'Single NPC', 'one') + opt('team', 'Coherent team', 'one') + '</select></label>' +
         '<label>Count <input type="number" id="gen-count" value="1" min="1" max="12"></label>' +
       '</div>' +
-      '<button class="app-btn app-btn-go" id="gen-roll">◆ Generate</button>' +
+      '<button class="app-btn app-btn-go" id="gen-roll">' + (ctx.onParams ? '◆ Add to encounter' : '◆ Generate') + '</button>' +
       '<div id="gen-preview" class="gen-preview"></div>' +
       '</div>' +
       '<div class="app-modal-actions" id="gen-actions"><button class="app-btn" data-x>Close</button></div></div>';
@@ -785,6 +1612,8 @@
         cp2020role: el('gen-cp').value === 'auto' ? null : (el('gen-cp').value === 'none' ? '' : el('gen-cp').value),
       };
       var scope = el('gen-scope').value, count = clampN(parseInt(el('gen-count').value, 10) || 1, 1, 12);
+      // Encounter builder: store the params (resolved to NPCs at launch), don't generate now.
+      if (ctx.onParams) { genClose(); ctx.onParams(p, count); return; }
       loadCombatDBs().then(function (DBs) {
         last = [];
         for (var i = 0; i < count; i++) {
@@ -818,6 +1647,48 @@
     })).then(done || function () {});
   }
 
+  /* Organisation generator modal */
+  var ORG_CORPS = null;
+  function loadOrgDBs() {
+    return Promise.all([loadCombatDBs(), ORG_CORPS ? Promise.resolve(ORG_CORPS) : fetch('data/corporations.json').then(function (r) { return r.json(); }).catch(function () { return []; })])
+      .then(function (res) { ORG_CORPS = res[1] || []; return { weapons: res[0].weapons, cyber: res[0].cyber, armor: res[0].armor, corps: ORG_CORPS }; });
+  }
+  function orgGenModal(id) {
+    var G = window.OrgGen; if (!G) { alert('Org generator not loaded.'); return; }
+    var kindOpts = G.list().map(function (k) { return opt(k.id, k.label, 'corporation'); }).join('');
+    var scaleOpts = Object.keys(G.SCALE).map(function (s) { return opt(s, G.SCALE[s].label, 'local'); }).join('');
+    function close() { var x = el('org-modal-ov'); if (x) x.parentNode.removeChild(x); }
+    var ov = document.createElement('div'); ov.id = 'org-modal-ov'; ov.className = 'app-modal-ov';
+    ov.innerHTML = '<div class="app-modal app-modal-wide"><div class="app-modal-head">Generate organisation</div>' +
+      '<div class="app-modal-body"><div class="gen-grid">' +
+        '<label>Kind<select id="org-kind">' + kindOpts + '</select></label>' +
+        '<label>Scale<select id="org-scale">' + scaleOpts + '</select></label>' +
+        '<label>Count <input type="number" id="org-count" value="1" min="1" max="8"></label>' +
+      '</div><button class="app-btn app-btn-go" id="org-roll">◆ Generate</button><div id="org-prev" class="gen-preview"></div></div>' +
+      '<div class="app-modal-actions" id="org-actions"><button class="app-btn" data-x>Close</button></div></div>';
+    ov.onclick = function (e) { if (e.target === ov) close(); };
+    document.body.appendChild(ov);
+    ov.querySelector('[data-x]').onclick = close;
+    var last = [];
+    el('org-roll').onclick = function () {
+      var p = { kind: el('org-kind').value, scale: el('org-scale').value }, n = clampN(parseInt(el('org-count').value, 10) || 1, 1, 8);
+      loadOrgDBs().then(function (DBs) {
+        last = []; for (var i = 0; i < n; i++) last.push(G.generate(p, DBs));
+        el('org-prev').innerHTML = '<div class="gen-plist">' + last.map(function (o) {
+          return '<div class="gen-row"><b>' + esc(o.name) + '</b> <span class="gen-tag">' + esc(o.type) + '</span><span class="gen-meta">' + (o.hierarchy.nodes.length) + ' leaders · ' + esc(o.headquarters) + '</span></div>';
+        }).join('') + '</div>';
+        el('org-actions').innerHTML = '<button class="app-btn" data-x>Close</button><button class="app-btn app-modal-ok" id="org-save">Save ' + last.length + ' org' + (last.length > 1 ? 's' : '') + '</button>';
+        el('org-actions').querySelector('[data-x]').onclick = close;
+        el('org-save').onclick = function () {
+          Promise.all(last.map(function (o) {
+            var nm = (o.name || 'org').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) + '-' + Date.now().toString(36) + '.org.json';
+            return api('POST', 'campaigns/' + encodeURIComponent(id) + '/orgs', { name: nm, json: o });
+          })).then(function () { close(); renderCampaignDetail(); });
+        };
+      });
+    };
+  }
+
   /* ── Combat (GM side): setup picker + resorbable combat stage ── */
   var combatUI = null;
 
@@ -843,6 +1714,7 @@
       var ov = document.createElement('div'); ov.id = 'app-modal-ov'; ov.className = 'app-modal-ov';
       ov.innerHTML = '<div class="app-modal app-modal-wide"><div class="app-modal-head">◆ Start combat</div>' +
         '<div class="app-modal-body">' +
+        (((d.meta && d.meta.prep && d.meta.prep.squads) || []).length ? '<div class="app-kicker">// SQUAD</div><div class="cbs-mook">Squad <select id="cbs-enc"><option value="">— none —</option>' + (d.meta.prep.squads).map(function (e, i) { return '<option value="' + i + '">' + esc(e.name || 'Squad') + '</option>'; }).join('') + '</select><button class="app-btn" id="cbs-encload">Load</button></div>' : '') +
         '<div class="app-kicker">// COMBATANTS</div>' + pcs + (npcs || '<div class="cd-empty">No NPCs in this campaign.</div>') +
         (window.NPCGen ? '<div class="app-kicker" style="margin-top:10px">// ARCHETYPES</div>' +
           '<button class="app-btn app-btn-go" id="cbs-gen">◆ Generate archetype →</button><div id="cbs-gen-list" class="cbs-genlist"></div>' : '') +
@@ -865,6 +1737,22 @@
         }).join('');
         box.querySelectorAll('[data-rmgen]').forEach(function (a) { a.onclick = function () { genExtra.splice(+a.getAttribute('data-rmgen'), 1); renderGenExtra(); }; });
       }
+      // Load a prepared encounter → check PCs/NPCs + materialise archetypes/mooks.
+      var encLoad = el('cbs-encload');
+      if (encLoad) encLoad.onclick = function () {
+        var idx = el('cbs-enc').value; if (idx === '') return;
+        var enc = d.meta.prep.squads[+idx]; if (!enc) return;
+        if (enc.settings) { el('cbs-mode').value = enc.settings.mode || 'hybrid'; el('cbs-vis').value = enc.settings.npcVis || 'full'; }
+        window.CombatEngine && loadCombatDBs().then(function (DBs) {
+          (enc.members || []).forEach(function (m) {
+            if (m.kind === 'pc-all') { ov.querySelectorAll('input[data-pc]').forEach(function (c) { c.checked = true; }); }
+            else if (m.kind === 'npcfile') { var c = ov.querySelector('input[data-npc="' + (window.CSS && CSS.escape ? CSS.escape(m.name) : m.name) + '"]'); if (c) { c.checked = true; var cnt = ov.querySelector('.cbs-count[data-count="' + (window.CSS && CSS.escape ? CSS.escape(m.name) : m.name) + '"]'); if (cnt) cnt.value = m.count || 1; } }
+            else if (m.kind === 'archetype' && window.NPCGen) { for (var i = 0; i < (m.count || 1); i++) { var s = window.NPCGen.generate(m.params, DBs); genExtra.push(window.CombatEngine.makeCombatant({ id: 'enc-' + Date.now().toString(36) + '-' + genExtra.length, kind: 'npc', name: s.role, sheet: s })); } }
+            else if (m.kind === 'mook') { for (var j = 0; j < (m.count || 1); j++) genExtra.push(window.CombatEngine.makeCombatant({ id: 'enc-' + Date.now().toString(36) + '-' + genExtra.length, kind: 'npc', name: (m.sheet && m.sheet.role) || 'Mook', sheet: m.sheet || {} })); }
+          });
+          renderGenExtra();
+        });
+      };
       var genBtn = el('cbs-gen');
       if (genBtn) genBtn.onclick = function () {
         archetypeGenModal({
@@ -926,6 +1814,7 @@
           list.sort(function (a, b) { return (b.init || 0) - (a.init || 0); });
           sess.camp.setCombatMeta({ active: true, round: 1, turnIdx: 0, order: list.map(function (c) { return c.id; }), settings: settings, startedAt: Date.now() });
           sess.camp.logCombat({ msg: '◆ Combat begins — initiative: ' + list.map(function (c) { return c.name + ' ' + c.init; }).join(', ') });
+          logSession('◆ Combat started — ' + list.length + ' combatant' + (list.length === 1 ? '' : 's') + '.');
           openCombatStage();
         });
       };

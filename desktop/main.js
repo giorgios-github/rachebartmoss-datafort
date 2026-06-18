@@ -16,7 +16,7 @@ app.setName('Datafort');
 
 // Folder picker for the campaign manager: returns text files' { name, content }.
 ipcMain.handle('pick-folder-files', async () => {
-  const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
+  const r = await dialog.showOpenDialog(liveWin() || undefined, { properties: ['openDirectory'] });
   if (r.canceled || !r.filePaths[0]) return [];
   const dir = r.filePaths[0];
   const out = [];
@@ -78,8 +78,8 @@ function buildMenu() {
         {
           label: 'Change campaign folder…',
           click: async () => {
-            const r = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'] });
-            if (!r.canceled && r.filePaths[0]) { dataDir = r.filePaths[0]; await startHub(); if (win) win.loadURL(appUrl()); }
+            const r = await dialog.showOpenDialog(liveWin() || undefined, { properties: ['openDirectory', 'createDirectory'] });
+            if (!r.canceled && r.filePaths[0]) { dataDir = r.filePaths[0]; await startHub(); if (liveWin()) liveWin().loadURL(appUrl()); else createWindow(); }
           },
         },
         { type: 'separator' },
@@ -93,7 +93,7 @@ function buildMenu() {
         },
         { label: 'Open the app in a browser', click: () => shell.openExternal(lanAppUrl()) },
         { type: 'separator' },
-        { label: 'Restart hub', click: async () => { await startHub(); if (win) win.loadURL(appUrl()); } },
+        { label: 'Restart hub', click: async () => { await startHub(); if (liveWin()) liveWin().loadURL(appUrl()); else createWindow(); } },
       ],
     },
     { role: 'editMenu' },
@@ -114,15 +114,18 @@ function openAppWindow() {
   w.loadURL(appUrl());
   return w;
 }
+// A live (non-destroyed) reference to the primary window, or null.
+function liveWin() { return win && !win.isDestroyed() ? win : null; }
 
 async function createWindow() {
   win = openAppWindow();
+  win.on('closed', function () { win = null; });
 }
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) { app.quit(); }
 else {
-  app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
+  app.on('second-instance', () => { var w = liveWin(); if (w) { if (w.isMinimized()) w.restore(); w.focus(); } else createWindow(); });
 
   app.whenReady().then(async () => {
     // In dev (`electron .`) the dock shows Electron's default icon — the
