@@ -5493,6 +5493,7 @@ function csLoad(e) {
         if (sheet) { // auto-apply: new sheet (new tab) from the imported sheet template
           var blank = makeBlankCS(); var d = JSON.parse(JSON.stringify(sheet.data));
           blank.layout = d.layout; blank.customSections = d.customSections; blank.nativeBlocks = d.nativeBlocks; blank.nativeExtras = d.nativeExtras; blank.statLabels = d.statLabels;
+          if (d.onboarding) blank.onboarding = d.onboarding;   // creation guidance rides the template
           _csAdoptSheet(blank);
         } else { alert('Imported ' + asTpl.length + ' template(s).'); }
         return;
@@ -5583,6 +5584,8 @@ function csSettingsModal() {
       '<span><b>Show all role special abilities</b><br><span class="cs-set-hint">List every role ability (Authority, Combat Sense, Interface…) in Skills, not just your role\'s.</span></span></label>' +
     '<label class="cs-set-row"><input type="checkbox" id="m-set-mark"' + (s.markCustom?' checked':'') + ' onchange="csSetOption(\'markCustom\',this.checked)">' +
       '<span><b>Mark custom content</b><br><span class="cs-set-hint">Show a subtle accent on your custom categories/fields even in view mode (off = indistinguishable from vanilla).</span></span></label>' +
+    '<label class="cs-set-row"><input type="checkbox" id="m-set-onb"' + (s.onbAuthor?' checked':'') + ' onchange="csSetOption(\'onbAuthor\',this.checked)">' +
+      '<span><b>Author character-creation onboarding</b><br><span class="cs-set-hint">Show the ✎ chip to write step-by-step creation guidance, then share it via a sheet template or exported JSON. Players who load it see the wizard automatically.</span></span></label>' +
     '<div class="cs-modal-actions"><button class="btn btn-sm btn-cy" onclick="_modalClose()">Done</button></div>');
 }
 function csSetOption(key, val) {
@@ -5591,6 +5594,7 @@ function csSetOption(key, val) {
   if (key === 'showAllRoleSkills') renderSkills();
   if (key === 'forceNetrunner') renderNetIdentity();
   if (key === 'markCustom') renderSheetLayout();
+  if (key === 'onbAuthor' && window.CSOnboarding) window.CSOnboarding.refreshAuthor();
 }
 
 /* ═══════════════════════════════════════════════
@@ -6134,7 +6138,7 @@ function csSaveAsTemplate(scope, a, b) {
 }
 function csSaveSheetTemplate() {
   _csNormalizeCustom();
-  var data = JSON.parse(JSON.stringify({ layout:CS.layout, customSections:CS.customSections, nativeBlocks:CS.nativeBlocks, nativeExtras:CS.nativeExtras, statLabels:CS.statLabels }));
+  var data = JSON.parse(JSON.stringify({ layout:CS.layout, customSections:CS.customSections, nativeBlocks:CS.nativeBlocks, nativeExtras:CS.nativeExtras, statLabels:CS.statLabels, onboarding:CS.onboarding || null }));
   data.customSections.forEach(function(c) { _stripValues(c.root); });
   Object.keys(data.nativeBlocks).forEach(function(s) { _stripValues(data.nativeBlocks[s].root); });
   Object.keys(data.nativeExtras).forEach(function(k) { data.nativeExtras[k].forEach(function(f) { f.value = _fieldBlank(f.type); }); });
@@ -6162,6 +6166,7 @@ function csNewFromTemplate(tid) {
   if (!confirm('Start a new sheet from this template (in a new tab)?')) return;
   var blank = makeBlankCS(); var d = JSON.parse(JSON.stringify(t.data));
   blank.layout = d.layout; blank.customSections = d.customSections; blank.nativeBlocks = d.nativeBlocks; blank.nativeExtras = d.nativeExtras; blank.statLabels = d.statLabels;
+  if (d.onboarding) blank.onboarding = d.onboarding;   // creation guidance rides the template
   _modalClose(); _csAdoptSheet(blank);
 }
 function csManageTemplates() {
@@ -6394,6 +6399,7 @@ function applyCS() {
   _csNormalizeCustom();
   renderSheetLayout();
   renderNativeExtras();
+  if (window.CSOnboarding) window.CSOnboarding.afterApply();
 }
 
 /* ═══ INIT (runs after data is loaded) ═══ */
@@ -6514,6 +6520,7 @@ function init() {
     };
   }
   initTutorialChips();
+  if (window.CSOnboarding) window.CSOnboarding.boot();
 }
 
 /* ═══ DATA LOADER ═══ */

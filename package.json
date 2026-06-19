@@ -7,7 +7,9 @@
     "build:sync": "vite build",
     "typecheck": "tsc --noEmit",
     "dev:sync": "vite build --watch",
-    "hub": "node hub/server.mjs"
+    "hub": "node hub/server.mjs",
+    "build:site": "node scripts/build-site.mjs",
+    "deploy:site": "npm run build:sync && node scripts/build-site.mjs"
   },
   "devDependencies": {
     "@types/ws": "^8.18.1",
