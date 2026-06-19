@@ -1,0 +1,38 @@
+{
+  "quick": {
+    "title": "Create your character — Quick Start",
+    "steps": [
+      { "id": "q1", "title": "Identity & concept", "target": "sec:identity", "body": "Set your {{ref:cs-name}} and {{ref:cs-handle}}, then pick a {{ref:cs-role}}. Choosing a Role auto-fills your Special Ability.\nExample: Name “Eliza Cortez”, Handle “Static”, Role Netrunner." },
+      { "id": "q2", "title": "Lifepath", "target": "sec:lifepath", "body": "Flesh out background, family and motivations in {{sec:lifepath}}; roll life events if you like.\nExample: Corporate exile, family wiped out in a hostile takeover, motivated by revenge." },
+      { "id": "q3", "title": "Stats", "target": "sec:stats", "body": "Assign your nine stats in {{sec:stats}} using the method your GM chose (CP2020 points or 9D10).\nExample (Fast/Friendly, ~62 pts): INT 8, REF 7, TECH 8, COOL 6, ATT 5, LUCK 6, MA 6, BODY 6, EMP 7." },
+      { "id": "q4", "title": "Skills", "target": ["ref:skill-points", "sec:skills"], "body": "Spend your starting points ({{ref:skill-points}}, 40 by default) in {{sec:skills}}. Career skills are highlighted; your Special Ability sits at the top.\nExample: max your Special Ability first, then spread the rest across your highlighted career skills." },
+      { "id": "q5", "title": "Cyberware", "target": ["sec:cyber", "ref:cyber-hc-total"], "body": "Install chrome in {{sec:cyber}}. Watch the Humanity Cost {{ref:cyber-hc-total}} — too much chrome and you slide toward cyberpsychosis.\nExample: an Interface Plug + Chipware Socket for a Netrunner." },
+      { "id": "q6", "title": "Gear & weapons", "target": "sec:weapons", "body": "Add {{sec:weapons}}, armor and clothing in {{sec:fashion}}, and stock {{sec:inventory}}.\nExample: a Militech Avenger pistol, a light armor jacket (SP 14), and a medkit." },
+      { "id": "q7", "title": "Lifestyle & money", "target": "sec:lifestyle", "body": "Set up {{sub:lifestyle:Housing}}, services and cash in {{sec:lifestyle}}.\nExample: a Combat Zone cube (200 eb/mo) and 1,000 eb starting cash." },
+      { "id": "q8", "title": "Network & gigs", "target": "sec:network", "body": "Add contacts and gigs in {{sec:network}}.\nExample: a Fixer named “Dex” as your main contact and one open gig." },
+      { "id": "q9", "title": "Final check", "target": "sec:life", "body": "Review your health track in {{sec:life}} and add anything in {{sec:notes}}.\nExample: note your starting eddies and any debts so the GM can track them." }
+    ]
+  },
+  "full": {
+    "title": "Create your character — Full",
+    "steps": [
+      { "id": "f1", "title": "Concept", "target": "sec:identity", "body": "Decide what kind of edgerunner you are in one line: a Solo gun-for-hire, a Netrunner, a Fixer with connections. Everything else flows from this.\nExample: “A burned-out corporate Netrunner looking for a way back in.”" },
+      { "id": "f2", "title": "Name & handle", "target": "sec:identity", "body": "Enter your real {{ref:cs-name}} and the street {{ref:cs-handle}} people actually call you by.\nExample: Name “Eliza Cortez”, Handle “Static”." },
+      { "id": "f3", "title": "Role & age", "target": "ref:cs-role", "body": "Pick your {{ref:cs-role}} — this auto-fills your Special Ability — and set your {{ref:cs-age}}.\nExample: Role Netrunner (Special Ability: Interface), Age 27." },
+      { "id": "f4", "title": "Lifepath — origins & style", "target": "sec:lifepath", "body": "In {{sec:lifepath}}, set cultural origin, personality and clothing/affectation. Use the roll buttons or type your own.\nExample: Anglo-American, cynical personality, generic chic clothing, mirrorshades." },
+      { "id": "f5", "title": "Lifepath — family", "target": "sec:lifepath", "body": "Fill in family background, parents and siblings in {{sec:lifepath}}.\nExample: corporate family that lost everything; one estranged older brother." },
+      { "id": "f6", "title": "Lifepath — motivations", "target": "sec:lifepath", "body": "Note what you value most, how you feel about people, and your most valued person and possession.\nExample: values honor; wary of strangers; most valued person is a dead mentor; prized possession is their first deck." },
+      { "id": "f7", "title": "Life events", "target": "sec:lifepath", "body": "Roll year-by-year events with “Roll by age” to build your history, or add them manually.\nExample: age 22 — made a powerful enemy; age 25 — big score that went sideways." },
+      { "id": "f8", "title": "Stats", "target": "sec:stats", "body": "Assign your nine stats in {{sec:stats}} using your GM's method (CP2020 points or 9D10). Derived values update automatically.\nExample (Fast/Friendly, ~62 pts): INT 8, REF 7, TECH 8, COOL 6, ATT 5, LUCK 6, MA 6, BODY 6, EMP 7." },
+      { "id": "f9", "title": "Skills", "target": ["ref:skill-points", "sec:skills"], "body": "Spend your starting points ({{ref:skill-points}}, 40 by default) in {{sec:skills}}. Put points into the highlighted career skills first.\nExample: Interface +6, Programming +5, Education +4, then round out with the rest." },
+      { "id": "f10", "title": "Special Ability", "target": "sec:skills", "body": "Confirm your role's Special Ability rank at the top of {{sec:skills}} — it was set when you chose your role.\nExample: a Netrunner's Interface should usually be one of your highest skills." },
+      { "id": "f11", "title": "Cyberware & humanity", "target": ["sec:cyber", "ref:cyber-hc-total"], "body": "Install chrome in {{sec:cyber}} and keep an eye on the Humanity Cost {{ref:cyber-hc-total}}. High cost pushes you toward cyberpsychosis.\nExample: Interface Plugs (2d6 HC) and a Chipware Socket." },
+      { "id": "f12", "title": "Netrunner gear", "target": "sec:net", "when": { "token": "ref:cs-role", "op": "contains", "val": "net" }, "body": "You're a Netrunner — set up your deck, programs and interface in {{sec:net}}.\nExample: a Mensa-grade deck loaded with Hammer, Worm and a Shield program." },
+      { "id": "f13", "title": "Weapons", "target": "sec:weapons", "body": "Pick your weapons in {{sec:weapons}}.\nExample: a Militech Avenger (medium pistol) and a knife as backup." },
+      { "id": "f14", "title": "Fashion & armor", "target": "sec:fashion", "body": "Equip an outfit in {{sec:fashion}}. The equipped outfit's armor SP feeds your damage track.\nExample: an armored leather jacket (SP 14) over generic chic." },
+      { "id": "f15", "title": "Inventory & vehicles", "target": "sec:inventory", "body": "Stock your gear in {{sec:inventory}} and add any {{sec:vehicles}}.\nExample: medkit, flashlight, agent (pocket computer); a beat-up city car." },
+      { "id": "f16", "title": "Lifestyle & money", "target": "sec:lifestyle", "body": "Set up {{sub:lifestyle:Housing}}, {{sub:lifestyle:Services}}, banking and cash in {{sec:lifestyle}}.\nExample: Combat Zone cube (200 eb/mo), 1,000 eb cash, no debts." },
+      { "id": "f17", "title": "Network, health & notes", "target": "sec:network", "body": "Add contacts and gigs in {{sec:network}}, check your health track in {{sec:life}}, and jot anything in {{sec:notes}}.\nExample: Fixer “Dex” as a contact; note your eddies and any debts in Notes." }
+    ]
+  }
+}
