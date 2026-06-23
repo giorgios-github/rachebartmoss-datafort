@@ -99,3 +99,5 @@ Rache Bartmoss Datafort content is unofficial content providend under R. Talsori
 Cyberpunk:2020 is a Registered Trademark of R.Talsorian Corporation. Original Cyberpunk:2020 material Copyright 1994 through 2026 by R.Talsorian Corporation. All Rights Reserved. Used without permission. 
 
 Any use of R.Talsorian Corporation's copyrighted material or trademarks on this site should not be viewed as a challenge to those copyrights or trademarks. If requested by RTG, all or some of the material will be removed from this site as soon as I receive that request
+
+Map in the map screenshot designed by [@bennock](https://www.reddit.com/user/bennock/) on Reddit. All rights reserved, used with their consent. 
