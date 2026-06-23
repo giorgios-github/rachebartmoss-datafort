@@ -271,6 +271,7 @@ body { font-family:var(--mono); background:var(--bg); color:var(--text); font-si
 
 /* Outfit badge in Inventory containers */
 .fashion-badge-outfit { font-size:9px; letter-spacing:1px; background:#111; color:#fff; padding:1px 4px; text-transform:uppercase; }
+.fashion-badge-fixed { font-size:9px; letter-spacing:1px; background:#6b5a2a; color:#fff; padding:1px 4px; text-transform:uppercase; }
 .fashion-item.fi-outfit { border-color:#888; }
 
 /* Drag handle on gear items */

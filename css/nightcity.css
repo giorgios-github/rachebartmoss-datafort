@@ -2,10 +2,11 @@
    Self-contained; layered over the existing inline styles of nightcity.html. */
 
 /* ── Mode bar (in #nav) ── */
-#nc-modebar { display:flex; gap:0; margin-left:auto; }
-.nc-mode { font-family:var(--head, 'Eurostile', sans-serif); font-size:11px; letter-spacing:1px; padding:5px 14px; border:2px solid #111; border-left:none; background:#fff; color:#111; cursor:pointer; text-transform:uppercase; }
-.nc-mode:first-child { border-left:2px solid #111; }
-.nc-mode.active { background:#111; color:#fff; }
+/* Mode toggle now lives at the top of the right sidebar (the old top bar was removed). */
+#nc-modebar { display:flex; gap:0; border-bottom:2px solid #111; }
+.nc-mode { flex:1; font-family:var(--head, 'Eurostile', sans-serif); font-size:10px; letter-spacing:.5px; padding:7px 4px; border:none; border-right:1px solid #333; background:#111; color:#888; cursor:pointer; text-transform:uppercase; }
+.nc-mode:last-child { border-right:none; }
+.nc-mode.active { background:#fff; color:#111; }
 
 /* ── Context bar (under #nav) ── */
 #nc-ctxbar { display:none; align-items:center; flex-wrap:wrap; gap:8px; padding:7px 14px; background:#f3f3f3; border-bottom:2px solid #111; }
@@ -61,6 +62,8 @@
 .nc-entry-act-wrap { margin-left:auto; }
 .nc-entry-act { font-family:var(--mono, monospace); font-size:11px; color:#2980b9; cursor:pointer; }
 .nc-entry-act:hover { text-decoration:underline; }
+.nc-entry-shop { font-family:var(--mono, monospace); font-size:9px; letter-spacing:1px; text-transform:uppercase; color:#111; background:#b8860b; padding:1px 6px; cursor:pointer; margin-left:6px; }
+.nc-entry-shop:hover { background:#caa022; }
 .nc-entry-notes { font-family:var(--mono, monospace); font-size:11px; color:#555; line-height:1.5; margin-top:4px; white-space:pre-wrap; }
 .nc-thumbs { display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; }
 .nc-thumb { width:46px; height:46px; object-fit:cover; border:1px solid #aaa; cursor:pointer; }
@@ -145,7 +148,7 @@ body[data-nc-mode="gm"] #dv-sec { display:none; }
 @media (max-width:760px) { .nc-atlas-wrap { flex-direction:column; } .nc-atlas-legend { width:100%; } }
 
 /* ── Custom maps & off-NC lists (Inc 3) ── */
-#nc-maps-bar { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:8px 12px; background:#f3f3f3; border-bottom:2px solid #111; }
+#nc-maps-bar { display:flex; align-items:center; gap:6px; flex-wrap:wrap; flex-shrink:0; padding:8px 12px; background:#f3f3f3; border-bottom:2px solid #111; }
 .nc-mtab { font-family:var(--head,sans-serif); font-size:11px; letter-spacing:1px; padding:5px 11px; border:2px solid #111; background:#fff; color:#111; cursor:pointer; display:flex; align-items:center; gap:6px; }
 .nc-mtab.active { background:#111; color:#fff; }
 .nc-mtab-mv { font-size:10px; color:#888; padding:0 2px; cursor:pointer; }
@@ -174,3 +177,31 @@ body[data-nc-mode="gm"] #dv-sec { display:none; }
 /* Embedded in the app (gm/player): drop the reference topic label, tighten chrome */
 body[data-nc-mode="gm"] #overview > div:first-child h2,
 body[data-nc-mode="player"] #overview > div:first-child h2 { display:none; }
+
+/* ════ Location popup v2 — two-pane "maps tool" ════ */
+.nc-modal-card--wide { max-width:780px; }
+.nc-modal-card--wide .nc-modal-body { padding:0; }
+.nc-loc { display:flex; align-items:stretch; }
+.nc-loc-media { width:280px; flex-shrink:0; background:#0d0d0e; padding:10px; display:flex; flex-direction:column; gap:10px; max-height:74vh; overflow:auto; }
+.nc-loc-img { position:relative; margin:0; }
+.nc-loc-img img { width:100%; display:block; border:1px solid #333; }
+.nc-loc-img figcaption { font-family:var(--mono, monospace); font-size:9px; letter-spacing:1px; text-transform:uppercase; color:#b8860b; background:#000; padding:3px 6px; }
+.nc-loc-img-map img { border-color:#b8860b; }
+.nc-loc-img-x { position:absolute; top:5px; right:5px; width:20px; height:20px; line-height:20px; text-align:center; background:rgba(0,0,0,.7); color:#fff; cursor:pointer; font-size:11px; }
+.nc-loc-img-x:hover { background:#c0392b; }
+.nc-loc-noimg { flex:1; display:flex; align-items:center; justify-content:center; min-height:160px; border:1px dashed #333; color:#555; font-family:var(--mono, monospace); font-size:10px; letter-spacing:2px; }
+.nc-loc-main { flex:1; min-width:0; padding:14px 16px; max-height:74vh; overflow:auto; }
+.nc-loc-badges { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:12px; }
+.nc-loc-addr { font-family:var(--mono, monospace); font-size:12px; color:#555; }
+.nc-loc-badge { font-family:var(--mono, monospace); font-size:9px; letter-spacing:1px; padding:2px 6px; border:1px solid #111; color:#111; }
+.nc-loc-badge-sec { background:#111; color:#fff; }
+.nc-loc-badge-pub { background:#1a7a2e; color:#fff; border-color:#1a7a2e; }
+.nc-loc-badge-vis { background:#eee; color:#555; border-color:#ccc; }
+.nc-loc-shop { display:block; width:100%; box-sizing:border-box; font-family:var(--head, sans-serif); font-size:13px; letter-spacing:2px; text-transform:uppercase; color:#111; background:#b8860b; border:none; padding:11px; margin-bottom:14px; cursor:pointer; }
+.nc-loc-shop:hover { background:#caa022; }
+.nc-loc-addimgs { display:flex; gap:8px; margin-top:auto; padding-top:6px; }
+@media (max-width:620px) { .nc-loc { flex-direction:column; } .nc-loc-media { width:auto; max-height:200px; } }
+
+/* Location view-mode (read-only presentation) */
+.nc-loc-notes { font-family:var(--mono, monospace); font-size:14px; line-height:1.65; color:#222; white-space:pre-wrap; margin-bottom:14px; }
+.nc-loc-empty { color:#999; font-style:italic; }

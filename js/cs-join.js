@@ -14,6 +14,7 @@
   var q = new URLSearchParams(location.search);
   var campaign = q.get('campaign');
   var sheetId = q.get('sheet');
+  if (sheetId) sheetId = sheetId.replace(/(\.json)+$/i, '');   // never publish a .json-suffixed doc id (avoids Foo.json.json files)
   var mode = q.get('mode'); // 'send' = push local sheet; else receive GM's copy
   if (!campaign || !sheetId || !S) return; // local mode
 

@@ -653,7 +653,7 @@ var TOOLS_LIST = [
   { tool:'charsheet', label:'Character Sheet' },
   { tool:'npcsheet',  label:'NPC Sheet' },
   { tool:'orgs',      label:'Organisations' },
-  { tool:'ncmap',     label:'Night City Map' },
+  { tool:'ncmap',     label:'Map' },
   { tool:'galmap',    label:'Galactic Map' },
   { tool:'outfit',    label:'Outfit Designer' }
 ];
@@ -1067,7 +1067,7 @@ function searchItems(type) {
     var n = (g.name || '').toLowerCase();
     if (_storageExc.some(function(x) { return n.indexOf(x) >= 0; })) return false;
     return _storageKw.some(function(k) { return n.indexOf(k) >= 0; });
-  }).concat(CUSTOM_STORAGE);
+  }).concat(CUSTOM_STORAGE).concat(CUSTOM_STORAGE_FIXED);
   var fmtSlots = function(i) { return i.slots ? i.slots + ' slots — ' : (_getFashionSlots(i) + ' slots — '); };
   var configs = {
     cyber:  { db: DB.cyberware, field: 'cyber',  fmt: function(i) { return i.name + '<span class="dd-sub">' + i.type + (i.subtype ? ' / ' + i.subtype : '') + ' — HC:' + i.hc + ' — ' + i.cost + 'eb — ' + (i.notes || '') + '</span>'; } },
@@ -1653,6 +1653,33 @@ var CUSTOM_STORAGE = [
   { name: 'TransWorld Rolling Duffel',         category: 'STORAGE', cost: 80,  wt: 1.8, notes: 'Wheeled duffel, retractable handle, lockable zip.',       slots: 16 },
 ];
 
+/* Non-portable containers: stashes that can't be carried (no Equip badge). They sit at
+   the top level of Storage or go inside a vehicle / apartment — and whatever they hold,
+   they occupy their FULL slot capacity in whatever non-portable space contains them. */
+var CUSTOM_STORAGE_FIXED = [
+  { name: 'Cardboard Box',          category: 'STORAGE', cost: 1,    wt: 0.3, notes: 'Disposable box. Falls apart in the rain.',                   slots: 8,  nonPortable: true },
+  { name: 'Plastic Storage Tote',   category: 'STORAGE', cost: 12,   wt: 1.5, notes: 'Snap-lid stacking tote.',                                   slots: 14, nonPortable: true },
+  { name: 'Storage Bin',            category: 'STORAGE', cost: 20,   wt: 2.0, notes: 'Heavy-duty plastic bin.',                                   slots: 20, nonPortable: true },
+  { name: 'Wooden Crate',           category: 'STORAGE', cost: 25,   wt: 6.0, notes: 'Nailed shipping crate.',                                    slots: 24, nonPortable: true },
+  { name: 'Footlocker',             category: 'STORAGE', cost: 45,   wt: 8.0, notes: 'Military footlocker with hasp.',                            slots: 20, nonPortable: true },
+  { name: 'Steamer Trunk',          category: 'STORAGE', cost: 90,   wt: 14,  notes: 'Old travel trunk, leather straps.',                        slots: 30, nonPortable: true },
+  { name: 'Lockbox',                category: 'STORAGE', cost: 35,   wt: 3.0, notes: 'Small steel cash/valuables box, keyed.',                    slots: 6,  nonPortable: true },
+  { name: 'Strongbox',              category: 'STORAGE', cost: 120,  wt: 9.0, notes: 'Reinforced steel box, combination lock. SP10.',           slots: 10, nonPortable: true },
+  { name: 'Wall Safe',             category: 'STORAGE', cost: 400,  wt: 25,  notes: 'Concealable behind-panel safe, electronic lock. SP15.',     slots: 12, nonPortable: true },
+  { name: 'Floor Vault',            category: 'STORAGE', cost: 1500, wt: 120, notes: 'Bolt-down floor vault, biometric lock. SP25.',             slots: 40, nonPortable: true },
+  { name: 'Gun Locker',             category: 'STORAGE', cost: 250,  wt: 35,  notes: 'Steel long-gun cabinet, foam racks. SP12.',                slots: 16, nonPortable: true },
+  { name: 'Weapons Crate',          category: 'STORAGE', cost: 60,   wt: 10,  notes: 'Mil-surplus arms crate, stencilled.',                      slots: 24, nonPortable: true },
+  { name: 'Ammo Can',               category: 'STORAGE', cost: 15,   wt: 2.5, notes: 'Sealed steel ammo can, water-tight.',                      slots: 8,  nonPortable: true },
+  { name: 'Pelican Hard Case',      category: 'STORAGE', cost: 180,  wt: 6.0, notes: 'IP67 wheeled hard case, pick-foam. SP8.',                  slots: 18, nonPortable: true },
+  { name: 'Tool Chest',             category: 'STORAGE', cost: 140,  wt: 28,  notes: 'Rolling drawer tool chest.',                               slots: 28, nonPortable: true },
+  { name: 'Cooler',                 category: 'STORAGE', cost: 40,   wt: 4.0, notes: 'Insulated cooler, holds a charge 12h.',                    slots: 14, nonPortable: true },
+  { name: 'Filing Cabinet',         category: 'STORAGE', cost: 80,   wt: 30,  notes: 'Four-drawer steel cabinet, lockable.',                     slots: 26, nonPortable: true },
+  { name: 'Locker',                 category: 'STORAGE', cost: 70,   wt: 22,  notes: 'Gym/work locker, vented door.',                            slots: 18, nonPortable: true },
+  { name: 'Barrel / Drum',          category: 'STORAGE', cost: 30,   wt: 12,  notes: '200L steel drum, sealed lid.',                             slots: 30, nonPortable: true },
+  { name: 'Server Rack',            category: 'STORAGE', cost: 600,  wt: 60,  notes: '19" rack cabinet, lockable mesh doors.',                   slots: 22, nonPortable: true },
+  { name: 'Shipping Container',     category: 'STORAGE', cost: 3000, wt: 2200,notes: '20ft intermodal container. A room you can lock.',          slots: 200,nonPortable: true },
+];
+
 var _FASHION_SLOT_KEYS = [
   ['backpack', 12], ['briefcase', 8], ['attaché', 8], ['attache', 8],
   ['duffel', 14], ['trenchcoat', 6], ['greatcoat', 5], ['duster', 5],
@@ -1680,6 +1707,7 @@ function _makeContainer(src, isOutfit) {
     notes:    src.notes || '',
     slots:    _getFashionSlots(src),
     isOutfit: !!isOutfit,
+    nonPortable: !!src.nonPortable,
     isArmor:  false,
     sp:       0,
     spCurrent:0,
@@ -1987,6 +2015,8 @@ function _extractDragItem() {
     item = CS.gear.splice(_gearDrag.gearIdx, 1)[0];
   } else if (_gearDrag.src === 'fashion') {
     item = CS.fashion[_gearDrag.fIdx].contents.splice(_gearDrag.cIdx, 1)[0];
+  } else if (_gearDrag.src === 'fashionContainer') {
+    item = CS.fashion.splice(_gearDrag.fIdx, 1)[0];   // move a whole container (e.g. a stash) into a vehicle/apartment
   } else if (_gearDrag.src === 'notStored') {
     CS.notStored = CS.notStored || [];
     item = CS.notStored.splice(_gearDrag.nsIdx, 1)[0];
@@ -2106,7 +2136,7 @@ function renderFashion() {
   var vehCargoHtml = (CS.vehicles || []).map(function(v, vi) {
     if (!v.name) return '';
     var slots = _getVehCargoSlots(v);
-    var used  = (v.cargoContents || []).length;
+    var used  = _cargoUsed(v.cargoContents);
     var full  = used >= slots;
     var pct   = slots > 0 ? Math.round(used / slots * 100) : 0;
     var slotViz = slots <= 16
@@ -2120,12 +2150,13 @@ function renderFashion() {
         'onclick="(function(){var k=\'iv' + vi + '-' + ci + '\';_fciOpen=_fciOpen===k?null:k;renderFashion();})()">' +
         '<span class="fci-name">' + (c.name || '?') + '</span>' +
         (c.wt ? '<span class="fci-wt">' + c.wt + 'kg</span>' : '') +
-        '<span class="fci-rm" onclick="event.stopPropagation();removeFromVehCargo(' + vi + ',' + ci + ')" title="Return to gear">↩</span>' +
+        '<span class="fci-rm" onclick="event.stopPropagation();removeFromVehCargo(' + vi + ',' + ci + ')" title="Take out">↩</span>' +
         (open ? '<div class="fci-detail">' +
           (c.category ? '<span>' + c.category + '</span>' : '') +
           (c.cost !== undefined ? '<span>' + c.cost + 'eb</span>' : '') +
           (c.wt ? '<span>' + c.wt + 'kg</span>' : '') +
           (c.notes ? '<span class="fci-detail-notes">' + c.notes + '</span>' : '') +
+          _containerContentsHtml(c) +
         '</div>' : '') +
       '</div>';
     }).join('');
@@ -2149,7 +2180,7 @@ function renderFashion() {
   var houseCargoHtml = ((CS.lifestyle && CS.lifestyle.housing) || []).map(function(h, hi) {
     if (!h.name) return '';
     var slots = _lsHousingCargoSlots(h);
-    var used  = (h.cargoContents || []).length;
+    var used  = _cargoUsed(h.cargoContents);
     var full  = used >= slots;
     var pct   = slots > 0 ? Math.round(used / slots * 100) : 0;
     var slotViz = '<div class="slot-bar"><div class="slot-bar-fill" style="width:' + pct + '%"></div></div>';
@@ -2161,12 +2192,13 @@ function renderFashion() {
         'onclick="(function(){var k=\'ih' + hi + '-' + ci + '\';_fciOpen=_fciOpen===k?null:k;renderFashion();renderLifestyle();})()">' +
         '<span class="fci-name">' + (c.name || '?') + '</span>' +
         (c.wt ? '<span class="fci-wt">' + c.wt + 'kg</span>' : '') +
-        '<span class="fci-rm" onclick="event.stopPropagation();removeFromHouseCargo(' + hi + ',' + ci + ')" title="Return to gear">↩</span>' +
+        '<span class="fci-rm" onclick="event.stopPropagation();removeFromHouseCargo(' + hi + ',' + ci + ')" title="Take out">↩</span>' +
         (open ? '<div class="fci-detail">' +
           (c.category ? '<span>' + c.category + '</span>' : '') +
           (c.cost !== undefined ? '<span>' + c.cost + 'eb</span>' : '') +
           (c.wt ? '<span>' + c.wt + 'kg</span>' : '') +
           (c.notes ? '<span class="fci-detail-notes">' + c.notes + '</span>' : '') +
+          _containerContentsHtml(c) +
         '</div>' : '') +
       '</div>';
     }).join('');
@@ -2272,9 +2304,11 @@ function renderFashion() {
       '</div>';
     }).join('');
 
-    var badge = f.isOutfit ? '<span class="fashion-badge-outfit">outfit</span>' : '';
+    var badge = f.isOutfit ? '<span class="fashion-badge-outfit">outfit</span>'
+      : (f.nonPortable ? '<span class="fashion-badge-fixed" title="Non-portable — can\'t be carried; sits at home or in a vehicle">fixed</span>' : '');
 
-    var eBadge = (!f.isOutfit && !f.isArmor)
+    // Non-portable containers (stashes, safes, crates) can't be equipped — no E badge.
+    var eBadge = (!f.isOutfit && !f.isArmor && !f.nonPortable)
       ? '<span class="fi-equip-badge' + (f.equipped ? ' fi-equip-on' : '') + '" ' +
           'onclick="event.stopPropagation();CS.fashion[' + fi + '].equipped=!CS.fashion[' + fi + '].equipped;renderFashion()" ' +
           'title="Equipped">E</span>'
@@ -2479,6 +2513,19 @@ function _lsHousingMonthlyCost() {
     return t + (h.owned ? 0 : (parseFloat(h.rent)||0)) + util;
   }, 0);
 }
+/* Slots an item occupies in a non-portable space (vehicle / apartment cargo): a
+   non-portable container takes its WHOLE capacity regardless of contents; anything
+   else takes one slot. */
+function _cargoCost(it) { return (it && it.nonPortable && it.slots) ? it.slots : 1; }
+function _cargoUsed(arr) { return (arr || []).reduce(function(s, it) { return s + _cargoCost(it); }, 0); }
+function _isContainerItem(it) { return !!(it && Array.isArray(it.contents)); }
+/* When a container sits in a vehicle/apartment, expanding it lists what it holds. */
+function _containerContentsHtml(c) {
+  if (!_isContainerItem(c)) return '';
+  if (!c.contents.length) return '<span class="fci-detail-notes">Empty — ' + (c.slots || '?') + ' slots</span>';
+  return '<span class="fci-detail-notes">Holds ' + c.contents.length + '/' + (c.slots || '?') + ': ' +
+    c.contents.map(function(x) { return _esc(x.name || '?'); }).join(', ') + '</span>';
+}
 function _lsHousingCargoSlots(h) { return (parseInt(h.rooms) || 1) * 50; }
 
 /* cash */
@@ -2617,16 +2664,16 @@ function houseCargoDropZone(e, hi) {
   if (!_gearDrag) return;
   var h = CS.lifestyle.housing[hi];
   h.cargoContents = h.cargoContents || [];
-  if (h.cargoContents.length >= _lsHousingCargoSlots(h)) return;
   var item = _extractDragItem();
   if (!item) return;
-  h.cargoContents.push(item);
+  if (_cargoUsed(h.cargoContents) + _cargoCost(item) > _lsHousingCargoSlots(h)) { CS.notStored = (CS.notStored || []).concat(item); }
+  else { h.cargoContents.push(item); }
   _gearDrag = null;
   renderLifestyle(); renderFashion(); renderGear(); renderNotStored();
 }
 function removeFromHouseCargo(hi, ci) {
   var item = CS.lifestyle.housing[hi].cargoContents.splice(ci, 1)[0];
-  CS.gear.push(item);
+  if (_isContainerItem(item)) { CS.fashion.push(item); } else { CS.gear.push(item); }
   renderLifestyle(); renderFashion(); renderGear();
 }
 
@@ -2804,7 +2851,7 @@ function pendPurchase(obj, kind, costOverride) {
 // All buyIds still present in the inventory (incl. cyber options).
 function _inventoryBuyIds() {
   var ids = {};
-  function scan(arr) { (arr || []).forEach(function (x) { if (x && x.buyId) ids[x.buyId] = 1; if (x && x.options) x.options.forEach(function (o) { if (o && o.buyId) ids[o.buyId] = 1; }); }); }
+  function scan(arr) { (arr || []).forEach(function (x) { if (x && x.buyId) ids[x.buyId] = 1; if (x && Array.isArray(x.options)) x.options.forEach(function (o) { if (o && o.buyId) ids[o.buyId] = 1; }); }); }
   scan(CS.weapons); scan(CS.gear); scan(CS.cyberware); scan(CS.wardrobe); scan(CS.vehicles);
   return ids;
 }
@@ -2842,9 +2889,12 @@ window.pendDebit = function (all) {
 function renderPending() {
   if (!document.querySelector('.cs')) return;     // only on the character sheet
   // Reconcile: drop lines whose linked item was removed from the inventory.
+  // Only do this when buyIds are actually being tracked on the inventory — in joined
+  // (campaign) mode the sheet re-normalizes items on sync and strips buyId, so an empty
+  // map must NOT be read as "every item was deleted" (that wiped the whole tray).
   if (CS && Array.isArray(CS.pending) && CS.pending.length) {
     var have = _inventoryBuyIds();
-    CS.pending = CS.pending.filter(function (p) { return !p.buyId || have[p.buyId]; });
+    if (Object.keys(have).length) CS.pending = CS.pending.filter(function (p) { return !p.buyId || have[p.buyId]; });
   }
   var box = document.getElementById('buytray');
   var list = (CS && CS.pending) || [];
@@ -3979,16 +4029,16 @@ function vehCargoDropZone(e, vIdx) {
   if (!_gearDrag) return;
   var v = CS.vehicles[vIdx];
   v.cargoContents = v.cargoContents || [];
-  if (v.cargoContents.length >= _getVehCargoSlots(v)) return;
   var item = _extractDragItem();
   if (!item) return;
-  v.cargoContents.push(item);
+  if (_cargoUsed(v.cargoContents) + _cargoCost(item) > _getVehCargoSlots(v)) { CS.notStored = (CS.notStored || []).concat(item); }
+  else { v.cargoContents.push(item); }
   _gearDrag = null;
   renderVehicles(); renderFashion(); renderGear(); renderNotStored();
 }
 function removeFromVehCargo(vIdx, cIdx) {
   var item = CS.vehicles[vIdx].cargoContents.splice(cIdx, 1)[0];
-  CS.gear.push(item);
+  if (_isContainerItem(item)) { CS.fashion.push(item); } else { CS.gear.push(item); }
   renderVehicles(); renderFashion(); renderGear();
 }
 function toggleVehCargoDetail(vIdx, cIdx) {
@@ -4015,7 +4065,7 @@ function renderLifestyle() {
   /* ─────────── HOUSING ─────────── */
   var housingCards = (ls.housing || []).map(function(h, hi) {
     var slots = _lsHousingCargoSlots(h);
-    var used  = (h.cargoContents || []).length;
+    var used  = _cargoUsed(h.cargoContents);
     var full  = used >= slots;
     var pct   = slots > 0 ? Math.round(used / slots * 100) : 0;
     var slotBar = '<div class="slot-bar" style="margin:3px 0 4px"><div class="slot-bar-fill" style="width:' + pct + '%"></div></div>';
@@ -4939,7 +4989,7 @@ function renderVehicles() {
   if (!el) return;
   el.innerHTML = CS.vehicles.map(function(v, i) {
     var slots = _getVehCargoSlots(v);
-    var used  = (v.cargoContents || []).length;
+    var used  = _cargoUsed(v.cargoContents);
     var full  = used >= slots;
     var pct   = slots > 0 ? Math.round(used / slots * 100) : 0;
 
@@ -6399,6 +6449,7 @@ function applyCS() {
   _csNormalizeCustom();
   renderSheetLayout();
   renderNativeExtras();
+  try { renderPending(); } catch (e) {}   // mount/reconcile the buy tray (e.g. shop purchases arriving via sync)
   if (window.CSOnboarding) window.CSOnboarding.afterApply();
 }
 
