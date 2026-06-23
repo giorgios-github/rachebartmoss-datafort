@@ -7,7 +7,7 @@ It is divided in two tools with different scopes :
 	- A link between GM and player devices that allows for sync and data sharing on the same Wi-Fi network.
 	- A set of tools built on, or utilizing, this link. It live-syncs character sheets, map informations and more between GM and players. Full features are listed below.
 
-## App tools :
+## App tools
 1. Party :
 	- Character Sheets are synced live between GM and players
 	- Character Sheets feature many systems on top of the basic ones, such as
@@ -36,7 +36,7 @@ It is divided in two tools with different scopes :
 6. Database
 	- GMs and players can consult datasets of all vehicles, weapons, cyberware, programs, corporations and gear feature in the sourcebooks, plus (if made public) the entries, organisations, and NPCs designed by the GM.
 
-### Screenshots : 
+### Screenshots 
 <img width="1822" height="1185" alt="Screenshot 2026-06-23 at 15 25 19" src="https://github.com/user-attachments/assets/f54d0b10-31be-4156-9c3f-613903d64d5c" />
 The player sheets in column view, on the GM app. 
 
