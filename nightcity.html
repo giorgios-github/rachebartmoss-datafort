@@ -108,19 +108,10 @@ body{font-family:var(--mono);background:var(--bg);color:var(--text);font-size:12
 <link rel="stylesheet" href="css/nightcity.css">
 </head>
 <body>
-<div id="nav">
-  <h1>DATATERM DISPLAY SYSTEM</h1>
-  <span class="sub">Night City flashmaps</span>
-  <div id="nc-modebar">
-    <button class="nc-mode active" data-mode="ref" onclick="ncSetMode('ref')">Reference</button>
-    <button class="nc-mode" data-mode="player" onclick="ncSetMode('player')">Player Log</button>
-    <button class="nc-mode" data-mode="gm" onclick="ncSetMode('gm')">GM Planner</button>
-  </div>
-</div>
 <div id="nc-ctxbar"></div>
+<div id="nc-maps-bar" style="display:none"></div>
 <div id="app">
   <div id="content">
-    <div id="nc-maps-bar" style="display:none"></div>
     <div id="view-custom" style="display:none"></div>
     <div id="overview">
       <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;border-bottom:3px solid #111;padding-bottom:6px">
@@ -186,6 +177,11 @@ body{font-family:var(--mono);background:var(--bg);color:var(--text);font-size:12
     </div>
   </div>
   <div id="sidebar">
+    <div id="nc-modebar">
+      <button class="nc-mode active" data-mode="ref" onclick="ncSetMode('ref')">Reference</button>
+      <button class="nc-mode" data-mode="player" onclick="ncSetMode('player')">Player Log</button>
+      <button class="nc-mode" data-mode="gm" onclick="ncSetMode('gm')">GM Planner</button>
+    </div>
     <div id="sidebar-head" onclick="showOverview()">◂ OVERVIEW MAP</div>
     <div id="district-list"></div>
     <div id="nc-side-panel"></div>

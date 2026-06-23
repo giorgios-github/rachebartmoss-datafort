@@ -135,20 +135,32 @@ export function createHub(opts = {}) {
   const isJunkId = (id) => /^nc-/.test(String(id || ''));
   const sheetsDirFor = (name) => path.join(DATA, name, 'sheets');
   function loadSheetsInto(sheetsMap, doc, dir) {
-    let loaded = 0;
-    for (const f of fs.existsSync(dir) ? fs.readdirSync(dir) : []) {
+    if (!fs.existsSync(dir)) return 0;
+    // Collapse cascaded extensions (Foo.json, Foo.json.json, …) to one canonical id.
+    // When several files share a base, keep the richest (largest json, then newest)
+    // and delete the inferior duplicates — this auto-heals old .json.json junk without
+    // ever clobbering the real sheet with an emptier phantom.
+    const best = new Map();   // base -> { f, rec, size }
+    for (const f of fs.readdirSync(dir)) {
       if (!f.endsWith('.json')) continue;
-      const base = f.replace(/\.json$/, '');
-      if (isJunkId(base)) { try { fs.unlinkSync(path.join(dir, f)); log('  - removed legacy junk file', f); } catch {} continue; }
+      const base = f.replace(/(\.json)+$/i, '');
+      const fp = path.join(dir, f);
+      if (isJunkId(base)) { try { fs.unlinkSync(fp); log('  - removed legacy junk file', f); } catch {} continue; }
+      let rec;
       try {
-        const raw = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
-        let rec;
+        const raw = JSON.parse(fs.readFileSync(fp, 'utf8'));
         if (raw && raw.id && raw.json) rec = { id: base, ownerId: raw.ownerId ?? null, name: raw.name || base, updatedAt: raw.updatedAt || Date.now(), json: raw.json };
         else { raw._id = base; rec = { id: base, ownerId: null, name: raw.handle || raw.name || base, updatedAt: Date.now(), json: raw }; }
-        doc.transact(() => sheetsMap.set(rec.id, rec));
-        loaded++;
-      } catch (e) { log('  ! skipped', f, '-', e.message); }
+      } catch (e) { log('  ! skipped', f, '-', e.message); continue; }
+      const size = JSON.stringify(rec.json || {}).length;
+      const prev = best.get(base);
+      if (!prev || size > prev.size || (size === prev.size && rec.updatedAt > prev.rec.updatedAt)) {
+        if (prev) { try { fs.unlinkSync(path.join(dir, prev.f)); log('  - removed duplicate sheet file', prev.f); } catch {} }
+        best.set(base, { f, rec, size });
+      } else { try { fs.unlinkSync(fp); log('  - removed duplicate sheet file', f); } catch {} }
     }
+    let loaded = 0;
+    for (const { rec } of best.values()) { doc.transact(() => sheetsMap.set(rec.id, rec)); loaded++; }
     return loaded;
   }
   const _writeTimers = new Map();
@@ -157,7 +169,7 @@ export function createHub(opts = {}) {
     const key = name + '/' + id;
     clearTimeout(_writeTimers.get(key));
     _writeTimers.set(key, setTimeout(() => {
-      try { const dir = sheetsDirFor(name); fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, id + '.json'), JSON.stringify((rec && rec.json) || {}, null, 2)); log(`  · saved ${name}/${(rec && rec.name) || id}`); }
+      try { const dir = sheetsDirFor(name); fs.mkdirSync(dir, { recursive: true }); const fileId = String(id).replace(/(\.json)+$/i, ''); fs.writeFileSync(path.join(dir, fileId + '.json'), JSON.stringify((rec && rec.json) || {}, null, 2)); log(`  · saved ${name}/${(rec && rec.name) || id}`); }
       catch (e) { log('  ! write failed', name, id, '-', e.message); }
     }, 400));
   }

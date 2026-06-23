@@ -71,7 +71,7 @@
         '<div class="pc-or">— or enter it —</div>' +
         '<div class="pc-row"><div><label class="pc-l">Campaign</label><input id="pc-camp" class="pc-in" value="main"></div>' +
         '<div><label class="pc-l">Your sheet id</label><input id="pc-sheet" class="pc-in" placeholder="Player_1"></div></div>' +
-        '<button class="app-btn app-btn-go pc-go" id="pc-connect">⇄ CONNECT</button>' +
+        '<button class="app-btn app-btn-go pc-go" id="pc-connect">CONNECT</button>' +
         '<div class="pc-err" id="pc-err"></div>' +
       '</div>';
     el('pc-connect').onclick = function () {
@@ -88,32 +88,34 @@
     };
   }
 
-  /* ── Modal ── */
-  function modalClose() { var ov = el('app-modal-ov'); if (ov) ov.parentNode.removeChild(ov); }
+  /* ── Modal ──
+     Generic prompt/confirm use the shared UI.modal (css/ui.css). Bespoke modals
+     elsewhere still build .app-modal markup inline and close via modalClose(),
+     which now clears either overlay during the design-system migration. */
+  function modalClose() {
+    var ov = el('app-modal-ov'); if (ov) ov.parentNode.removeChild(ov);
+    if (window.UI) UI.close();
+  }
   function prompt1(title, label, placeholder, onOk) {
-    modalClose();
-    var ov = document.createElement('div'); ov.id = 'app-modal-ov'; ov.className = 'app-modal-ov';
-    ov.innerHTML = '<div class="app-modal"><div class="app-modal-head">' + esc(title) + '</div>' +
-      '<div class="app-modal-body"><label style="font-size:11px;color:#666">' + esc(label) + '</label><input id="app-modal-in" placeholder="' + esc(placeholder || '') + '"></div>' +
-      '<div class="app-modal-actions"><button class="app-btn" data-x>Cancel</button><button class="app-btn app-modal-ok" data-ok>OK</button></div></div>';
-    ov.onclick = function (e) { if (e.target === ov) modalClose(); };
-    document.body.appendChild(ov);
-    var inp = el('app-modal-in'); inp.focus();
-    function commit() { var v = inp.value; modalClose(); onOk(v); }
-    ov.querySelector('[data-ok]').onclick = commit;
-    ov.querySelector('[data-x]').onclick = modalClose;
-    inp.onkeydown = function (e) { if (e.key === 'Enter') commit(); else if (e.key === 'Escape') modalClose(); };
+    UI.modal({
+      title: title,
+      body: '<label class="ui-field-label">' + esc(label) + '</label><input id="app-modal-in" class="ui-input" placeholder="' + esc(placeholder || '') + '">',
+      actions: [
+        { label: 'Cancel' },
+        { label: 'OK', kind: 'primary', onClick: function (box) { onOk(box.querySelector('#app-modal-in').value); } }
+      ],
+      onShow: function (box) {
+        var inp = box.querySelector('#app-modal-in'); inp.focus();
+        inp.onkeydown = function (e) { if (e.key === 'Enter') { var v = inp.value; UI.close(); onOk(v); } };
+      }
+    });
   }
   function confirm1(msg, onYes) {
-    modalClose();
-    var ov = document.createElement('div'); ov.id = 'app-modal-ov'; ov.className = 'app-modal-ov';
-    ov.innerHTML = '<div class="app-modal"><div class="app-modal-head">Confirm</div>' +
-      '<div class="app-modal-body" style="font-size:13px">' + esc(msg) + '</div>' +
-      '<div class="app-modal-actions"><button class="app-btn" data-x>Cancel</button><button class="app-btn app-modal-ok" data-ok>Yes</button></div></div>';
-    ov.onclick = function (e) { if (e.target === ov) modalClose(); };
-    document.body.appendChild(ov);
-    ov.querySelector('[data-ok]').onclick = function () { modalClose(); onYes(); };
-    ov.querySelector('[data-x]').onclick = modalClose;
+    UI.modal({
+      title: 'Confirm',
+      body: esc(msg),
+      actions: [{ label: 'Cancel' }, { label: 'Yes', kind: 'primary', onClick: function () { onYes(); } }]
+    });
   }
 
   // Show exactly one top-level view; hide the others (prevents the ended-session
@@ -133,9 +135,44 @@
   }
 
   /* ── Campaigns list ── */
+  // New campaign + optional import of sheet/template .json files (onboarding travels with them).
+  function newCampaignModal() {
+    if (!window.UI) {
+      prompt1('New campaign', 'Campaign name', 'e.g. Night Heist', function (name) {
+        name = (name || '').trim(); if (!name) return;
+        api('POST', 'campaigns', { name: name }).then(function (r) { if (r && r.id) openCampaign(r.id); });
+      });
+      return;
+    }
+    window.UI.modal({
+      title: 'New campaign',
+      body: '<label class="rt-field"><span class="rt-field-l">Campaign name</span><input class="rt-input" id="nc-name" placeholder="e.g. Night Heist"></label>' +
+        '<label class="rt-field"><span class="rt-field-l">Import sheets / templates (.json, optional)</span><input class="rt-input" id="nc-files" type="file" accept=".json,application/json" multiple></label>' +
+        '<p style="font-family:var(--mono);font-size:11px;color:var(--text2);line-height:1.5">Character sheets or templates exported from the sheet are added to the campaign. Any onboarding guide saved on them comes along.</p>',
+      actions: [{ label: 'Cancel' }, { label: 'Create', kind: 'primary', onClick: function (box) {
+        var name = (box.querySelector('#nc-name').value || '').trim(); if (!name) return false;
+        var files = box.querySelector('#nc-files').files;
+        api('POST', 'campaigns', { name: name }).then(function (r) {
+          if (!(r && r.id)) return;
+          var id = r.id;
+          if (!files || !files.length) { openCampaign(id); return; }
+          var jobs = Array.prototype.map.call(files, function (f) {
+            return f.text().then(function (txt) {
+              var json; try { json = JSON.parse(txt); } catch (e) { return; }
+              var nm = f.name.replace(/\.json$/i, '').replace(/[^\w.-]+/g, '_') || 'sheet';
+              return api('POST', 'campaigns/' + encodeURIComponent(id) + '/sheets', { name: nm, json: json });
+            });
+          });
+          Promise.all(jobs).then(function () { openCampaign(id); });
+        });
+      } }]
+    });
+  }
   function renderCampaigns() {
     state.campaignId = null;
     endSessionConn();
+    removeMonitor(); removeQdb();
+    var camp0 = el('app-camp'); if (camp0) camp0.innerHTML = '';
     setMode('manage');
     showView('view-campaigns');
     el('app-crumbs').innerHTML = '<span class="crumb-cur">Campaigns</span>';
@@ -156,12 +193,7 @@
         (cs.length ? '' : '<div class="app-empty">No campaigns yet. Spin one up to start managing sheets, NPCs and sessions.</div>') +
         '<div class="cmp-grid">' +
         cards + '<div class="cmp-card cmp-new" id="cmp-new"><span class="cmp-new-plus">+</span> NEW CAMPAIGN</div></div>';
-      el('cmp-new').onclick = function () {
-        prompt1('New campaign', 'Campaign name', 'e.g. Night Heist', function (name) {
-          name = (name || '').trim(); if (!name) return;
-          api('POST', 'campaigns', { name: name }).then(function (r) { if (r && r.id) openCampaign(r.id); });
-        });
-      };
+      el('cmp-new').onclick = newCampaignModal;
       el('view-campaigns').querySelectorAll('.cmp-card[data-id]').forEach(function (card) {
         card.onclick = function (e) { if (e.target.hasAttribute('data-del')) return; openCampaign(card.getAttribute('data-id')); };
       });
@@ -171,19 +203,46 @@
     });
   }
 
-  /* ── Campaign detail ── */
+  /* ── Open a campaign = enter the Run Table (no campaign/session dichotomy) ──
+     The GM lands on the run table directly (Party), joined to the LAN room so
+     presence works. "Go live" (setLive) flips on casting + The Table. */
   function openCampaign(id) {
-    state.campaignId = id; state.type = 'sheets'; cdSessionOpen = null; cdHost = null;
+    state.campaignId = id; state.type = 'sheets'; cdHost = null; cdData = null;
     endSessionConn();
-    var vs = el('view-session'); if (vs) vs.innerHTML = '';   // drop stale live panels (avoid id clashes)
-    setMode('manage');
-    showView('view-campaign');
+    var vc = el('view-campaign'); if (vc) vc.innerHTML = '';   // drop stale prep DOM
+    api('GET', 'campaigns/' + encodeURIComponent(id)).then(function (d) {
+      cdData = d;
+      // Sheet IDs are the base filename WITHOUT extension (the hub appends .json on
+      // save) — using the .json filename here caused Johny.json.json.json cascades.
+      var order = ((d.docs && d.docs.sheets) || []).map(function (x) { return String(x.name).replace(/(\.json)+$/i, ''); });
+      order = order.filter(function (v, i) { return order.indexOf(v) === i; });   // dedupe cascaded junk
+      openRunTable(id, order);
+    }).catch(function () { openRunTable(id, []); });
+  }
+  function openRunTable(id, order) {
+    sess.id = id; sess.role = 'gm'; sess.hosted = order.slice(); sess.order = order.slice(); sess.cols = {};
+    sess.active = order[0] || null; sess.section = 'party'; sess.live = false; sess.activeSessionId = null;
+    sess.tabs = null; sess.activeTab = null;   // fresh tab set per campaign
+    state.campaignId = id;
+    var vc = el('view-campaign'); if (vc) vc.innerHTML = '';
+    setMode('manage'); showView('view-session');
     el('app-crumbs').innerHTML = '<a id="crumb-home">Campaigns</a> <span class="crumb-sep">/</span> <span class="crumb-cur">' + esc(id) + '</span>';
-    renderCampaignDetail();
+    var ch = el('crumb-home'); if (ch) ch.onclick = function () { renderCampaigns(); };
+    joinSession(id, { name: 'GM', role: 'gm' });
+    pushCampaignLocations(id);
+    renderSessionShell();
+  }
+  // Toggle live casting (replaces the old GO LIVE / End-session flow).
+  function setLive(v) {
+    sess.live = !!v;
+    setMode(v ? 'active' : 'manage');
+    if (sess.camp && sess.camp.setOverview) sess.camp.setOverview({ live: !!v });
+    try { saveSessionMeta(sess.id, { active: !!v }); } catch (e) {}
+    renderSessionShell();
   }
 
   /* ── Campaign = Prep board (sidebar of prep modules) ── */
-  var cdData = null, cdSection = 'overview', cdSessionOpen = null, cdEventSel = null, cdLootSel = null;
+  var cdData = null, cdSection = 'events', cdEventSel = null;
   function uid(p) { return (p || 'x') + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36); }
   function prep() {
     if (!cdData.meta) cdData.meta = {};
@@ -212,261 +271,32 @@
   function newSession() { var n = sessions().length + 1; return { id: uid('ses'), name: 'Session ' + n, date: new Date().toISOString().slice(0, 10), notes: '', recap: '', log: [], attendance: [], createdAt: Date.now() }; }
   function fmtTime(ts) { try { return new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } }
 
-  var CD_SECTIONS = [
-    { k: 'overview', label: 'Overview' }, { k: 'sessions', label: 'Sessions' }, { k: 'players', label: 'Players' },
-    { k: 'locations', label: 'Locations' }, { k: 'events', label: 'Events' }, { k: 'squads', label: 'Squads' },
-    { k: 'loot', label: 'Loot' }, { k: 'files', label: 'Files' },
-  ];
-  // Unified workspace: section identity (icon + group) shared by PREP and LIVE rails.
-  var SECTION_META = {
-    overview: { icon: '◎', grp: 'PLAY' }, sessions: { icon: '◷', grp: 'PLAY' }, players: { icon: '◈', grp: 'PLAY' },
-    locations: { icon: '◰', grp: 'PLAY' }, events: { icon: '▸', grp: 'PLAY' }, squads: { icon: '⚔', grp: 'PLAY' },
-    loot: { icon: '◆', grp: 'PLAY' }, livesheet: { icon: '◈', grp: 'PLAY' },
-    tools: { icon: '⚙', grp: 'LIBRARY' }, files: { icon: '▤', grp: 'LIBRARY' },
-  };
-  function wsRail(sections, activeKey) {
-    var order = [], byGrp = {};
-    sections.forEach(function (s) { var g = (SECTION_META[s.k] && SECTION_META[s.k].grp) || 'PLAY'; if (!byGrp[g]) { byGrp[g] = []; order.push(g); } byGrp[g].push(s); });
-    return order.map(function (g) {
-      return '<div class="ws-rail-grp">' + g + '</div>' + byGrp[g].map(function (s) {
-        var ic = (SECTION_META[s.k] && SECTION_META[s.k].icon) || '·';
-        var btn = '<button class="sess-nav ws-nav' + (s.k === activeKey ? ' active' : '') + '" data-sec="' + s.k + '"><span class="ws-nav-ic">' + ic + '</span>' + esc(s.label) +
-          (s.subs ? '<span class="ws-nav-exp" data-railexp="' + s.k + '">' + (sess.toolsExp ? '▾' : '▸') + '</span>' : '') + '</button>';
-        if (s.subs) {
-          btn += '<div class="ws-subnav" id="ws-sub-' + s.k + '"' + (sess.toolsExp ? '' : ' hidden') + '>' + s.subs.map(function (sub) {
-            var act = (sub.kind === 'section' && sub.k === activeKey) ? ' active' : '';
-            var attr = sub.kind === 'section' ? 'data-railsec="' + sub.k + '"' : 'data-railtool="' + esc(sub.kind === 'combat' ? 'combat' : (sub.url || '')) + '" data-raillabel="' + esc(sub.label) + '"';
-            return '<button class="ws-subnav-item' + act + '" ' + attr + '><span class="ws-nav-ic">' + (sub.icon || '·') + '</span>' + esc(sub.label) + '</button>';
-          }).join('') + '</div>';
-        }
-        return btn;
-      }).join('');
-    }).join('');
-  }
-  function renderCampaignDetail() {
-    var id = state.campaignId;
-    api('GET', 'campaigns/' + encodeURIComponent(id)).then(function (d) {
-      cdData = d; var meta = (d && d.meta) || {};
-      el('view-campaign').innerHTML =
-        '<div class="cd-head ws-top ws-top-prep">' +
-          '<button class="app-btn cd-back" id="cd-back">← Campaigns</button>' +
-          '<span class="ws-mode ws-mode-prep">PREP</span>' +
-          '<div class="cd-titlewrap"><h2 class="app-h ws-title">' + esc(meta.name || id) + '</h2></div>' +
-          '<span style="flex:1"></span>' +
-          '<button class="app-btn app-btn-go" id="cd-session" title="Host the sheets for players">▶ GO LIVE</button></div>' +
-        '<div class="sess-shell cd-shell"><nav class="sess-side ws-rail">' + wsRail(CD_SECTIONS, cdSection) + '</nav><div class="sess-content" id="cd-content"></div></div>';
-      var crumb = el('crumb-home'); if (crumb) crumb.onclick = renderCampaigns;
-      el('cd-back').onclick = renderCampaigns;
-      el('cd-session').onclick = function () { goLive(id); };
-      el('view-campaign').querySelectorAll('.sess-nav').forEach(function (b) { b.onclick = function () { cdSessionOpen = null; cdGoto(b.getAttribute('data-sec')); }; });
-      cdGoto(cdSection);
-    });
-  }
+  // Run Table workspace: section identity (glyph + group), aligned to the Claude
+  // Design handoff nav (GM: SESSION/CREATE/REFERENCE · Player: YOU/TABLE).
+  // Legacy prep keys (events/squads/loot/locations/sessions/files/tools) kept so
+  // the existing live-prep editors stay reachable during the migration.
   // Section renderers route through a HOST element so the same editors render in
   // both the PREP board (#cd-content) and a live session panel (workspace unity).
   var cdHost = null;
+  // Only the Cast (events) editor still routes through here; the other prep-board
+  // sections were retired when the campaign screen became the tabbed Run Table.
   function cdRenderSection(key, c) {
     if (!c) return;
-    c.classList.toggle('cd-bleed', key === 'locations');   // full-bleed embedded tools
-    if (key === 'overview') return cdOverview(c);
-    if (key === 'sessions') return cdSessions(c);
-    if (key === 'players') return cdPlayers(c);
     if (key === 'events') return cdEvents(c);
-    if (key === 'squads') return cdSquads(c);
-    if (key === 'locations') return cdLocations(c);
-    if (key === 'loot') return cdLoot(c);
-    if (key === 'files') return cdFiles(c);
-  }
-  function cdGoto(key) {
-    cdSection = key; cdHost = el('cd-content'); if (!cdHost) return;
-    el('view-campaign').querySelectorAll('.sess-nav').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-sec') === key); });
-    cdRenderSection(key, cdHost);
   }
 
-  function statCard(value, label, hot) {
-    return '<div class="cd-stat' + (hot ? ' cd-stat-hot' : '') + '"><b>' + value + '</b><span>' + esc(label) + '</span></div>';
-  }
-  function cdOverview(c) {
-    var id = state.campaignId, meta = cdData.meta || {};
-    var n = cdData.docs || {}, p = prep();
-    var played = sessions().length;
-    c.innerHTML =
-      '<div class="cd-scroll">' +
-      '<div class="ov-banner cd-ovbanner">' +
-        '<div class="ov-banner-main"><div class="app-kicker">// CAMPAIGN</div><h2 class="ov-title">' + esc(meta.name || id) + '</h2></div>' +
-        '<div class="ov-chips"><span class="ov-chip ov-chip-live"><b>' + played + '</b> session' + (played === 1 ? '' : 's') + ' played</span></div>' +
-      '</div>' +
-      '<div class="cd-ovgrid">' +
-        '<div class="cd-ovmain"><div class="ov-block"><div class="ov-lbl">BRIEFING</div>' +
-          '<textarea class="ov-edit cd-ovdesc" id="cd-desc" placeholder="What is this campaign about? (shown to players in the session Overview)…">' + esc(meta.description || '') + '</textarea></div></div>' +
-        '<div class="cd-ovstats">' +
-          statCard(played, 'sessions played', true) +
-          statCard((n.sheets || []).length, 'sheets') +
-          statCard((n.npcs || []).length, 'NPCs') +
-          statCard((n.orgs || []).length, 'orgs') +
-          statCard(p.locations.length, 'locations') +
-          statCard(p.squads.length, 'squads') +
-          statCard(p.loot.length, 'loot') +
-          statCard(p.events.length, 'events') +
-          statCard(p.clocks.length, 'clocks') +
-        '</div>' +
-      '</div></div>';
-    el('cd-desc').onchange = function () { saveCampaignMeta(id, { description: el('cd-desc').value }); };
-  }
 
   // Players — the campaign's player sheets; click one to edit it full-bleed (the
   // full Character Sheet, in-place).
-  function cdPlayers(c) {
-    var sheets = (cdData.docs && cdData.docs.sheets) || [];
-    var cards = sheets.length ? sheets.map(function (d) {
-      return '<button class="pl-card" data-sheet="' + esc(d.name) + '"><div class="pl-photo">◈</div><div class="pl-name">' + esc(idOf(d.name)) + '</div></button>';
-    }).join('') : '<div class="cd-empty">No player sheets yet. Add one here or in Files.</div>';
-    c.innerHTML = '<div class="cd-topbar"><div class="cd-sectitle">Players</div><span style="flex:1"></span><button class="app-btn app-btn-go" id="cd-newpc">+ Sheet</button></div>' +
-      '<div class="cd-scroll"><div class="pl-grid pl-grid-prep">' + cards + '</div></div>';
-    el('cd-newpc').onclick = function () {
-      prompt1('New character', 'Name', 'name', function (name) {
-        name = (name || '').trim(); if (!name) return; if (!/\.json$/i.test(name)) name += '.json';
-        api('POST', 'campaigns/' + encodeURIComponent(state.campaignId) + '/sheets', { name: name, json: {} }).then(function () { cdOpenDocInline('sheets', name); });
-      });
-    };
-    c.querySelectorAll('[data-sheet]').forEach(function (b) { b.onclick = function () { cdOpenDocInline('sheets', b.getAttribute('data-sheet')); }; });
-  }
   // Files — every campaign file (player sheets, NPCs, orgs, Night City, documents).
   // Editing a doc opens it full-bleed in the section (Character Sheet, etc.).
-  function cdFiles(c) {
-    if (['sheets', 'npcs', 'orgs', 'nightcity', 'documents'].indexOf(state.type) < 0) state.type = 'sheets';
-    var tabs = TYPES.map(function (t) {
-      var n = (cdData.docs && cdData.docs[t.key] ? cdData.docs[t.key].length : 0);
-      return '<div class="cd-tab' + (t.key === state.type ? ' active' : '') + '" data-type="' + t.key + '"><span class="cd-tab-ico">' + t.icon + '</span>' + t.label + ' <span class="cd-count">' + n + '</span></div>';
-    }).join('');
-    c.innerHTML = '<div class="cd-topbar"><div class="cd-sectitle">Files</div></div><div class="cd-scroll"><div class="cd-tabs">' + tabs + '</div><div id="cd-body"></div></div>';
-    c.querySelectorAll('.cd-tab').forEach(function (t) {
-      t.onclick = function () { state.type = t.getAttribute('data-type'); c.querySelectorAll('.cd-tab').forEach(function (x) { x.classList.remove('active'); }); t.classList.add('active'); renderType(cdData); };
-    });
-    renderType(cdData);
-  }
   // Open a campaign doc full-bleed inside the Files section (vs the old overlay).
-  function cdOpenDocInline(type, name) {
-    var id = state.campaignId, c = el('cd-content'); if (!c) return;
-    c.classList.add('cd-bleed');
-    function back() { renderCampaignDetail(); }
-    if (type === 'documents') {
-      var docPath = 'campaigns/' + encodeURIComponent(id) + '/documents/' + encodeURIComponent(name);
-      c.innerHTML = '<div class="cd-embed"><div class="cd-embed-bar"><button class="app-btn" id="cde-back">← Files</button><span class="cd-embed-name">' + esc(name) + '</span></div><textarea class="cd-embed-ta" id="cde-ta"></textarea></div>';
-      fetch('/__api/' + docPath).then(function (r) { return r.text(); }).then(function (txt) { var ta = el('cde-ta'); ta.value = txt; var to; ta.oninput = function () { clearTimeout(to); to = setTimeout(function () { fetch('/__api/' + docPath, { method: 'PUT', body: ta.value }); }, 400); }; });
-      el('cde-back').onclick = function () { var ta = el('cde-ta'); Promise.resolve(ta ? fetch('/__api/' + docPath, { method: 'PUT', body: ta.value }) : null).catch(function () {}).then(back); };
-      return;
-    }
-    var tool = TOOL_FOR[type]; if (!tool) return;
-    var url = tool + '?cdoc=1&cid=' + encodeURIComponent(id) + '&ctype=' + type + '&cname=' + encodeURIComponent(name);
-    c.innerHTML = '<div class="cd-embed"><div class="cd-embed-bar"><button class="app-btn" id="cde-back">← Files</button><span class="cd-embed-name">' + esc(name) + '</span></div><iframe class="cd-embed-frame" id="cde-frame" src="' + esc(url) + '"></iframe></div>';
-    el('cde-back').onclick = function () {
-      var fr = el('cde-frame'), win = fr && fr.contentWindow, ad = win && win.__cdocAdapter, obj;
-      try { obj = ad && ad.serialize(); } catch (e) { obj = null; }
-      if (obj == null) return back();
-      api('PUT', 'campaigns/' + encodeURIComponent(id) + '/' + type + '/' + encodeURIComponent(name), obj).then(back, back);
-    };
-  }
   // Re-render the current section into its current host (PREP container or live panel).
-  function cdRerender() { if (cdHost) cdRenderSection(cdSection, cdHost); else cdGoto(cdSection); }
+  function cdRerender() { if (cdHost) cdRenderSection(cdSection, cdHost); }
 
   /* Sessions — persistent records with a live journal. List → session page. */
-  function cdSessions(c) {
-    if (cdSessionOpen) return cdSessionPage(c, cdSessionOpen);
-    var ss = sessions().slice().reverse();
-    var live = cdData.meta.session || {};
-    var activeId = (live.active && live.activeId) || null;
-    c.innerHTML = '<div class="cd-topbar"><div class="cd-sectitle">Sessions</div><span style="flex:1"></span><button class="app-btn app-btn-go" id="cd-add">+ Session</button></div>' +
-      '<div class="cd-scroll"><div class="prep-list">' + (ss.length ? ss.map(function (s) {
-        var isLive = activeId === s.id;
-        return '<div class="prep-card sess-rec' + (isLive ? ' live' : '') + '" data-open="' + s.id + '">' +
-          '<div class="prep-row"><span class="prep-tag">' + (isLive ? '●' : '◷') + '</span>' +
-          '<span class="prep-name">' + esc(s.name || 'Session') + '</span>' +
-          (s.date ? '<span class="prep-sub">' + esc(s.date) + '</span>' : '') +
-          (isLive ? '<span class="sess-rec-live">LIVE</span>' : '') +
-          '<span style="flex:1"></span><span class="prep-sub">' + (s.log || []).length + ' log · ' + (s.attendance || []).length + ' present</span>' +
-          '<button class="prep-mini prep-del" data-del="' + s.id + '">✕</button></div>' +
-          (s.recap ? '<div class="sess-rec-recap">' + esc(s.recap) + '</div>' : '') + '</div>';
-      }).join('') : '<div class="cd-empty">No sessions yet. Each GO LIVE lets you resume one or start a new one — recaps, attendance and a live journal live here.</div>') + '</div></div>';
-    el('cd-add').onclick = function () { var s = newSession(); sessions().push(s); saveSessions(function () { cdSessionOpen = s.id; cdRerender(); }); };
-    c.querySelectorAll('[data-open]').forEach(function (card) { card.onclick = function (e) { if (e.target.hasAttribute('data-del')) return; cdSessionOpen = card.getAttribute('data-open'); cdRerender(); }; });
-    c.querySelectorAll('[data-del]').forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); var did = b.getAttribute('data-del'); confirm1('Delete this session record (notes, recap, journal)?', function () { cdData.meta.sessions = sessions().filter(function (x) { return x.id !== did; }); saveSessions(cdRerender); }); }; });
-  }
-  function attendHtml(s) {
-    var sheets = ((cdData.docs && cdData.docs.sheets) || []).map(function (d) { return idOf(d.name); });
-    if (!sheets.length) return '<span class="cd-empty">No sheets in this campaign.</span>';
-    var att = s.attendance || [];
-    return sheets.map(function (sid) { return '<label class="ses-att"><input type="checkbox" data-att="' + esc(sid) + '"' + (att.indexOf(sid) >= 0 ? ' checked' : '') + '> ' + esc(sid) + '</label>'; }).join('');
-  }
   // A session page mirrors the Overview structure (banner + recap/notes + journal).
-  function cdSessionPage(c, sid) {
-    var s = item(sessions(), sid);
-    if (!s.id) { cdSessionOpen = null; return cdSessions(c); }
-    var log = s.log || [];
-    c.innerHTML =
-      '<div class="cd-topbar"><button class="app-btn cd-back" id="ses-back">← Sessions</button><div class="cd-sectitle">Session</div><span style="flex:1"></span></div>' +
-      '<div class="cd-scroll">' +
-      '<div class="ov-banner cd-ovbanner"><div class="ov-banner-main">' +
-        '<input class="ses-name" id="ses-name" value="' + esc(s.name || '') + '" placeholder="Session name">' +
-        '<input class="ses-date" id="ses-date" type="date" value="' + esc(s.date || '') + '"></div>' +
-        '<div class="ov-chips"><span class="ov-chip"><b>' + log.length + '</b> log</span><span class="ov-chip"><b>' + (s.attendance || []).length + '</b> present</span></div></div>' +
-      '<div class="cd-ovgrid"><div class="cd-ovmain">' +
-        '<div class="ov-block"><div class="ov-lbl">RECAP</div><textarea class="ov-edit ov-edit-sm" id="ses-recap" placeholder="One-paragraph recap (what happened last time)…">' + esc(s.recap || '') + '</textarea></div>' +
-        '<div class="ov-block"><div class="ov-lbl">PREP NOTES</div><textarea class="ov-edit" id="ses-notes" placeholder="Your private notes for this session…">' + esc(s.notes || '') + '</textarea></div>' +
-      '</div><div class="cd-ovside">' +
-        '<div class="ov-block"><div class="ov-lbl">ATTENDANCE</div><div class="ses-attend">' + attendHtml(s) + '</div></div>' +
-        '<div class="ov-block"><div class="ov-lbl">JOURNAL — LIVE LOG</div><div class="ses-log">' + (log.length ? log.slice().reverse().map(function (e) {
-          return '<div class="ses-logrow"><span class="ses-logt">' + esc(fmtTime(e.ts)) + '</span> ' + esc(e.msg) + '</div>';
-        }).join('') : '<span class="cd-empty">No entries yet. Going live records reveals, loot and combat here.</span>') + '</div></div>' +
-      '</div></div></div>';
-    el('ses-back').onclick = function () { cdSessionOpen = null; cdRerender(); };
-    el('ses-name').onchange = function () { s.name = el('ses-name').value; saveSessions(); };
-    el('ses-date').onchange = function () { s.date = el('ses-date').value; saveSessions(); };
-    el('ses-recap').onchange = function () { s.recap = el('ses-recap').value; saveSessions(); };
-    el('ses-notes').onchange = function () { s.notes = el('ses-notes').value; saveSessions(); };
-    c.querySelectorAll('[data-att]').forEach(function (cb) {
-      cb.onchange = function () {
-        var asid = cb.getAttribute('data-att'), att = s.attendance || (s.attendance = []);
-        if (cb.checked) { if (att.indexOf(asid) < 0) att.push(asid); }
-        else s.attendance = att.filter(function (x) { return x !== asid; });
-        saveSessions();
-      };
-    });
-  }
   // GO LIVE — resume an existing session or start a new one, then pick sheets to host.
-  function goLive(id) {
-    var sheetDocs = (cdData.docs && cdData.docs.sheets) || [];
-    if (!sheetDocs.length) { alert('Add at least one sheet to the campaign first.'); return; }
-    var ssRev = sessions().slice().reverse();
-    modalClose();
-    var rows = ssRev.map(function (s, i) {
-      return '<label class="cbs-row"><input type="radio" name="golive-ses" value="' + esc(s.id) + '"' + (i === 0 ? ' checked' : '') + '> ' +
-        esc(s.name || 'Session') + (s.date ? ' · ' + esc(s.date) : '') + ' <span class="cbs-tag">' + (s.log || []).length + ' log</span></label>';
-    }).join('');
-    var ov = document.createElement('div'); ov.id = 'app-modal-ov'; ov.className = 'app-modal-ov';
-    ov.innerHTML = '<div class="app-modal"><div class="app-modal-head">▶ Go live — attach a session</div>' +
-      '<div class="app-modal-body">' +
-        (rows ? '<div class="app-kicker">// RESUME</div>' + rows : '') +
-        '<label class="cbs-row" style="margin-top:8px"><input type="radio" name="golive-ses" value="__new__"' + (ssRev.length ? '' : ' checked') + '> Start a new session</label>' +
-        '<input id="golive-newname" class="pc-in" value="Session ' + (sessions().length + 1) + '">' +
-      '</div>' +
-      '<div class="app-modal-actions"><button class="app-btn" data-x>Cancel</button><button class="app-btn app-modal-ok" data-ok>Continue ▸</button></div></div>';
-    ov.onclick = function (e) { if (e.target === ov) modalClose(); };
-    document.body.appendChild(ov);
-    ov.querySelector('[data-x]').onclick = modalClose;
-    ov.querySelector('[data-ok]').onclick = function () {
-      var pick = (ov.querySelector('input[name="golive-ses"]:checked') || {}).value;
-      var chosen;
-      if (pick === '__new__' || !pick) {
-        chosen = newSession(); var nm = (el('golive-newname').value || '').trim(); if (nm) chosen.name = nm;
-        sessions().push(chosen);
-      } else { chosen = item(sessions(), pick); }
-      saveSessions(function () {
-        modalClose();
-        startSessionPicker(id, sheetDocs, (cdData.meta.session && cdData.meta.session.order) || [], chosen.id);
-      });
-    };
-  }
 
   function item(arr, id) { return arr.filter(function (x) { return x.id === id; })[0] || {}; }
   function move(arr, id, d) { var i = arr.findIndex(function (x) { return x.id === id; }); var j = i + d; if (i < 0 || j < 0 || j >= arr.length) return; var t = arr[i]; arr[i] = arr[j]; arr[j] = t; }
@@ -499,39 +329,30 @@
   }
   function readImage(file, cb) { var r = new FileReader(); r.onload = function () { cb(r.result); }; r.readAsDataURL(file); }
   function cdEvents(c) {
-    var evs = prep().events, cls = prep().clocks;
-    if (cdEventSel && !item(evs, cdEventSel).id && !item(cls, cdEventSel).id) cdEventSel = null;
-    if (!cdEventSel) cdEventSel = (evs[0] && evs[0].id) || (cls[0] && cls[0].id) || null;
+    var evs = prep().events;
+    if (cdEventSel && !item(evs, cdEventSel).id) cdEventSel = null;
+    if (!cdEventSel) cdEventSel = (evs[0] && evs[0].id) || null;
     var evItems = evs.map(function (e) {
       return '<div class="ev-li' + (e.id === cdEventSel ? ' active' : '') + '" data-sel="' + e.id + '"><span class="ev-li-ico">▸</span>' +
-        '<span class="ev-li-name">' + esc(e.title || '(untitled event)') + '</span>' +
+        '<span class="ev-li-name">' + esc(e.title || '(untitled reveal)') + '</span>' +
         '<span class="ev-li-preset">' + esc(e.preset || 'imagetext') + (e.trigger && e.trigger.clockId ? ' · ⏱' : '') + '</span>' +
+        '<button class="prep-mini" data-rev="' + e.id + '" title="Cast to players">⇄</button>' +
         '<button class="prep-mini prep-del" data-del="' + e.id + '">✕</button></div>';
     }).join('');
-    var clkItems = cls.map(function (k) {
-      return '<div class="ev-li ev-li-clk' + (k.id === cdEventSel ? ' active' : '') + '" data-sel="' + k.id + '"><span class="ev-li-ico">⏱</span>' +
-        '<span class="ev-li-name">' + esc(k.label || '(clock)') + '</span>' +
-        '<span class="ev-li-preset">' + (k.value || 0) + '/' + (k.max || 6) + '</span>' +
-        '<button class="prep-mini prep-del" data-del="' + k.id + '">✕</button></div>';
-    }).join('');
-    var listItems = (evs.length || cls.length)
-      ? (evItems + (cls.length ? '<div class="ev-li-div">CLOCKS</div>' + clkItems : ''))
-      : '<div class="cd-empty">No events or clocks yet.</div>';
-    c.innerHTML = '<div class="cd-topbar"><div class="cd-sectitle">Events</div><span style="flex:1"></span>' +
-      '<button class="app-btn" id="cd-addclk">+ Clock</button><button class="app-btn app-btn-go" id="cd-add">+ Event</button></div>' +
-      '<div class="cd-board"><div class="ev-list"><div class="cd-side-head">Timeline</div>' + listItems + '</div><div class="cd-boardmain"><div class="ev-canvas" id="ev-canvas"></div></div></div>';
+    var listItems = evs.length ? evItems : '<div class="cd-empty">No reveals yet.</div>';
+    c.innerHTML = '<div class="cd-topbar"><div class="cd-sectitle">cast</div><span style="flex:1"></span>' +
+      '<button class="app-btn app-btn-go" id="cd-add">+ Reveal</button></div>' +
+      '<div class="cd-board"><div class="ev-list"><div class="cd-side-head">Reveals</div>' + listItems + '</div><div class="cd-boardmain"><div class="ev-canvas" id="ev-canvas"></div></div></div>';
     el('cd-add').onclick = function () { var e = { id: uid('ev'), title: '', preset: 'imagetext', image: '', text: '', portrait: '', npcRef: '', trigger: null }; evs.push(e); cdEventSel = e.id; savePrep(cdRerender); };
-    el('cd-addclk').onclick = function () { var k = { id: uid('clk'), label: '', max: 6, value: 0, color: CLOCK_COLORS[cls.length % 4] }; cls.push(k); cdEventSel = k.id; savePrep(cdRerender); };
-    c.querySelectorAll('[data-sel]').forEach(function (b) { b.onclick = function (e) { if (e.target.hasAttribute('data-del')) return; cdEventSel = b.getAttribute('data-sel'); cdRerender(); }; });
-    c.querySelectorAll('[data-del]').forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); var did = b.getAttribute('data-del'); cdData.meta.prep.events = evs.filter(function (x) { return x.id !== did; }); cdData.meta.prep.clocks = cls.filter(function (x) { return x.id !== did; }); if (cdEventSel === did) cdEventSel = null; savePrep(cdRerender); }; });
+    c.querySelectorAll('[data-sel]').forEach(function (b) { b.onclick = function (e) { if (e.target.hasAttribute('data-del') || e.target.hasAttribute('data-rev')) return; cdEventSel = b.getAttribute('data-sel'); cdRerender(); }; });
+    c.querySelectorAll('[data-rev]').forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); var ev = item(evs, b.getAttribute('data-rev')); if (ev.id && castReveal(eventReveal(ev))) { b.textContent = '✓'; setTimeout(function () { b.textContent = '⇄'; }, 900); } }; });
+    c.querySelectorAll('[data-del]').forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); var did = b.getAttribute('data-del'); cdData.meta.prep.events = evs.filter(function (x) { return x.id !== did; }); if (cdEventSel === did) cdEventSel = null; savePrep(cdRerender); }; });
     renderEventCanvas();
   }
   function renderEventCanvas() {
     var box = el('ev-canvas'); if (!box) return;
-    var clk = item(prep().clocks, cdEventSel);
-    if (clk.id) return renderClockCanvas(box, clk);
     var ev = item(prep().events, cdEventSel);
-    if (!ev.id) { box.innerHTML = '<div class="cd-empty">Select or add an event or clock.</div>'; return; }
+    if (!ev.id) { box.innerHTML = '<div class="cd-empty">Select or add a reveal.</div>'; return; }
     var npcDocs = (cdData.docs && cdData.docs.npcs) || [];
     var clocks = prep().clocks;
     var blocks = evBlocks(ev);
@@ -593,97 +414,15 @@
     if (window.FilmWindow && window.FilmWindow.preview) window.FilmWindow.preview(el('ev-preview'), eventReveal(ev));
   }
   function eventReveal(ev) { return { kind: 'event', title: ev.title || '', tabs: ev.tabs || null, blocks: evBlocks(ev), ts: Date.now() }; }
-  function linkedEventsHtml(k) {
-    var linked = (prep().events || []).filter(function (e) { return e.trigger && e.trigger.clockId === k.id; });
-    return linked.length
-      ? '<div class="ev-linked">' + linked.map(function (e) { return '<span class="ev-linkchip">▸ ' + esc(e.title || 'event') + ' · below ' + e.trigger.below + '</span>'; }).join('') + '</div>'
-      : '<span class="cd-empty">No events trigger from this clock yet. Set a clock trigger on an event.</span>';
-  }
   // Clock editor in the Events canvas (clocks live alongside events — they link).
-  function renderClockCanvas(box, k) {
-    var pct = Math.round(((k.value || 0) / (k.max || 1)) * 100);
-    box.innerHTML =
-      '<input class="ses-name ev-title" id="clk-label" value="' + esc(k.label || '') + '" placeholder="Clock name (Alarm / Heat / Countdown…)">' +
-      '<div class="ev-row"><div class="ov-lbl">SEGMENTS (MAX)</div><div class="ev-trig"><button class="prep-mini" id="clk-maxm">−</button><span class="clock-val" id="clk-maxv">' + (k.max || 6) + '</span><button class="prep-mini" id="clk-maxp">+</button> &nbsp;segments</div></div>' +
-      '<div class="ev-row"><div class="ov-lbl">FILLED</div><div class="ev-trig"><button class="prep-mini" id="clk-valm">−</button><span class="clock-val">' + (k.value || 0) + ' / ' + (k.max || 6) + '</span><button class="prep-mini" id="clk-valp">+</button></div>' +
-        '<div class="clock-bar" style="margin-top:8px"><span style="width:' + pct + '%;background:' + (k.color || '#b8860b') + '"></span></div></div>' +
-      '<div class="ev-row"><div class="ov-lbl">COLOR</div><div class="ev-colors">' + CLOCK_COLORS.map(function (col) { return '<button class="ev-color' + (k.color === col ? ' active' : '') + '" data-col="' + col + '" style="background:' + col + '"></button>'; }).join('') + '</div></div>' +
-      '<div class="ev-row"><div class="ov-lbl">LINKED EVENTS</div>' + linkedEventsHtml(k) + '</div>';
-    el('clk-label').onchange = function () { k.label = el('clk-label').value; savePrep(cdRerender); };
-    el('clk-maxp').onclick = function () { k.max = (k.max || 6) + 1; savePrep(cdRerender); };
-    el('clk-maxm').onclick = function () { k.max = Math.max(1, (k.max || 6) - 1); if (k.value > k.max) k.value = k.max; savePrep(cdRerender); };
-    el('clk-valp').onclick = function () { k.value = Math.min(k.max || 6, (k.value || 0) + 1); savePrep(cdRerender); };
-    el('clk-valm').onclick = function () { k.value = Math.max(0, (k.value || 0) - 1); savePrep(cdRerender); };
-    box.querySelectorAll('[data-col]').forEach(function (b) { b.onclick = function () { k.color = b.getAttribute('data-col'); savePrep(cdRerender); }; });
-  }
 
-  function memberLabel(m) {
-    if (m.kind === 'pc-all') return 'All player characters';
-    if (m.kind === 'npcfile') return idOf(m.name);
-    if (m.kind === 'archetype') return (window.NPCGen && ((m.params.tier || '') + ' ' + m.params.archetype)) || 'archetype';
-    if (m.kind === 'mook') return (m.sheet && m.sheet.role) || 'mook';
-    return '?';
-  }
   /* Reusable drag-drop helpers (palette → bins/containers). Shared by Squads + Loot. */
-  function makeDraggable(node, payload) {
-    node.setAttribute('draggable', 'true');
-    node.addEventListener('dragstart', function (e) { e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('text/plain', JSON.stringify(payload)); e.stopPropagation(); });
-  }
-  function makeDropZone(node, onDrop) {
-    node.addEventListener('dragover', function (e) { e.preventDefault(); e.stopPropagation(); node.classList.add('dnd-over'); });
-    node.addEventListener('dragleave', function () { node.classList.remove('dnd-over'); });
-    node.addEventListener('drop', function (e) {
-      e.preventDefault(); e.stopPropagation(); node.classList.remove('dnd-over');
-      var raw = e.dataTransfer.getData('text/plain'); if (!raw) return;
-      var obj; try { obj = JSON.parse(raw); } catch (x) { return; }
-      onDrop(obj);
-    });
-  }
 
   /* Squads — palette (NPC files + archetypes + PCs) drag-dropped into squad bins.
      Refs are resolved to combatants at combat launch. A squad can link a loot box. */
-  function cdSquads(c) {
-    var sq = prep().squads, npcDocs = (cdData.docs && cdData.docs.npcs) || [], loots = prep().loot;
-    var palItems = [{ cls: 'sq-pc', label: '◈ All PCs', payload: { kind: 'pc-all' } }]
-      .concat(npcDocs.map(function (d) { return { cls: '', label: '☗ ' + idOf(d.name), payload: { kind: 'npcfile', name: d.name, count: 1 } }; }))
-      .concat(window.NPCGen ? window.NPCGen.list().map(function (a) { return { cls: 'sq-arch', label: '◆ ' + a.label, payload: { kind: 'archetype', params: { archetype: a.id, tier: 'average' }, count: 1 } }; }) : []);
-    var palette = '<div class="cd-side-head">Palette</div><div class="cd-side-sub">Drag into a squad →</div><div class="sq-palette">' +
-      palItems.map(function (p, i) { return '<div class="sq-pchip ' + p.cls + '" data-pi="' + i + '">' + esc(p.label) + '</div>'; }).join('') + '</div>';
-    var bins = sq.length ? sq.map(function (s) {
-      var lootOpts = '<option value="">— link loot —</option>' + loots.map(function (g) { return '<option value="' + g.id + '"' + (s.lootId === g.id ? ' selected' : '') + '>' + esc(g.name || 'Loot') + '</option>'; }).join('');
-      return '<div class="sq-bin" data-bin="' + s.id + '">' +
-        '<div class="sq-bin-head"><input class="prep-title sq-name" data-sqn="' + s.id + '" value="' + esc(s.name || '') + '" placeholder="Squad name">' +
-          '<select class="run-sel" data-sqloot="' + s.id + '">' + lootOpts + '</select>' +
-          (window.NPCGen ? '<button class="prep-mini" data-sqarch="' + s.id + '">◆ tune</button>' : '') +
-          '<button class="prep-mini prep-del" data-sqdel="' + s.id + '">✕</button></div>' +
-        '<div class="sq-members">' + ((s.members || []).length ? s.members.map(function (m, i) {
-          return '<div class="sq-m"><span>' + esc(memberLabel(m)) + '</span>' + (m.kind !== 'pc-all' ? '<span class="sq-mc">×' + (m.count || 1) + '</span><button class="prep-mini" data-sqdec="' + s.id + ':' + i + '">−</button><button class="prep-mini" data-sqinc="' + s.id + ':' + i + '">+</button>' : '') +
-            '<button class="prep-mini prep-del" data-sqrm="' + s.id + ':' + i + '">✕</button></div>';
-        }).join('') : '<div class="cd-empty sq-drop-hint">Drop combatants here.</div>') + '</div></div>';
-    }).join('') : '<div class="cd-empty">No squads. Add one, then drag combatants in.</div>';
-    c.innerHTML = '<div class="cd-topbar"><div class="cd-sectitle">Squads</div><span style="flex:1"></span><button class="app-btn app-btn-go" id="cd-add">+ Squad</button></div>' +
-      '<div class="cd-board"><div class="sq-side">' + palette + '</div><div class="cd-boardmain"><div class="sq-bins" id="sq-bins">' + bins + '</div></div></div>';
-    el('cd-add').onclick = function () { sq.push({ id: uid('sq'), name: 'Squad ' + (sq.length + 1), members: [], lootId: null }); savePrep(cdRerender); };
-    c.querySelectorAll('[data-pi]').forEach(function (n) { makeDraggable(n, palItems[+n.getAttribute('data-pi')].payload); });
-    c.querySelectorAll('[data-bin]').forEach(function (bin) {
-      var s = item(sq, bin.getAttribute('data-bin'));
-      makeDropZone(bin, function (m) { if (m.kind === 'pc-all' && (s.members || []).some(function (x) { return x.kind === 'pc-all'; })) return; (s.members || (s.members = [])).push(m); savePrep(cdRerender); });
-    });
-    c.querySelectorAll('[data-sqn]').forEach(function (inp) { inp.onchange = function () { item(sq, inp.getAttribute('data-sqn')).name = inp.value; savePrep(); }; });
-    c.querySelectorAll('[data-sqloot]').forEach(function (sel) { sel.onchange = function () { item(sq, sel.getAttribute('data-sqloot')).lootId = sel.value || null; savePrep(); }; });
-    c.querySelectorAll('[data-sqdel]').forEach(function (b) { b.onclick = function () { cdData.meta.prep.squads = sq.filter(function (x) { return x.id !== b.getAttribute('data-sqdel'); }); savePrep(cdRerender); }; });
-    function memberAt(spec) { var p = spec.split(':'); return { s: item(sq, p[0]), i: +p[1] }; }
-    c.querySelectorAll('[data-sqrm]').forEach(function (b) { b.onclick = function () { var r = memberAt(b.getAttribute('data-sqrm')); r.s.members.splice(r.i, 1); savePrep(cdRerender); }; });
-    c.querySelectorAll('[data-sqinc]').forEach(function (b) { b.onclick = function () { var r = memberAt(b.getAttribute('data-sqinc')); var m = r.s.members[r.i]; m.count = Math.min(20, (m.count || 1) + 1); savePrep(cdRerender); }; });
-    c.querySelectorAll('[data-sqdec]').forEach(function (b) { b.onclick = function () { var r = memberAt(b.getAttribute('data-sqdec')); var m = r.s.members[r.i]; m.count = Math.max(1, (m.count || 1) - 1); savePrep(cdRerender); }; });
-    c.querySelectorAll('[data-sqarch]').forEach(function (b) { b.onclick = function () { var s = item(sq, b.getAttribute('data-sqarch')); archetypeGenModal({ onParams: function (p, count) { (s.members || (s.members = [])).push({ kind: 'archetype', params: p, count: count || 1 }); savePrep(cdRerender); } }); }; });
-  }
 
   /* Locations — the Night City GM planner, campaign-scoped. Locations marked
      "public" (in the planner's place editor) push live to players in session. */
-  function cdLocations(c) {
-    c.innerHTML = '<iframe class="cd-ncframe-full" src="nightcity.html?campaign=' + encodeURIComponent(state.campaignId) + '&ncrole=gm"></iframe>';
-  }
   // Pull the campaign's public NC places and push them to players via the overview.
   function pushCampaignLocations(id) {
     fetch('/__api/campaigns/' + encodeURIComponent(id) + '/nightcity/_campaign.json').then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }).then(function (d) {
@@ -697,239 +436,23 @@
       if (sess.camp && sess.camp.setOverview) sess.camp.setOverview({ locations: places, locMaps: maps, locOrder: locOrder });
     });
   }
-  function openToolOverlay(url, title) {
-    var ov = document.createElement('div'); ov.className = 'cdoc-overlay'; ov.id = 'tool-overlay';
-    ov.innerHTML = '<div class="cdoc-bar"><span class="cdoc-title">' + esc(title) + '</span><button class="app-btn" id="tool-ov-close" style="margin-left:auto">Close</button></div><div style="flex:1;min-height:0"><iframe src="' + esc(url) + '" style="width:100%;height:100%;border:none"></iframe></div>';
-    document.body.appendChild(ov);
-    el('tool-ov-close').onclick = function () { ov.parentNode.removeChild(ov); };
-  }
 
-  /* Clocks live inside Events now (see renderClockCanvas). */
   var CLOCK_COLORS = ['#c0392b', '#b8860b', '#1a7a2e', '#7a5ab8'];
 
   /* Loot — palette (money / IP / objects from DBs / container) drag-dropped into
      nested container boxes. Level-0 nodes (and money, not IP) are unique or shared. */
   var LOOT_DBS = null;
-  function loadLootDBs() {
-    if (LOOT_DBS) return Promise.resolve(LOOT_DBS);
-    var files = [['data/cp2020weapons.json', 'weapon'], ['data/cyberware.json', 'cyberware'], ['data/cp2020gear.json', 'gear'], ['data/cp2020-vehicles.json', 'vehicle'], ['data/cp2020decks.json', 'deck'], ['data/cp2020programs.json', 'program']];
-    return Promise.all(files.map(function (f) { return fetch(f[0]).then(function (r) { return r.json(); }).catch(function () { return []; }); })).then(function (res) {
-      var out = [];
-      res.forEach(function (rows, i) { var cat = files[i][1]; (Array.isArray(rows) ? rows : (rows && rows.items) || []).forEach(function (row) { var nm = row.name || row.model || row.title; if (!nm) return; var c2 = (cat === 'gear' && row.category === 'ARMOR/CLOTHING') ? 'armor' : cat; out.push({ cat: c2, name: nm, data: Object.assign({ name: nm }, row) }); }); });
-      LOOT_DBS = out; return out;
-    });
-  }
   function lootNodeLabel(n) {
     if (n.type === 'money') return '€$' + (n.amount || 0) + (n.form && n.form !== 'eddies' ? ' ' + n.form : '');
     if (n.type === 'ip') return (n.amount || 0) + ' IP';
     if (n.type === 'container') return (n.name || 'Container') + ' (' + (n.children || []).length + ')';
     return n.name || 'Item';
   }
-  function findLootNode(arr, nid) { for (var i = 0; i < arr.length; i++) { if (arr[i].id === nid) return { arr: arr, i: i, node: arr[i] }; if (arr[i].children) { var r = findLootNode(arr[i].children, nid); if (r) return r; } } return null; }
-  function paletteToNode(pal, isTop) {
-    var n = { id: uid('ln') };
-    if (pal.kind === 'lootmoney') { n.type = 'money'; n.amount = 0; n.form = 'eddies'; }
-    else if (pal.kind === 'lootip') { n.type = 'ip'; n.amount = 0; return n; }
-    else if (pal.kind === 'lootcontainer') { n.type = 'container'; n.name = 'Container'; n.children = []; }
-    else if (pal.kind === 'lootcustom') { n.type = 'item'; n.cat = 'custom'; n.name = 'Item'; }
-    else { n.type = 'item'; n.cat = pal.cat; n.name = pal.name; n.data = pal.data; }
-    if (isTop) n.share = 'shared';
-    return n;
-  }
-  function lootNodeHtml(n, depth, boxId) {
-    var top = depth === 0, uniq = n.share === 'unique';
-    var shareBtn = (top && n.type !== 'ip') ? '<button class="prep-mini loot-share' + (uniq ? ' on' : '') + '" data-nshare="' + n.id + '" title="unique = one player; shared = everyone">' + (uniq ? 'UNIQUE' : 'shared') + '</button>' : '';
-    var del = '<button class="prep-mini prep-del" data-nrm="' + n.id + '">✕</button>';
-    if (n.type === 'money') return '<div class="loot-node"><span class="loot-ico">€$</span><input class="loot-amt" type="number" data-amt="' + n.id + '" value="' + (n.amount || 0) + '"><input class="loot-form" data-form="' + n.id + '" value="' + esc(n.form || 'eddies') + '" placeholder="form">' + shareBtn + del + '</div>';
-    if (n.type === 'ip') return '<div class="loot-node"><span class="loot-ico">IP</span><input class="loot-amt" type="number" data-amt="' + n.id + '" value="' + (n.amount || 0) + '">' + del + '</div>';
-    if (n.type === 'container') return '<div class="loot-node loot-cont"><span class="loot-ico">▣</span><input class="loot-cname" data-nname="' + n.id + '" value="' + esc(n.name || '') + '" placeholder="Container">' + shareBtn + del +
-      '<div class="loot-tree loot-sub" data-drop="node:' + n.id + '">' + ((n.children || []).map(function (ch) { return lootNodeHtml(ch, depth + 1, boxId); }).join('') || '<span class="loot-hint">drop items here</span>') + '</div></div>';
-    return '<div class="loot-node"><span class="loot-cat">' + esc(n.cat || 'item') + '</span><input class="loot-iname" data-nname="' + n.id + '" value="' + esc(n.name || '') + '">' + shareBtn + del + '</div>';
-  }
-  function cdLoot(c) {
-    var lt = prep().loot, events = prep().events, squads = prep().squads;
-    var boxes = lt.length ? lt.map(function (g) {
-      var evOpts = '<option value="">— event —</option>' + events.map(function (e) { return '<option value="' + e.id + '"' + (g.linkedEventId === e.id ? ' selected' : '') + '>' + esc(e.title || 'event') + '</option>'; }).join('');
-      var sqOpts = '<option value="">— squad —</option>' + squads.map(function (s) { return '<option value="' + s.id + '"' + (g.linkedSquadId === s.id ? ' selected' : '') + '>' + esc(s.name || 'squad') + '</option>'; }).join('');
-      return '<div class="sq-bin loot-box" data-box="' + g.id + '">' +
-        '<div class="sq-bin-head"><input class="prep-title" data-boxn="' + g.id + '" value="' + esc(g.name || '') + '" placeholder="Loot box name">' +
-          '<select class="run-sel" data-boxev="' + g.id + '">' + evOpts + '</select><select class="run-sel" data-boxsq="' + g.id + '">' + sqOpts + '</select>' +
-          '<button class="prep-mini prep-del" data-boxdel="' + g.id + '">✕</button></div>' +
-        '<div class="loot-tree" data-drop="box:' + g.id + '">' + ((g.nodes || []).map(function (n) { return lootNodeHtml(n, 0, g.id); }).join('') || '<span class="loot-hint">Drag money, IP, objects or a container here.</span>') + '</div></div>';
-    }).join('') : '<div class="cd-empty">No loot boxes. Add one, then drag rewards in.</div>';
-    c.innerHTML = '<div class="cd-topbar"><div class="cd-sectitle">Loot</div><span style="flex:1"></span><button class="app-btn app-btn-go" id="cd-add">+ Loot box</button></div>' +
-      '<div class="cd-board"><div class="sq-side" id="loot-pal">' +
-        '<div class="cd-side-head">Palette</div><div class="cd-side-sub">Drag into a box →</div><div class="sq-palette loot-palfix">' +
-          '<div class="sq-pchip" data-pal=\'{"kind":"lootmoney"}\'>€$ Money</div>' +
-          '<div class="sq-pchip" data-pal=\'{"kind":"lootip"}\'>IP</div>' +
-          '<div class="sq-pchip" data-pal=\'{"kind":"lootcontainer"}\'>▣ Container</div>' +
-          '<div class="sq-pchip" data-pal=\'{"kind":"lootcustom"}\'>＋ Custom item</div>' +
-        '</div><input class="pc-in loot-search" id="loot-search" placeholder="Search weapons, gear, cyber…"><div class="loot-results" id="loot-results"></div>' +
-      '</div><div class="cd-boardmain"><div class="sq-bins" id="loot-bins">' + boxes + '</div></div></div>';
-    el('cd-add').onclick = function () { lt.push({ id: uid('loot'), name: 'Loot ' + (lt.length + 1), linkedEventId: null, linkedSquadId: null, nodes: [] }); savePrep(cdRerender); };
-    c.querySelectorAll('#loot-pal [data-pal]').forEach(function (n) { makeDraggable(n, JSON.parse(n.getAttribute('data-pal'))); });
-    // Wire each box: header, drop zones (root + containers), node edits.
-    c.querySelectorAll('[data-box]').forEach(function (binEl) {
-      var g = item(lt, binEl.getAttribute('data-box'));
-      binEl.querySelectorAll('[data-drop]').forEach(function (zone) {
-        var spec = zone.getAttribute('data-drop'), isTop = spec.indexOf('box:') === 0;
-        makeDropZone(zone, function (pal) {
-          var target = isTop ? (g.nodes || (g.nodes = [])) : (findLootNode(g.nodes, spec.slice(5)).node.children);
-          target.push(paletteToNode(pal, isTop)); savePrep(cdRerender);
-        });
-      });
-    });
-    c.querySelectorAll('[data-boxn]').forEach(function (i) { i.onchange = function () { item(lt, i.getAttribute('data-boxn')).name = i.value; savePrep(); }; });
-    c.querySelectorAll('[data-boxev]').forEach(function (s) { s.onchange = function () { item(lt, s.getAttribute('data-boxev')).linkedEventId = s.value || null; savePrep(); }; });
-    c.querySelectorAll('[data-boxsq]').forEach(function (s) { s.onchange = function () { item(lt, s.getAttribute('data-boxsq')).linkedSquadId = s.value || null; savePrep(); }; });
-    c.querySelectorAll('[data-boxdel]').forEach(function (b) { b.onclick = function () { cdData.meta.prep.loot = lt.filter(function (x) { return x.id !== b.getAttribute('data-boxdel'); }); savePrep(cdRerender); }; });
-    function boxOf(binEl) { return item(lt, binEl.closest('[data-box]').getAttribute('data-box')); }
-    c.querySelectorAll('[data-nrm]').forEach(function (b) { b.onclick = function () { var g = boxOf(b), r = findLootNode(g.nodes, b.getAttribute('data-nrm')); if (r) r.arr.splice(r.i, 1); savePrep(cdRerender); }; });
-    c.querySelectorAll('[data-nshare]').forEach(function (b) { b.onclick = function () { var g = boxOf(b), r = findLootNode(g.nodes, b.getAttribute('data-nshare')); if (r) r.node.share = r.node.share === 'unique' ? 'shared' : 'unique'; savePrep(cdRerender); }; });
-    c.querySelectorAll('[data-amt]').forEach(function (i) { i.onchange = function () { var g = boxOf(i), r = findLootNode(g.nodes, i.getAttribute('data-amt')); if (r) r.node.amount = parseInt(i.value, 10) || 0; savePrep(); }; });
-    c.querySelectorAll('[data-form]').forEach(function (i) { i.onchange = function () { var g = boxOf(i), r = findLootNode(g.nodes, i.getAttribute('data-form')); if (r) r.node.form = i.value; savePrep(); }; });
-    c.querySelectorAll('[data-nname]').forEach(function (i) { i.onchange = function () { var g = boxOf(i), r = findLootNode(g.nodes, i.getAttribute('data-nname')); if (r) r.node.name = i.value; savePrep(); }; });
-    // Searchable DB palette.
-    var search = el('loot-search'), results = el('loot-results');
-    function renderResults(q) {
-      q = (q || '').toLowerCase().trim();
-      if (!q || !LOOT_DBS) { results.innerHTML = q ? '<span class="loot-hint">…</span>' : ''; return; }
-      var hits = LOOT_DBS.filter(function (e) { return e.name.toLowerCase().indexOf(q) >= 0; }).slice(0, 24);
-      // Index-based payloads: item names may contain quotes/apostrophes that would
-      // break a JSON-in-attribute and abort the drag wiring for items below.
-      results.innerHTML = hits.length ? hits.map(function (e, i) { return '<div class="sq-pchip loot-res" data-ri="' + i + '"><span class="loot-cat">' + esc(e.cat) + '</span>' + esc(e.name) + '</div>'; }).join('') : '<span class="loot-hint">no match</span>';
-      results.querySelectorAll('[data-ri]').forEach(function (n) { var e = hits[+n.getAttribute('data-ri')]; makeDraggable(n, { kind: 'lootitem', cat: e.cat, name: e.name, data: e.data }); });
-    }
-    loadLootDBs().then(function () { if (search && search.value) renderResults(search.value); });
-    if (search) search.oninput = function () { renderResults(search.value); };
-  }
 
-  function renderType(detail) {
-    var id = state.campaignId, type = state.type;
-    var items = ((detail.docs && detail.docs[type]) || []).filter(function (it) { return !/^_/.test(it.name); });
-    var hasFolder = !!(window.bartmoss && window.bartmoss.pickFolderFiles);
-    var editable = TOOL_FOR[type] || type === 'documents';
-    var ico = typeIcon(type);
-    var list = items.length
-      ? items.map(function (it) {
-          return '<div class="cd-item"><span class="cd-item-ico">' + ico + '</span><span class="cd-name">' + esc(it.name) + '</span>' +
-            '<span class="cd-sub">' + Math.round(it.size / 102.4) / 10 + ' KB</span>' +
-            (editable ? '<span class="cd-edit" data-edit="' + esc(it.name) + '">edit</span>' : '') +
-            '<a class="cd-open" href="/__api/campaigns/' + encodeURIComponent(id) + '/' + type + '/' + encodeURIComponent(it.name) + '" target="_blank">view</a>' +
-            '<span class="cd-x" data-rm="' + esc(it.name) + '">remove</span></div>';
-        }).join('')
-      : '<div class="cd-empty">Nothing here yet. Drop files, import a folder, or create one.</div>';
-    var archPanel = '';
-    if (type === 'npcs' && window.NPCGen) {
-      archPanel = '<div class="arch-panel"><div class="app-kicker">// BUILT-IN ARCHETYPES <span class="arch-note">generators — not counted</span></div>' +
-        '<div class="arch-grid">' + window.NPCGen.list().map(function (a) {
-          return '<button class="arch-tile" data-arch="' + esc(a.id) + '"><span class="arch-name">' + esc(a.label) + '</span><span class="arch-desc">' + esc(a.desc) + '</span></button>';
-        }).join('') + '</div></div>';
-    }
-    el('cd-body').innerHTML =
-      '<div class="cd-actions">' +
-        '<button class="app-btn" id="cd-new">+ New ' + type.replace(/s$/, '') + '</button>' +
-        (type === 'npcs' && window.NPCGen ? '<button class="app-btn app-btn-go" id="cd-gen">◆ Generate from archetype</button>' : '') +
-        (type === 'orgs' && window.OrgGen ? '<button class="app-btn app-btn-go" id="cd-genorg">◆ Generate organisation</button>' : '') +
-        (hasFolder ? '<button class="app-btn" id="cd-folder">Import a folder…</button>' : '') +
-      '</div>' +
-      '<div class="cd-drop" id="cd-drop"><span class="cd-drop-tag">IMPORT BAY</span> Drag &amp; drop ' + type + ' files here</div>' +
-      '<div class="cd-list">' + list + '</div>' + archPanel;
-
-    if (type === 'npcs' && window.NPCGen) {
-      var saveBack = function (sheets) { saveGeneratedNPCs(id, sheets, renderCampaignDetail); };
-      var gen = el('cd-gen'); if (gen) gen.onclick = function () { archetypeGenModal({ onSave: saveBack }); };
-      el('cd-body').querySelectorAll('[data-arch]').forEach(function (t) {
-        t.onclick = function () { archetypeGenModal({ preset: t.getAttribute('data-arch'), onSave: saveBack }); };
-      });
-    }
-    if (type === 'orgs' && window.OrgGen) {
-      var go = el('cd-genorg'); if (go) go.onclick = function () { orgGenModal(id); };
-    }
-
-    el('cd-new').onclick = function () {
-      prompt1('New ' + type.replace(/s$/, ''), 'Name', type === 'documents' ? 'notes.md' : 'name', function (name) {
-        name = (name || '').trim(); if (!name) return;
-        if (type !== 'documents' && !/\.json$/i.test(name)) name += '.json';
-        var payload = type === 'documents' ? { name: name, content: '' } : { name: name, json: {} };
-        api('POST', 'campaigns/' + encodeURIComponent(id) + '/' + type, payload).then(renderCampaignDetail);
-      });
-    };
-    if (hasFolder) el('cd-folder').onclick = function () {
-      window.bartmoss.pickFolderFiles().then(function (files) {
-        if (!files || !files.length) return;
-        Promise.all(files.map(function (f) { return api('PUT', 'campaigns/' + encodeURIComponent(id) + '/' + type + '/' + encodeURIComponent(f.name), f.content); }))
-          .then(renderCampaignDetail);
-      });
-    };
-    el('cd-body').querySelectorAll('[data-rm]').forEach(function (s) {
-      s.onclick = function () { var nm = s.getAttribute('data-rm'); confirm1('Remove ' + nm + '?', function () { api('DELETE', 'campaigns/' + encodeURIComponent(id) + '/' + type + '/' + encodeURIComponent(nm)).then(renderCampaignDetail); }); };
-    });
-    el('cd-body').querySelectorAll('[data-edit]').forEach(function (s) {
-      s.onclick = function () { cdOpenDocInline(type, s.getAttribute('data-edit')); };
-    });
-    wireDrop(el('cd-drop'), id, type);
-  }
 
   /* ── Doc editor overlay: tool via the file-bridge (?cdoc), or a textarea for documents ── */
-  function openDocEditor(id, type, name) {
-    if (type === 'documents') return openTextEditor(id, name);
-    var tool = TOOL_FOR[type]; if (!tool) return;
-    var url = tool + '?cdoc=1&cid=' + encodeURIComponent(id) + '&ctype=' + type + '&cname=' + encodeURIComponent(name);
-    // onClose flushes the LATEST sheet from the iframe via a parent-side PUT so
-    // closing never loses the last edits (the iframe's own save is debounced and
-    // would be aborted when the iframe is removed).
-    showOverlay(name, '<iframe class="cdoc-frame" id="cdoc-frame" src="' + url + '"></iframe>', function () {
-      var fr = el('cdoc-frame'), win = fr && fr.contentWindow, ad = win && win.__cdocAdapter;
-      var obj; try { obj = ad && ad.serialize(); } catch (e) { obj = null; }
-      if (obj == null) return Promise.resolve();
-      return api('PUT', 'campaigns/' + encodeURIComponent(id) + '/' + type + '/' + encodeURIComponent(name), obj);
-    });
-  }
-  function openTextEditor(id, name) {
-    var docPath = 'campaigns/' + encodeURIComponent(id) + '/documents/' + encodeURIComponent(name);
-    fetch('/__api/' + docPath).then(function (r) { return r.text(); }).then(function (txt) {
-      showOverlay(name, '<textarea class="cdoc-textarea" id="cdoc-ta"></textarea>', function () {
-        var ta = el('cdoc-ta'); if (!ta) return Promise.resolve();
-        return fetch('/__api/' + docPath, { method: 'PUT', body: ta.value });
-      });
-      var ta = el('cdoc-ta'); ta.value = txt; var t;
-      ta.oninput = function () { clearTimeout(t); t = setTimeout(function () { fetch('/__api/' + docPath, { method: 'PUT', body: ta.value }); }, 400); };
-    });
-  }
   // onClose: optional () => Promise that saves before the overlay is torn down.
-  function showOverlay(title, innerHtml, onClose) {
-    var ov = document.createElement('div'); ov.className = 'cdoc-overlay'; ov.id = 'cdoc-overlay';
-    ov.innerHTML = '<div class="cdoc-bar"><span class="cdoc-title">' + esc(title) + '</span><button class="app-btn" id="cdoc-close">Close</button></div>' + innerHtml;
-    document.body.appendChild(ov);
-    var closing = false;
-    el('cdoc-close').onclick = function () {
-      if (closing) return; closing = true;
-      var btn = el('cdoc-close'); if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
-      Promise.resolve(onClose ? onClose() : null).catch(function () {}).then(function () {
-        if (ov.parentNode) ov.parentNode.removeChild(ov);
-        renderCampaignDetail();
-      });
-    };
-  }
 
-  function wireDrop(zone, id, type) {
-    if (!zone) return;
-    zone.ondragover = function (e) { e.preventDefault(); zone.classList.add('drag'); };
-    zone.ondragleave = function () { zone.classList.remove('drag'); };
-    zone.ondrop = function (e) {
-      e.preventDefault(); zone.classList.remove('drag');
-      var files = Array.prototype.slice.call(e.dataTransfer.files || []);
-      if (!files.length) return;
-      Promise.all(files.map(function (file) {
-        return new Promise(function (resolve) {
-          var r = new FileReader();
-          r.onload = function () { api('PUT', 'campaigns/' + encodeURIComponent(id) + '/' + type + '/' + encodeURIComponent(file.name), r.result).then(resolve, resolve); };
-          r.readAsText(file);
-        });
-      })).then(renderCampaignDetail);
-    };
-  }
 
   /* ── Sessions ── */
   var SESS_MODE_KEY = 'bartmoss_sess_mode';
@@ -937,6 +460,7 @@
   try { var m = localStorage.getItem(SESS_MODE_KEY); if (m === 'grid' || m === 'tabs' || m === 'columns') sess.mode = m; } catch (e) {}
   function idOf(docName) { return String(docName).replace(/\.json$/i, ''); }
   function playerLink(sid) {
+    sid = idOf(sid);
     var h = sess.hub || { host: location.hostname, port: location.port };
     // Player link now opens the full session shell (app.html), with their sheet
     // pre-selected as the Live-sheet section.
@@ -1020,8 +544,9 @@
     }).catch(function () {});
   }
   function openPlayerSession(id, sheetId) {
+    sheetId = sheetId ? idOf(sheetId) : sheetId;   // never carry a .json extension into the sheet doc id (avoids .json.json files)
     sess.id = id; sess.role = 'player'; sess.sheetId = sheetId; sess.order = sheetId ? [sheetId] : [];
-    sess.active = sheetId || null; sess.section = 'overview';
+    sess.active = sheetId || null; sess.section = 'mysheet'; sess.tabs = null; sess.activeTab = null;
     setMode('active'); showView('view-session');
     el('app-crumbs').innerHTML = '<span class="crumb-cur">' + esc(id) + '</span>';
     joinSession(id, { name: sheetId || 'Player', role: 'player' });
@@ -1036,108 +561,1357 @@
       syncCombatBtn();
       var m = sess.camp.combatMeta() || {};
       if (!m.active && el('cbt-overlay')) closeCombatStage();
+      // Player: combat auto-opens as a tab when the GM launches it.
+      if (sess.role !== 'gm' && sess.tabs) {
+        if (m.active) openTool('combat');
+        else { var at = activeTab(); if (at && at.tool === 'combat') openTool('sheet'); }
+      }
       updateOverviewActions();
     });
     sess.camp.onStatus(function (st) { var e = el('app-status'); if (e) { e.textContent = st === 'connected' ? 'Hub · live' : st; e.className = 'app-status' + (st === 'connected' ? ' on' : ''); } });
     if (sess.camp.onOverview) sess.camp.onOverview(function () {
       refreshOverviewText();
       if (sess.role === 'player' && window.FilmWindow) window.FilmWindow.apply(ovGet().reveal);
+      if (sess.role === 'gm') renderMonitor();
       if (sess.role === 'player') ncSyncToFrame();
     });
     // Apply any reveal already present when the player joins.
     if (sess.role === 'player' && window.FilmWindow) setTimeout(function () { window.FilmWindow.apply(ovGet().reveal); }, 400);
   }
 
-  // GM keeps the full prep section set live (create/edit events, loot… mid-game).
-  var PREP_LIVE = { events: 1, squads: 1, loot: 1, locations: 1 };
-  function sessSections() {
-    if (sess.role !== 'gm') return [{ k: 'overview', label: 'Overview' }, { k: 'locations', label: 'Locations' }, { k: 'livesheet', label: 'Live-sheet' }, { k: 'tools', label: 'Tools' }, { k: 'files', label: 'Files' }];
-    // GM Tools = quick access to the prep sections (edit live) + standalone tools + combat.
-    var subs = [
-      { kind: 'section', k: 'events', label: 'Events', icon: SECTION_META.events.icon },
-      { kind: 'section', k: 'squads', label: 'Squads', icon: SECTION_META.squads.icon },
-      { kind: 'section', k: 'loot', label: 'Loot', icon: SECTION_META.loot.icon },
-      { kind: 'section', k: 'locations', label: 'Locations', icon: SECTION_META.locations.icon },
-    ].concat(SESS_TOOLS.map(function (t) { return { kind: 'tool', url: t.url, label: t.label, icon: t.icon }; }))
-     .concat([{ kind: 'combat', label: 'Combat', icon: '◆' }]);
-    return [{ k: 'overview', label: 'Overview' }, { k: 'players', label: 'Players' }, { k: 'tools', label: 'Tools', subs: subs }, { k: 'files', label: 'Files' }];
-  }
   function ensureCdData(cb) {
     if (cdData && state.campaignId === sess.id) return cb();
     state.campaignId = sess.id;
     api('GET', 'campaigns/' + encodeURIComponent(sess.id)).then(function (d) { cdData = d; cb(); }).catch(function () {});
   }
+  /* ════ Tabbed shell (top-tabs replace the rail) ════ */
+  var TOOLS_GM = [
+    { id: 'party', label: 'Party', glyph: '⧉', sub: 'Player sheets' },
+    { id: 'cast', label: 'Cast', glyph: '⊡', sub: 'Reveal to players' },
+    { id: 'map', label: 'Map', glyph: '▦', sub: 'Shared intel' },
+    { id: 'combat', label: 'Combat', glyph: '◎', sub: 'Encounter & squads' },
+    { id: 'clocks', label: 'Clocks', glyph: '◴', sub: 'Tension trackers' },
+    { id: 'npc', label: 'NPC', glyph: '☺', sub: 'Bestiary & generators' },
+    { id: 'org', label: 'ORG', glyph: '⌗', sub: 'Organisations' },
+    { id: 'shop', label: 'Shop', glyph: '▣', sub: 'Storefronts & catalog' },
+    { id: 'database', label: 'Database', glyph: '▤', sub: 'Reference & custom' },
+    { id: 'log', label: 'Log', glyph: '☰', sub: 'Session history' },
+  ];
+  var TOOLS_PLAYER = [
+    { id: 'sheet', label: 'Sheet', glyph: '⒜', sub: 'Your character' },
+    { id: 'map', label: 'Map', glyph: '▦', sub: 'Shared intel' },
+    { id: 'npc', label: 'NPC', glyph: '☺', sub: 'Contacts & public' },
+    { id: 'org', label: 'ORG', glyph: '⌗', sub: 'Organisations' },
+    { id: 'shop', label: 'Shop', glyph: '▣', sub: 'Buy gear & chrome' },
+    { id: 'clocks', label: 'Clocks', glyph: '◴', sub: 'Public clocks' },
+    { id: 'database', label: 'Database', glyph: '▤', sub: 'Reference' },
+  ];
+  var TOOL_ALIAS = { players: 'party', mysheet: 'sheet', table: 'cast', locations: 'map', encounter: 'combat', generators: 'combat', bestiary: 'npc', studio: 'npc' };
+  function toolDefs() { return sess.role === 'gm' ? TOOLS_GM : TOOLS_PLAYER; }
+  function toolMeta(id) { var all = TOOLS_GM.concat(TOOLS_PLAYER); for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i]; return { id: id, label: id, glyph: '·' }; }
+  function activeTab() { return (sess.tabs || []).filter(function (t) { return t.id === sess.activeTab; })[0] || null; }
+  function activeToolId() { var t = activeTab(); return t ? t.tool : null; }
+
   function renderSessionShell() {
-    var paused = sess.camp && sess.camp.isPaused && sess.camp.isPaused();
-    var nav = wsRail(sessSections(), sess.section);
-    var ctrls = sess.role === 'gm'
-      ? '<button class="app-btn" id="sess-share">⇄ Share</button><button class="app-btn" id="sess-pause">' + (paused ? 'Resume' : 'Pause') + '</button><button class="app-btn app-btn-danger" id="sess-end">End</button>'
-      : '<button class="app-btn app-btn-danger" id="sess-leave">Leave</button>';
-    el('view-session').innerHTML =
-      '<div class="sess-top ws-top ws-top-live"><span class="ws-mode ws-mode-live">● LIVE</span><span class="sess-title ws-title">' + esc(sess.id) + '</span>' +
-        '<span style="flex:1"></span>' + ctrls + '</div>' +
-      '<div class="ws-livebar" id="ws-livebar" hidden></div>' +
-      '<div id="sess-paused-bar">' + (paused ? '<div class="sess-paused">SESSION PAUSED — players see a PAUSED banner. Sync continues.</div>' : '') + '</div>' +
-      '<div class="sess-shell"><nav class="sess-side ws-rail">' + nav + '</nav><div class="sess-content" id="sess-content"></div></div>';
-    el('view-session').querySelectorAll('.sess-nav').forEach(function (b) { b.onclick = function () { gotoSection(b.getAttribute('data-sec')); }; });
-    // Tools rail: expand/collapse the quick-tool sub-list; jump straight to a tool.
-    el('view-session').querySelectorAll('[data-railexp]').forEach(function (s) {
-      s.onclick = function (e) { e.stopPropagation(); sess.toolsExp = !sess.toolsExp; var sub = el('ws-sub-' + s.getAttribute('data-railexp')); if (sub) sub.hidden = !sess.toolsExp; s.textContent = sess.toolsExp ? '▾' : '▸'; };
-    });
-    el('view-session').querySelectorAll('[data-railtool]').forEach(function (b) {
-      b.onclick = function () {
-        var tool = b.getAttribute('data-railtool'), lbl = b.getAttribute('data-raillabel');
-        gotoSection('tools');
-        if (tool === 'combat') sessCombat(); else openSessTool(tool, lbl);
-      };
-    });
-    el('view-session').querySelectorAll('[data-railsec]').forEach(function (b) {
-      b.onclick = function () { gotoSection(b.getAttribute('data-railsec')); };
-    });
-    if (sess.role === 'gm') {
-      el('sess-share').onclick = shareLinks;
-      el('sess-pause').onclick = function () {
-        if (!(sess.camp && sess.camp.setPaused)) return;
-        paused = !paused; sess.camp.setPaused(paused); saveSessionMeta(sess.id, { paused: paused });
-        el('sess-pause').textContent = paused ? 'Resume' : 'Pause';
-        el('sess-paused-bar').innerHTML = paused ? '<div class="sess-paused">SESSION PAUSED — players see a PAUSED banner. Sync continues.</div>' : '';
-      };
-      el('sess-end').onclick = function () { confirm1('End the session? Player sheets are already saved to the campaign.', function () { saveSessionMeta(sess.id, { active: false }).then(function () { if (sess.camp && sess.camp.setPaused) sess.camp.setPaused(false); openCampaign(sess.id); }); }); };
-    } else {
-      el('sess-leave').onclick = function () { endSessionConn(); renderPlayerConnect(); };
+    // Merged top bar: campaign controls live in #app-camp (one bar with brand/status).
+    var camp = el('app-camp');
+    if (camp) {
+      var live = !!sess.live, paused = sess.camp && sess.camp.isPaused && sess.camp.isPaused();
+      camp.innerHTML = (sess.role === 'gm'
+        ? '<span class="ws-mode ' + (live ? 'ws-mode-live' : 'ws-mode-prep') + '">' + (live ? '● LIVE' : 'PREP') + '</span>' +
+          '<button class="app-btn ' + (live ? 'app-btn-danger' : 'app-btn-go') + '" id="sess-live">' + (live ? 'End live' : 'Go live') + '</button>' +
+          '<button class="app-btn" id="sess-share">Share</button>' +
+          (live ? '<button class="app-btn" id="sess-pause">' + (paused ? 'Resume' : 'Pause') + '</button>' : '')
+        : '<button class="app-btn app-btn-danger" id="sess-leave">Leave</button>');
+      if (sess.role === 'gm') {
+        el('sess-live').onclick = function () { setLive(!sess.live); };
+        el('sess-share').onclick = shareLinks;
+        var pb = el('sess-pause'); if (pb) pb.onclick = function () { if (!(sess.camp && sess.camp.setPaused)) return; var p = !sess.camp.isPaused(); sess.camp.setPaused(p); saveSessionMeta(sess.id, { paused: p }); renderSessionShell(); };
+      } else { el('sess-leave').onclick = function () { endSessionConn(); renderPlayerConnect(); }; }
     }
-    gotoSection(sess.section);
+    // Init tabs: GM → Party, Player → Sheet.
+    if (!sess.tabs || !sess.tabs.length) { sess.tabs = [{ id: uid('tab'), tool: sess.role === 'gm' ? 'party' : 'sheet' }]; sess.activeTab = sess.tabs[0].id; }
+    el('view-session').innerHTML =
+      '<div id="sess-paused-bar">' + (sess.camp && sess.camp.isPaused && sess.camp.isPaused() ? '<div class="sess-paused">SESSION PAUSED — players see a PAUSED banner.</div>' : '') + '</div>' +
+      '<div class="tab-bar" id="tab-bar"></div>' +
+      '<div class="tab-content" id="tab-content"></div>';
+    renderTabs();
     updateOverviewActions();
+    renderMonitor();
   }
-  function gotoSection(key) {
-    sess.section = key;
-    // Active state: top-level rail buttons + section sub-items (in the Tools menu).
-    el('view-session').querySelectorAll('.sess-nav').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-sec') === key); });
-    el('view-session').querySelectorAll('[data-railsec]').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-railsec') === key); });
-    var content = el('sess-content'); if (!content) return;
-    // Ensure a panel for the active key (it may live only in the Tools sub-menu).
-    var panel = el('sec-' + key);
-    if (!panel) { panel = document.createElement('div'); panel.id = 'sec-' + key; panel.className = 'sess-sec'; content.appendChild(panel); }
-    content.querySelectorAll('.sess-sec').forEach(function (p) { p.hidden = (p.id !== 'sec-' + key); });
-    if (key === 'overview') renderOverview(panel);          // always refresh (dynamic)
-    else if (PREP_LIVE[key] && sess.role === 'gm') {        // live prep editor (create/edit mid-game)
-      panel.classList.add('sess-sec-prep');
-      ensureCdData(function () { cdSection = key; cdHost = panel; cdRenderSection(key, panel); });
-    } else if (!panel.dataset.built) { buildSection(key, panel); panel.dataset.built = '1'; }
+  function renderTabs() {
+    var bar = el('tab-bar'); if (!bar) return;
+    bar.innerHTML = (sess.tabs || []).map(function (t) {
+      var label = t.tool ? toolMeta(t.tool).label : 'New tab';
+      return '<div class="tab' + (t.id === sess.activeTab ? ' active' : '') + '" data-tab="' + t.id + '" draggable="true">' +
+        '<span class="tab-l">' + esc(label) + '</span>' +
+        '<button class="tab-x" data-tabx="' + t.id + '" title="Close">✕</button></div>';
+    }).join('') + '<button class="tab-add" id="tab-add" title="New tab">＋</button>';
+    bar.querySelectorAll('[data-tab]').forEach(function (d) {
+      d.onclick = function (e) { if (e.target.hasAttribute('data-tabx')) return; sess.activeTab = d.getAttribute('data-tab'); renderTabs(); };
+      d.ondragstart = function (e) { e.dataTransfer.setData('text/plain', d.getAttribute('data-tab')); };
+      d.ondragover = function (e) { e.preventDefault(); };
+      d.ondrop = function (e) { e.preventDefault(); var from = e.dataTransfer.getData('text/plain'), to = d.getAttribute('data-tab'); reorderTab(from, to); };
+    });
+    bar.querySelectorAll('[data-tabx]').forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); closeTab(b.getAttribute('data-tabx')); }; });
+    el('tab-add').onclick = function () { var nt = { id: uid('tab'), tool: null }; sess.tabs.push(nt); sess.activeTab = nt.id; renderTabs(); };
+    renderTabContent();
   }
-  function buildSection(key, panel) {
-    if (key === 'players') return renderPlayers(panel);
-    if (key === 'livesheet') return renderLivesheet(panel);
-    if (key === 'locations') return renderLocationsSection(panel);
-    if (key === 'tools') return renderTools(panel);
-    if (key === 'files') return renderFiles(panel);
+  function reorderTab(fromId, toId) {
+    if (fromId === toId) return;
+    var arr = sess.tabs, fi = arr.map(function (t) { return t.id; }).indexOf(fromId), ti = arr.map(function (t) { return t.id; }).indexOf(toId);
+    if (fi < 0 || ti < 0) return; var m = arr.splice(fi, 1)[0]; arr.splice(ti, 0, m); renderTabs();
   }
-  // Player Locations — campaign NC map in player mode; receives public pins live.
-  function renderLocationsSection(panel) {
+  function closeTab(id) {
+    var arr = sess.tabs, i = arr.map(function (t) { return t.id; }).indexOf(id); if (i < 0) return;
+    arr.splice(i, 1);
+    if (!arr.length) { arr.push({ id: uid('tab'), tool: sess.role === 'gm' ? 'party' : 'sheet' }); }
+    if (sess.activeTab === id) sess.activeTab = arr[Math.max(0, i - 1)].id;
+    renderTabs();
+  }
+  function renderTabContent() {
+    var host = el('tab-content'); if (!host) return;
+    host.className = 'tab-content';
+    var t = activeTab();
+    if (!t) { host.innerHTML = ''; qdbEnsure(); return; }
+    if (!t.tool) { renderLauncher(host); qdbEnsure(); return; }
+    toolRender(t.tool, host);
+    renderMonitor();
+    qdbEnsure();
+  }
+  function renderLauncher(host) {
+    host.className = 'tab-content tab-launcher';
+    host.innerHTML = '<div class="tab-launch-inner">' + rtHead('＋', 'Open a tool', 'Pick what to load in this tab', '') +
+      '<div class="launch-grid">' + toolDefs().map(function (d) {
+        return '<button class="launch-card" data-launch="' + d.id + '"><span class="launch-l">' + esc(d.label) + '</span><span class="launch-s">' + esc(d.sub) + '</span></button>';
+      }).join('') + '</div></div>';
+    host.querySelectorAll('[data-launch]').forEach(function (b) { b.onclick = function () { var t = activeTab(); if (t) { t.tool = b.getAttribute('data-launch'); renderTabs(); } }; });
+  }
+  function toolRender(tool, host) {
+    host.innerHTML = '';
+    if (tool === 'combat' && sess.role !== 'gm') {   // players: live combat view (auto-opened)
+      host.className = 'tab-content sess-sec-files';
+      host.innerHTML = '<div id="pcbt-mount" style="position:absolute;inset:0;overflow:auto"></div>';
+      if (window.CombatUI) window.CombatUI.mount(el('pcbt-mount'), { camp: sess.camp, role: 'player' });
+      return;
+    }
+    if (tool === 'party') return renderPlayers(host);
+    if (tool === 'sheet') return renderLivesheet(host);
+    if (tool === 'cast') return renderTheTable(host);
+    if (tool === 'map') return renderMap(host);
+    if (tool === 'combat') return renderCombatTab(host);
+    if (tool === 'clocks') return renderClocks(host);
+    if (tool === 'npc') return renderBestiary(host);
+    if (tool === 'org') return renderOrgTab(host);
+    if (tool === 'shop') return renderShop(host);
+    if (tool === 'database') return renderDatabase(host);
+    if (tool === 'log') return renderLog(host);
+    host.innerHTML = '<div class="app-empty">Unknown tool.</div>';
+  }
+  // Open a tool: focus its tab if open, else fill the active empty tab, else new tab.
+  function openTool(tool) {
+    tool = TOOL_ALIAS[tool] || tool;
+    if (!sess.tabs) sess.tabs = [];
+    var ex = sess.tabs.filter(function (t) { return t.tool === tool; })[0];
+    if (ex) { sess.activeTab = ex.id; }
+    else { var act = activeTab(); if (act && !act.tool) act.tool = tool; else { var nt = { id: uid('tab'), tool: tool }; sess.tabs.push(nt); sess.activeTab = nt.id; } }
+    renderTabs();
+  }
+  function gotoSection(key) { openTool(key); }   // legacy callers → open a tab
+  // Cross-nav: open the Shop tool focused on a shop linked to a given NPC / org / location.
+  function shopsLinkedTo(type, ref) { return (prep().shops || []).filter(function (s) { return s.link && s.link.type === type && s.link.ref === ref; }); }
+  function openShopFor(type, ref) {
+    var matches = shopsLinkedTo(type, ref);
+    if (matches.length) sess.shopSel = matches[0].id;
+    openTool('shop');
+  }
+  /* ── Run Table shared components (handoff DS, vanilla) ── */
+  // Proper NPC names (street handle + real name) so generated NPCs aren't "Ganger \"Razor\"".
+  var NPC_FIRST = ['Mireille', 'Tomas', 'Lin', 'Dée', 'Kazuo', 'Ana', 'Viktor', 'Sasha', 'Reiko', 'Diego', 'Nadia', 'Omar', 'Yuki', 'Cole', 'Inez', 'Marek', 'Priya', 'Dmitri', 'Lena', 'Theo'];
+  var NPC_LAST = ['Vance', 'Vasquez', 'Okafor', 'Cassel', 'Tanaka', 'Reyes', 'Kowalski', 'Mbeki', 'Ferreira', 'Novak', 'Haddad', 'Sato', 'Brennan', 'Costa', 'Petrov', 'Singh', 'Dubois', 'Romano', 'Cruz', 'Adeyemi'];
+  var NPC_HANDLE = ['Razor', 'Static', 'Vex', 'Ghost', 'Spike', 'Cinder', 'Onyx', 'Halo', 'Wire', 'Vault', 'Echo', 'Mantis', 'Drift', 'Cobra', 'Nyx', 'Patch', 'Zero', 'Hex', 'Slick', 'Talon'];
+  function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+  function npcName() { return pick(NPC_FIRST) + ' ' + pick(NPC_LAST); }
+  function npcHandle() { return pick(NPC_HANDLE); }
+  function rtHead(glyph, title, sub, acts) {
+    return '<div class="rt-head"><span class="rt-head-title">' + esc(title) + '</span>' +
+      (acts ? '<span class="rt-head-act">' + acts + '</span>' : '') + '</div>';
+  }
+  // Cast a reveal to the players (gated by LIVE). Reuses the overview→FilmWindow channel.
+  function castReveal(reveal) {
+    if (!sess.live) { alert('Go live first (top bar) to cast to the players.'); return false; }
+    if (sess.camp && sess.camp.setOverview) { reveal.ts = Date.now(); sess.camp.setOverview({ reveal: reveal }); renderMonitor(); }
+    return true;
+  }
+  // GM ON AIR control monitor (bottom-right): a live scaled preview of the cast.
+  function renderMonitor() {
+    var existing = el('rt-monitor');
+    if (sess.role !== 'gm' || activeToolId() === 'cast') { if (existing) existing.parentNode.removeChild(existing); return; }
+    var rev = ovGet().reveal, on = !!rev;
+    var m = existing || document.createElement('div');
+    if (!existing) { m.id = 'rt-monitor'; document.body.appendChild(m); }
+    var min = !!sess.monMin;
+    m.className = 'rt-monitor' + (on ? ' on' : '') + (min ? ' min' : '');
+    m.innerHTML = '<div class="rt-monitor-head"><span class="rt-monitor-dot"></span><span style="flex:1">' + (on ? 'ON AIR' : 'OFF AIR') + '</span>' +
+      '<button class="rt-monitor-min" id="rt-mon-min" title="' + (min ? 'Expand' : 'Collapse') + '">' + (min ? '▴' : '▾') + '</button>' +
+      '<button class="rt-monitor-x" id="rt-mon-x" title="Clear cast">✕</button></div>' +
+      (min ? '' : '<div class="rt-monitor-screen" id="rt-mon-screen"></div>' +
+      '<div class="rt-monitor-foot">' + (on ? esc(rev.title || 'Cast') : 'Nothing cast') + ' · control monitor</div>');
+    el('rt-mon-min').onclick = function () { sess.monMin = !sess.monMin; renderMonitor(); };
+    el('rt-mon-x').onclick = function () { if (sess.camp && sess.camp.setOverview) sess.camp.setOverview({ reveal: null }); renderMonitor(); };
+    if (!min && on && window.FilmWindow && window.FilmWindow.preview) window.FilmWindow.preview(el('rt-mon-screen'), rev);
+  }
+  function removeMonitor() { var m = el('rt-monitor'); if (m) m.parentNode.removeChild(m); }
+  /* Quick database — a floating square button (any tool page) opening a 25vw search popup. */
+  function qdbEnsure() {
+    var t = activeTab(), show = t && t.tool;
+    if (!show) { removeQdb(); return; }
+    if (el('qdb-btn')) return;
+    var b = document.createElement('button'); b.id = 'qdb-btn'; b.className = 'qdb-btn'; b.title = 'Quick database'; b.textContent = 'db';
+    b.onclick = qdbToggle; document.body.appendChild(b);
+  }
+  function removeQdb() { ['qdb-btn', 'qdb-pop'].forEach(function (i) { var e = el(i); if (e) e.parentNode.removeChild(e); }); }
+  function qdbLoad(then) {
+    if (DB_CACHE) return then();
+    DB_CACHE = {};
+    Promise.all(DB_DEFS.map(function (d) { return fetch(d[2]).then(function (r) { return r.json(); }).then(function (j) { DB_CACHE[d[0]] = Array.isArray(j) ? j : (j.items || j.roles || []); }).catch(function () { DB_CACHE[d[0]] = []; }); })).then(then);
+  }
+  function qdbToggle() {
+    var p = el('qdb-pop'); if (p) { p.parentNode.removeChild(p); return; }
+    p = document.createElement('div'); p.id = 'qdb-pop'; p.className = 'qdb-pop';
+    p.innerHTML = '<div class="qdb-head">DATABASE<button class="qdb-x" id="qdb-x">✕</button></div>' +
+      '<input class="rt-input" id="qdb-s" placeholder="search gear · cyber · corps…" style="margin:8px">' +
+      '<div class="qdb-results" id="qdb-res"><div class="app-empty">Type to search.</div></div>';
+    document.body.appendChild(p);
+    el('qdb-x').onclick = function () { p.parentNode.removeChild(p); };
+    el('qdb-s').oninput = function () { qdbSearch(el('qdb-s').value); };
+    el('qdb-s').focus();
+    qdbLoad(function () {});
+  }
+  function qdbSearch(q) {
+    var res = el('qdb-res'); if (!res) return; q = (q || '').toLowerCase();
+    if (!q) { res.innerHTML = '<div class="app-empty">Type to search.</div>'; return; }
+    qdbLoad(function () {
+      var hits = [];
+      ['weapons', 'cyberware', 'gear', 'vehicles', 'decks', 'programs', 'corps'].forEach(function (cat) { (DB_CACHE[cat] || []).forEach(function (r) { if (JSON.stringify(r).toLowerCase().indexOf(q) >= 0) hits.push({ cat: cat, r: r }); }); });
+      hits = hits.slice(0, 80);
+      res.innerHTML = hits.length ? hits.map(function (h) { return '<div class="qdb-row"><span class="qdb-cat">' + h.cat + '</span><b>' + esc(h.r.name || '') + '</b><span class="qdb-d">' + esc(h.r.cost || h.r.damage || h.r.industry || h.r.hc || '') + '</span></div>'; }).join('') : '<div class="app-empty">No match.</div>';
+    });
+  }
+  // Queue a generated NPC for the next combat (consumed by openCombatSetup).
+  function addToCombat(sheet) {
+    if (!window.CombatEngine) { alert('Combat engine not loaded.'); return 0; }
+    var q = sess.pendingCombat || (sess.pendingCombat = []);
+    q.push(window.CombatEngine.makeCombatant({ id: 'gen-' + Date.now().toString(36) + '-' + q.length, kind: 'npc', name: npcDocName(sheet), sheet: sheet }));
+    return q.length;
+  }
+
+  /* ── Generators (CREATE) — Combatant wired to NPCGen ── */
+  function renderGenerators(panel) {
+    if (!panel) return;
+    var tab = sess.genTab || 'combatant';
+    panel.innerHTML = rtHead('⊞', 'Generators', 'Roll NPCs, squads & loot — semi-random', '') +
+      '<div class="rt-tabs">' + [['combatant', 'Combatant'], ['squad', 'Squad'], ['loot', 'Loot']].map(function (t) {
+        return '<button class="rt-tab' + (t[0] === tab ? ' active' : '') + '" data-gtab="' + t[0] + '">' + t[1] + '</button>';
+      }).join('') + '</div><div id="gen-body"></div>';
+    panel.querySelectorAll('[data-gtab]').forEach(function (b) { b.onclick = function () { sess.genTab = b.getAttribute('data-gtab'); renderGenerators(panel); }; });
+    var body = panel.querySelector('#gen-body');
+    if (tab === 'combatant') renderGenCombatant(body);
+    else if (tab === 'squad') renderGenSquad(body);
+    else renderGenLoot(body);
+  }
+  function renderGenCombatant(body) {
+    var G = window.NPCGen; if (!G) { body.innerHTML = '<div class="app-empty">Generator not loaded.</div>'; return; }
+    var archOpts = G.list().map(function (a) { return '<option value="' + a.id + '">' + esc(a.label) + '</option>'; }).join('');
+    var tierOpts = G.TIER_ORDER.map(function (k) { return '<option value="' + k + '"' + (k === 'average' ? ' selected' : '') + '>' + esc(G.TIERS[k].label) + '</option>'; }).join('');
+    var chromeOpts = ['auto', 'none', 'light', 'moderate', 'heavy', 'borg'].map(function (c) { return '<option value="' + c + '">' + c.charAt(0).toUpperCase() + c.slice(1) + '</option>'; }).join('');
+    var facOpts = ['—', 'Arasaka', 'Militech', 'Maelstrom', 'Tyger Claws', 'NCPD', 'Scavengers', 'Independent'].map(function (f) { return '<option value="' + esc(f) + '">' + esc(f) + '</option>'; }).join('');
+    body.innerHTML = '<div class="rt-two">' +
+      '<div class="rt-panel"><div class="rt-panel-head">Settings</div><div class="rt-panel-body">' +
+        '<label class="rt-field"><span class="rt-field-l">Role</span><select class="rt-select" id="g-arch">' + archOpts + '</select></label>' +
+        '<label class="rt-field"><span class="rt-field-l">Threat</span><select class="rt-select" id="g-tier">' + tierOpts + '</select></label>' +
+        '<label class="rt-field"><span class="rt-field-l">Faction</span><select class="rt-select" id="g-fac">' + facOpts + '</select></label>' +
+        '<label class="rt-field"><span class="rt-field-l">Cyberware tier</span><select class="rt-select" id="g-chrome">' + chromeOpts + '</select></label>' +
+        '<label class="rt-switch" style="margin:2px 0 14px"><input type="checkbox" id="g-named" checked><span class="rt-switch-track"></span> Named (not a mook)</label>' +
+        '<button class="rt-btn rt-btn--green rt-btn--block" id="g-roll">Generate</button>' +
+      '</div></div><div id="g-dossier"></div></div>';
+    renderGenDossier(el('g-dossier'), sess.genSheet);
+    el('g-roll').onclick = function () {
+      loadCombatDBs().then(function (DBs) {
+        var arch = el('g-arch').value, tier = el('g-tier').value, fac = el('g-fac').value, chrome = el('g-chrome').value, named = el('g-named').checked;
+        var roleLabel = G.ARCHETYPES[arch] ? G.ARCHETYPES[arch].label : arch;
+        var s = G.generate({ archetype: arch, tier: tier, chrome: chrome === 'auto' ? null : chrome, name: 'x' }, DBs);
+        s.role = roleLabel;
+        if (named) { s.handle = npcHandle(); s.name = npcName(); } else { s.handle = ''; s.name = roleLabel; }
+        if (fac && fac !== '—') { s.faction = fac; s.notes = (s.notes || '') + ' · ' + fac; }
+        sess.genSheet = s; renderGenDossier(el('g-dossier'), s);
+      });
+    };
+  }
+  function renderGenDossier(host, s) {
+    if (!host) return;
+    if (!s) { host.innerHTML = '<div class="rt-panel"><div class="rt-panel-head">Generated combatant</div><div class="rt-panel-body"><div class="app-empty">Set parameters and Generate.</div></div></div>'; return; }
+    var statKeys = ['INT', 'REF', 'TECH', 'COOL', 'BODY', 'MA'];
+    var statsHtml = statKeys.map(function (k) { return '<div class="rt-stat"><div class="rt-stat-l">' + k + '</div><div class="rt-stat-v">' + (s.stats && s.stats[k] != null ? s.stats[k] : '—') + '</div></div>'; }).join('');
+    var skills = (s.skills || []).slice().sort(function (a, b) { return b.val - a.val; }).slice(0, 5);
+    var skillsHtml = skills.map(function (sk) { return '<div class="rt-rowline"><span>' + esc(sk.name) + '</span><span>' + sk.val + '</span></div>'; }).join('') || '<div class="app-empty">—</div>';
+    var gear = [].concat(
+      (s.weapons || []).map(function (w) { return { t: esc((w.name || w) + (w.damage ? ' (' + w.damage + ')' : '')), red: false }; }),
+      (s.armor || []).map(function (a) { return { t: esc(a.name || a), red: false }; }),
+      (s.cyberware || []).map(function (c) { return { t: esc(c.name || c), red: true }; }));
+    var gearHtml = gear.map(function (g) { return '<div class="rt-rowline' + (g.red ? ' rt-rowline-red' : '') + '"><span>' + g.t + '</span></div>'; }).join('') || '<div class="app-empty">—</div>';
+    var threat = (s.tier || '').charAt(0).toUpperCase() + (s.tier || '').slice(1);
+    host.innerHTML = '<div class="rt-panel"><div class="rt-panel-head">Generated combatant' +
+      '<span class="rt-panel-act"><span class="rt-badge rt-badge--red">' + esc(threat || 'NPC') + '</span>' +
+      '<button class="rt-btn" id="gd-combat">+ Add to combat</button></span></div>' +
+      '<div class="rt-panel-body">' +
+        '<div class="rt-dossier-top"><div class="rt-portrait"></div>' +
+          '<div style="flex:1;min-width:0"><div class="rt-head-title" style="font-size:24px">' + esc(s.handle ? (s.name + ' “' + s.handle + '”') : (s.name || s.role || 'NPC')) + '</div>' +
+          '<div class="rt-head-sub">' + esc((s.role || '') + (s.faction ? ' · ' + s.faction : '') + ' · ' + (s.chrome || '') + ' chrome') + '</div>' +
+          '<div class="rt-stats" style="margin-top:12px">' + statsHtml + '</div></div></div>' +
+        '<div class="rt-cols2"><div><div class="rt-field-l">Key skills</div>' + skillsHtml + '</div>' +
+          '<div><div class="rt-field-l">Gear &amp; chrome</div>' + gearHtml + '</div></div>' +
+        '<div style="display:flex;gap:14px;align-items:center;margin-top:16px">' +
+          '<button class="rt-btn rt-btn--gold" id="gd-cast">Cast as reveal</button>' +
+          '<button class="rt-link" id="gd-save">Save to roster</button></div>' +
+      '</div></div>';
+    el('gd-cast').onclick = function () { castReveal({ kind: 'event', preset: 'dossier', title: (s.handle ? (s.name + ' “' + s.handle + '”') : (s.name || s.role || 'NPC')), portrait: '', text: (s.notes || '') }); };
+    el('gd-save').onclick = function () { saveGeneratedNPCs(sess.id, [s]); el('gd-save').textContent = 'Saved ✓'; };
+    el('gd-combat').onclick = function () { var n = addToCombat(s); el('gd-combat').textContent = '✓ queued (' + n + ') — see Encounter'; };
+  }
+  // Generators — Squad (coherent team) + Loot (rolled rewards).
+  function renderGenSquad(body) {
+    var G = window.NPCGen; if (!G) { body.innerHTML = '<div class="app-empty">Generator not loaded.</div>'; return; }
+    var archOpts = G.list().map(function (a) { return '<option value="' + a.id + '">' + esc(a.label) + '</option>'; }).join('');
+    var tierOpts = G.TIER_ORDER.map(function (k) { return '<option value="' + k + '"' + (k === 'average' ? ' selected' : '') + '>' + esc(G.TIERS[k].label) + '</option>'; }).join('');
+    body.innerHTML = '<div class="rt-two">' +
+      '<div class="rt-panel"><div class="rt-panel-head">Settings</div><div class="rt-panel-body">' +
+        '<label class="rt-field"><span class="rt-field-l">Faction / archetype</span><select class="rt-select" id="sq-arch">' + archOpts + '</select></label>' +
+        '<label class="rt-field"><span class="rt-field-l">Base threat</span><select class="rt-select" id="sq-tier">' + tierOpts + '</select></label>' +
+        '<label class="rt-field"><span class="rt-field-l">Size</span><input class="rt-input" id="sq-size" type="number" value="4" min="2" max="8"></label>' +
+        '<button class="rt-btn rt-btn--green rt-btn--block" id="sq-roll">Generate squad</button>' +
+      '</div></div><div id="sq-out"></div></div>';
+    el('sq-roll').onclick = function () {
+      loadCombatDBs().then(function (DBs) {
+        var team = G.generateTeam({ archetype: el('sq-arch').value, tier: el('sq-tier').value, size: clampN(parseInt(el('sq-size').value, 10) || 4, 2, 8) }, DBs);
+        team.forEach(function (s, i) { s.handle = npcHandle(); s.name = npcName(); if (i === 0) s.role = s.role + ' (lead)'; });
+        sess.genTeam = team;
+        var rows = team.map(function (s, i) {
+          var wpn = (s.weapons && s.weapons[0] && (s.weapons[0].name || s.weapons[0])) || '—';
+          return '<div class="rt-rowline"><span>' + (i === 0 ? '★ ' : '') + esc(s.name + ' “' + s.handle + '”') + '</span>' +
+            '<span style="color:var(--text2)">' + esc((s.role || '') + ' · REF ' + s.stats.REF + ' · BODY ' + s.stats.BODY + ' · ' + wpn) + '</span></div>';
+        }).join('');
+        el('sq-out').innerHTML = '<div class="rt-panel"><div class="rt-panel-head">Squad (' + team.length + ')' +
+          '<span class="rt-panel-act"><button class="rt-btn" id="sq-combat">+ Add to combat</button><button class="rt-btn" id="sq-save">Save all</button></span></div>' +
+          '<div class="rt-panel-body">' + rows + '</div></div>';
+        el('sq-save').onclick = function () { saveGeneratedNPCs(sess.id, team); el('sq-save').textContent = 'Saved ✓'; };
+        el('sq-combat').onclick = function () { var n = 0; team.forEach(function (s) { n = addToCombat(s); }); el('sq-combat').textContent = '✓ queued (' + n + ')'; };
+      });
+    };
+  }
+  // Loot pools as {name, detail} with a rarity weight; eddies rolled per source.
+  var LOOT_TABLES = {
+    Corpse: { eb: [1, 6, 100], items: [['Sidearm + 1 clip', '2d6 · P', 1], ['Agent', 'pocket comp', 1], ['Keycard', 'R1 access', 2], ['Stim', '1d6 heal', 1], ['Cyberdeck chip', '~800 €$', 3], ['Designer drug', 'street', 2]] },
+    Stash: { eb: [2, 6, 100], items: [['Armorjack vest', 'SP 14', 1], ['Ammo crate', '×3 weapons', 1], ['Paydata shard', '~3k €$ fence', 3], ['Medkit ×2', '1d6 heal', 1], ['Smartgun link', 'cyber', 3], ['Grenade ×2', '7d6 frag', 2]] },
+    Vault: { eb: [1, 10, 1000], items: [['Mil-spec rifle', '5d6 · RIF', 3], ['Corporate paydata', '~10k €$', 4], ['Prototype cyberware', 'rare', 4], ['Designer drug cache', 'high value', 3], ['Black-market deck', 'SP20', 4], ['Bearer credchip', '5k €$', 3]] },
+    Vendor: { eb: [1, 6, 100], items: [['Cyberware (light)', '1d6 HC', 2], ['Ammo (any)', 'standard', 1], ['Armor piece', 'SP varies', 1], ['Tech tool', '+1 task', 1], ['Forged SIN', 'illegal', 3], ['Med supplies', 'restock', 1]] },
+  };
+  var RARITY_MAX = { Common: 1, Uncommon: 2, Rare: 3, 'Black-market': 4 };
+  function roll(n, d, mult) { var t = 0; for (var i = 0; i < n; i++) t += 1 + Math.floor(Math.random() * d); return t * (mult || 1); }
+  // Non-portable containers grantable as loot (mirror of the sheet's CUSTOM_STORAGE_FIXED).
+  var LOOT_CONTAINERS = [
+    { name: 'Cardboard Box', slots: 8, wt: 0.3, cost: 1, notes: 'Disposable box.' },
+    { name: 'Storage Bin', slots: 20, wt: 2, cost: 20, notes: 'Heavy-duty plastic bin.' },
+    { name: 'Wooden Crate', slots: 24, wt: 6, cost: 25, notes: 'Nailed shipping crate.' },
+    { name: 'Footlocker', slots: 20, wt: 8, cost: 45, notes: 'Military footlocker.' },
+    { name: 'Lockbox', slots: 6, wt: 3, cost: 35, notes: 'Keyed steel box.' },
+    { name: 'Strongbox', slots: 10, wt: 9, cost: 120, notes: 'Reinforced, combo lock. SP10.' },
+    { name: 'Wall Safe', slots: 12, wt: 25, cost: 400, notes: 'Concealed safe. SP15.' },
+    { name: 'Floor Vault', slots: 40, wt: 120, cost: 1500, notes: 'Bolt-down vault. SP25.' },
+    { name: 'Gun Locker', slots: 16, wt: 35, cost: 250, notes: 'Long-gun cabinet. SP12.' },
+    { name: 'Weapons Crate', slots: 24, wt: 10, cost: 60, notes: 'Mil-surplus arms crate.' },
+    { name: 'Ammo Can', slots: 8, wt: 2.5, cost: 15, notes: 'Sealed steel ammo can.' },
+    { name: 'Pelican Hard Case', slots: 18, wt: 6, cost: 180, notes: 'IP67 hard case. SP8.' },
+    { name: 'Shipping Container', slots: 200, wt: 2200, cost: 3000, notes: '20ft container.' }
+  ];
+  function renderGenLoot(body) {
+    var srcOpts = Object.keys(LOOT_TABLES).map(function (k) { return '<option value="' + k + '">' + k + '</option>'; }).join('');
+    var rarOpts = Object.keys(RARITY_MAX).map(function (k) { return '<option value="' + k + '"' + (k === 'Rare' ? ' selected' : '') + '>' + k + '</option>'; }).join('');
+    body.innerHTML = '<div class="rt-two">' +
+      '<div class="rt-panel"><div class="rt-panel-head">Settings</div><div class="rt-panel-body">' +
+        '<label class="rt-field"><span class="rt-field-l">Source</span><select class="rt-select" id="lt-src">' + srcOpts + '</select></label>' +
+        '<label class="rt-field"><span class="rt-field-l">Rarity ceiling</span><select class="rt-select" id="lt-rar">' + rarOpts + '</select></label>' +
+        '<label class="rt-field"><span class="rt-field-l">Items</span><input class="rt-input" id="lt-n" type="number" value="3" min="1" max="6"></label>' +
+        '<button class="rt-btn rt-btn--green rt-btn--block" id="lt-roll">Roll loot</button>' +
+        '<label class="rt-field" style="border-top:2px solid var(--ink);padding-top:12px;margin-top:14px"><span class="rt-field-l">Container as loot</span><select class="rt-select" id="lt-cont">' + LOOT_CONTAINERS.map(function (c, i) { return '<option value="' + i + '">' + esc(c.name) + ' · ' + c.slots + ' slots</option>'; }).join('') + '</select></label>' +
+        '<button class="rt-btn rt-btn--block" id="lt-contadd">+ Add container to Loot</button>' +
+      '</div></div><div id="lt-out"></div></div>';
+    el('lt-contadd').onclick = function () {
+      var c = LOOT_CONTAINERS[parseInt(el('lt-cont').value, 10) || 0]; if (!c) return;
+      ensureCdData(function () {
+        var box = { id: uid('loot'), name: c.name, nodes: [{ id: uid('ln'), type: 'item', cat: 'container', name: c.name, data: c, share: 'unique' }] };
+        prep().loot.push(box);
+        savePrep(function () { var b = el('lt-contadd'); if (b) { b.textContent = 'Added “' + c.name + '” ✓'; setTimeout(function () { b.textContent = '+ Add container to Loot'; }, 1200); } });
+      });
+    };
+    el('lt-roll').onclick = function () {
+      var src = el('lt-src').value, n = clampN(parseInt(el('lt-n').value, 10) || 3, 1, 6), max = RARITY_MAX[el('lt-rar').value] || 3;
+      var tbl = LOOT_TABLES[src], pool = tbl.items.filter(function (it) { return it[2] <= max; }).slice();
+      var picks = []; for (var i = 0; i < n && pool.length; i++) picks.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+      var eb = roll(tbl.eb[0], tbl.eb[1], tbl.eb[2]);
+      sess.genLoot = { src: src, eb: eb, picks: picks };
+      el('lt-out').innerHTML = '<div class="rt-panel"><div class="rt-panel-head">Loot · ' + esc(src) +
+        '<span class="rt-panel-act"><button class="rt-btn" id="lt-save">Save to Loot</button><button class="rt-btn rt-btn--gold" id="lt-cast">Cast</button></span></div>' +
+        '<div class="rt-panel-body"><div class="rt-rowline"><span style="color:var(--yellow);font-weight:700">€$ ' + eb.toLocaleString() + '</span><span>eddies</span></div>' +
+          picks.map(function (p) { return '<div class="rt-rowline"><span>' + esc(p[0]) + '</span><span style="color:var(--text2)">' + esc(p[1]) + '</span></div>'; }).join('') + '</div></div>';
+      el('lt-cast').onclick = function () { castReveal({ kind: 'event', title: 'Loot found', blocks: [{ type: 'text', mode: 'panel', size: 'xl', text: 'YOU FOUND\n\n€$ ' + eb.toLocaleString() + '\n' + picks.map(function (p) { return p[0] + ' — ' + p[1]; }).join('\n') }] }); };
+      el('lt-save').onclick = function () { ensureCdData(function () { var box = { id: uid('loot'), name: src + ' loot', nodes: [{ id: uid('ln'), type: 'money', amount: eb, form: 'eddies', share: 'shared' }].concat(picks.map(function (p) { return { id: uid('ln'), type: 'item', cat: 'custom', name: p[0] + ' (' + p[1] + ')', share: 'shared' }; })) }; prep().loot.push(box); savePrep(function () { el('lt-save').textContent = 'Saved ✓'; }); }); };
+    };
+  }
+
+  // Cast tool = the original rich block composer (hierarchical sizes / align /
+  // presets / clock triggers / Film Window preview). Reuses the old cdEvents code.
+  function renderTheTable(host) {
+    if (!host) return;
+    host.className = 'tab-content sess-cast';
+    ensureCdData(function () { cdSection = 'events'; cdHost = host; cdEvents(host); });
+  }
+
+  /* ── Clocks — standalone tension trackers (meta.prep.clocks) ── */
+  var CLOCK_VIZ = ['pie', 'bar', 'timer', 'tally', 'dial'];
+  // 5 clock visualisations (handoff), dark-on-white.
+  function clockViz(style, filled, total, color, size) {
+    size = size || 80; total = Math.max(1, total); filled = Math.max(0, Math.min(filled, total));
+    if (style === 'bar') {
+      return '<div style="width:' + (size * 2.4) + 'px;max-width:100%"><div style="height:18px;border:2px solid #111;background:#fff"><div style="height:100%;width:' + Math.round(filled / total * 100) + '%;background:' + color + '"></div></div></div>';
+    }
+    if (style === 'timer') {
+      var left = total - filled;
+      return '<div style="font-family:var(--head);font-size:' + Math.round(size * 0.5) + 'px;color:' + color + ';letter-spacing:1px">T–' + left + '</div>';
+    }
+    if (style === 'tally') {
+      var t = '';
+      for (var i = 0; i < total; i++) t += '<span style="font-family:var(--head);font-size:' + Math.round(size * 0.34) + 'px;color:' + (i < filled ? color : '#ccc') + ';margin-right:4px">✕</span>';
+      return '<div style="line-height:1.2;max-width:' + (size * 2.6) + 'px">' + t + '</div>';
+    }
+    var r = size / 2, cx = r, cy = r, ring = r - 3, s = '';
+    if (style === 'dial') {
+      var ang = (filled / total) * 2 * Math.PI - Math.PI / 2;
+      s = '<circle cx="' + cx + '" cy="' + cy + '" r="' + ring + '" fill="#fff" stroke="#111" stroke-width="2"/>';
+      for (var j = 0; j < total; j++) { var a = (j / total) * 2 * Math.PI - Math.PI / 2; s += '<line x1="' + (cx + (ring - 5) * Math.cos(a)) + '" y1="' + (cy + (ring - 5) * Math.sin(a)) + '" x2="' + (cx + ring * Math.cos(a)) + '" y2="' + (cy + ring * Math.sin(a)) + '" stroke="#111" stroke-width="2"/>'; }
+      s += '<line x1="' + cx + '" y1="' + cy + '" x2="' + (cx + (ring - 8) * Math.cos(ang)) + '" y2="' + (cy + (ring - 8) * Math.sin(ang)) + '" stroke="' + color + '" stroke-width="3"/><circle cx="' + cx + '" cy="' + cy + '" r="4" fill="' + color + '"/>';
+      return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">' + s + '</svg>';
+    }
+    for (var i2 = 0; i2 < total; i2++) {   // pie (default)
+      var a0 = (i2 / total) * 2 * Math.PI - Math.PI / 2, a1 = ((i2 + 1) / total) * 2 * Math.PI - Math.PI / 2;
+      var x0 = cx + ring * Math.cos(a0), y0 = cy + ring * Math.sin(a0), x1 = cx + ring * Math.cos(a1), y1 = cy + ring * Math.sin(a1);
+      var large = (a1 - a0) > Math.PI ? 1 : 0;
+      s += '<path d="M ' + cx + ' ' + cy + ' L ' + x0 + ' ' + y0 + ' A ' + ring + ' ' + ring + ' 0 ' + large + ' 1 ' + x1 + ' ' + y1 + ' Z" fill="' + (i2 < filled ? color : '#fff') + '" stroke="#111" stroke-width="2"/>';
+    }
+    return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">' + s + '</svg>';
+  }
+  function renderClocks(panel) {
+    if (!panel) return;
+    if (sess.role !== 'gm') {   // players: read-only, public clocks only
+      panel.innerHTML = rtHead('◴', 'Clocks', 'Live tension trackers', '') + '<div id="clk-p">Loading…</div>';
+      api('GET', 'campaigns/' + encodeURIComponent(sess.id)).then(function (d) {
+        var cls = (((d.meta || {}).prep || {}).clocks || []).filter(function (k) { return k.public; });
+        el('clk-p').innerHTML = cls.length ? cls.map(function (k) {
+          return '<div class="rt-panel" style="margin-bottom:12px"><div class="rt-panel-head">' + esc(k.label || 'Clock') + '<span class="rt-panel-act" style="font-family:var(--mono);font-size:12px">' + (k.value || 0) + ' / ' + (k.max || 6) + '</span></div>' +
+            '<div class="rt-panel-body" style="display:flex;justify-content:center">' + clockViz(k.style || 'pie', k.value || 0, k.max || 6, k.color || CLOCK_COLORS[0], 96) + '</div></div>';
+        }).join('') : '<div class="app-empty">No public clocks right now.</div>';
+      }).catch(function () {});
+      return;
+    }
+    ensureCdData(function () {
+      var cls = prep().clocks;
+      var cards = cls.length ? cls.map(function (k) {
+        var v = k.value || 0, m = k.max || 6, col = k.color || CLOCK_COLORS[0], stl = k.style || 'pie';
+        var styleOpts = CLOCK_VIZ.map(function (sv) { return '<option value="' + sv + '"' + (sv === stl ? ' selected' : '') + '>' + sv + '</option>'; }).join('');
+        var colorBtns = CLOCK_COLORS.map(function (c) { return '<button class="ev-color' + (c === col ? ' active' : '') + '" data-ccol="' + k.id + '|' + c + '" style="background:' + c + '"></button>'; }).join('');
+        return '<div class="rt-panel" data-clk="' + k.id + '" style="margin-bottom:12px"><div class="rt-panel-head">' + esc(k.label || 'Clock') +
+          '<span class="rt-panel-act"><span style="font-family:var(--mono);font-size:12px;margin-right:4px">' + v + ' / ' + m + '</span>' +
+          '<button class="rt-btn" data-cdec="' + k.id + '">−</button><button class="rt-btn rt-btn--green" data-cinc="' + k.id + '">+</button>' +
+          '<button class="rt-btn" data-crst="' + k.id + '">Reset</button>' +
+          '<button class="rt-btn' + (k.public ? ' rt-btn--gold' : '') + '" data-cpub="' + k.id + '" title="Visible to players">' + (k.public ? '◉ Public' : '◌ Public') + '</button>' +
+          '<button class="rt-btn rt-btn--gold" data-ccast="' + k.id + '">Cast</button>' +
+          '<button class="rt-link" data-cdel="' + k.id + '">✕</button></span></div>' +
+          '<div class="rt-panel-body" style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">' +
+            '<div style="min-width:84px;display:flex;justify-content:center">' + clockViz(stl, v, m, col, 80) + '</div>' +
+            '<div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:8px">' +
+              '<input class="rt-input" data-clabel="' + k.id + '" value="' + esc(k.label || '') + '" placeholder="Clock label">' +
+              '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+                '<label class="rt-field-l" style="margin:0">Style</label><select class="rt-select" style="max-width:120px" data-cstyle="' + k.id + '">' + styleOpts + '</select>' +
+                '<label class="rt-field-l" style="margin:0 0 0 8px">Max</label><input class="rt-input" type="number" min="1" max="24" style="width:72px" data-cmax="' + k.id + '" value="' + m + '">' +
+                '<span style="display:inline-flex;gap:4px;margin-left:8px">' + colorBtns + '</span>' +
+              '</div>' +
+            '</div></div></div>';
+      }).join('') : '<div class="app-empty">No clocks yet. Add one to track tension or progress.</div>';
+      panel.innerHTML = rtHead('◴', 'Clocks', 'Tension & progress trackers', '<button class="rt-btn rt-btn--green" id="clk-add">+ Clock</button>') + cards;
+      el('clk-add').onclick = function () { cls.push({ id: uid('clk'), label: 'New clock', max: 6, value: 0, color: CLOCK_COLORS[cls.length % 4], style: 'pie' }); savePrep(function () { renderClocks(panel); }); };
+      function up() { savePrep(function () { renderClocks(panel); }); }
+      function quiet() { savePrep(function () {}); }
+      panel.querySelectorAll('[data-cinc]').forEach(function (b) { b.onclick = function () { var k = item(cls, b.getAttribute('data-cinc')); k.value = Math.min((k.value || 0) + 1, k.max || 6); up(); }; });
+      panel.querySelectorAll('[data-cdec]').forEach(function (b) { b.onclick = function () { var k = item(cls, b.getAttribute('data-cdec')); k.value = Math.max((k.value || 0) - 1, 0); up(); }; });
+      panel.querySelectorAll('[data-crst]').forEach(function (b) { b.onclick = function () { item(cls, b.getAttribute('data-crst')).value = 0; up(); }; });
+      panel.querySelectorAll('[data-cdel]').forEach(function (b) { b.onclick = function () { var id = b.getAttribute('data-cdel'); cdData.meta.prep.clocks = cls.filter(function (x) { return x.id !== id; }); up(); }; });
+      panel.querySelectorAll('[data-clabel]').forEach(function (e) { e.onchange = function () { item(cls, e.getAttribute('data-clabel')).label = e.value; quiet(); }; });
+      panel.querySelectorAll('[data-cstyle]').forEach(function (e) { e.onchange = function () { item(cls, e.getAttribute('data-cstyle')).style = e.value; up(); }; });
+      panel.querySelectorAll('[data-cmax]').forEach(function (e) { e.onchange = function () { var k = item(cls, e.getAttribute('data-cmax')); k.max = clampN(parseInt(e.value, 10) || 6, 1, 24); if (k.value > k.max) k.value = k.max; up(); }; });
+      panel.querySelectorAll('[data-ccol]').forEach(function (b) { b.onclick = function () { var p = b.getAttribute('data-ccol').split('|'); item(cls, p[0]).color = p[1]; up(); }; });
+      panel.querySelectorAll('[data-cpub]').forEach(function (b) { b.onclick = function () { var k = item(cls, b.getAttribute('data-cpub')); k.public = !k.public; up(); }; });
+      panel.querySelectorAll('[data-ccast]').forEach(function (b) { b.onclick = function () { var k = item(cls, b.getAttribute('data-ccast')); castReveal({ kind: 'event', title: k.label || 'Clock', blocks: [{ type: 'text', mode: 'panel', size: 'xl', text: (k.label || 'CLOCK').toUpperCase() + '\n\n' + (k.value || 0) + ' / ' + (k.max || 6) }] }); }; });
+    });
+  }
+
+  /* ── Studio org generator (used by the ORG tab) ── */
+  function renderStudioOrg(body) {
+    var G = window.OrgGen; if (!G) { studioCard(body, 'Organisation', 'Org generator not loaded.', [['Open Organisations editor', function () { studioNewDoc('orgs', 'organisations.html'); }]]); return; }
+    var kindOpts = G.list().map(function (k) { return '<option value="' + k.id + '">' + esc(k.label) + '</option>'; }).join('');
+    var scaleOpts = Object.keys(G.SCALE).map(function (s) { return '<option value="' + s + '"' + (s === 'local' ? ' selected' : '') + '>' + esc(G.SCALE[s].label) + '</option>'; }).join('');
+    body.innerHTML = '<div class="rt-two">' +
+      '<div class="rt-panel"><div class="rt-panel-head">Settings</div><div class="rt-panel-body">' +
+        '<label class="rt-field"><span class="rt-field-l">Kind</span><select class="rt-select" id="og-kind">' + kindOpts + '</select></label>' +
+        '<label class="rt-field"><span class="rt-field-l">Scale</span><select class="rt-select" id="og-scale">' + scaleOpts + '</select></label>' +
+        '<button class="rt-btn rt-btn--green rt-btn--block" id="og-roll">Generate</button>' +
+        '<button class="rt-btn rt-btn--block" id="og-edit" style="margin-top:8px">Open full editor</button>' +
+      '</div></div><div id="og-out"></div></div>';
+    el('og-edit').onclick = function () { studioNewDoc('orgs', 'organisations.html'); };
+    el('og-roll').onclick = function () {
+      loadCombatDBs().then(function (DBs) {
+        var org = G.generate({ kind: el('og-kind').value, scale: el('og-scale').value }, DBs);
+        sess.genOrg = org;
+        var leaders = ((org.hierarchy && org.hierarchy.nodes) || []).map(function (n) {
+          return '<div class="rt-rowline"><span>' + esc(n.label || '—') + '</span><span style="color:var(--text2)">' + esc(n.title || '') + '</span></div>';
+        }).join('');
+        el('og-out').innerHTML = '<div class="rt-panel"><div class="rt-panel-head">' + esc(org.name || 'Organisation') +
+          '<span class="rt-panel-act"><span class="rt-badge rt-badge--gold">' + esc(org.scale || '') + '</span><button class="rt-btn" id="og-save">Save</button></span></div>' +
+          '<div class="rt-panel-body"><div class="rt-head-sub" style="margin:0 0 10px">' + esc((org.type || '') + ' · ' + (org.tagline || '')) + '</div>' +
+          '<div class="rt-rowline"><span>HQ</span><span>' + esc(org.headquarters || '—') + '</span></div>' +
+          '<div class="rt-rowline"><span>Founded</span><span>' + esc(org.founded || '—') + '</span></div>' +
+          '<div class="rt-rowline"><span>Ticker</span><span>' + esc((org.market && org.market.stockSymbol) || '—') + '</span></div>' +
+          (org.general && org.general.publicSummary ? '<p style="font-family:var(--mono);font-size:12px;color:var(--text2);margin:10px 0;line-height:1.6">' + esc(org.general.publicSummary) + '</p>' : '') +
+          '<div class="rt-field-l" style="margin-top:8px">Leadership</div>' + (leaders || '<div class="app-empty">—</div>') +
+          '</div></div>';
+        el('og-save').onclick = function () { api('POST', 'campaigns/' + encodeURIComponent(sess.id) + '/orgs', { name: org.name || 'org', json: org }).then(function () { el('og-save').textContent = 'Saved ✓'; }); };
+      });
+    };
+  }
+  function studioCard(body, title, sub, actions) {
+    body.innerHTML = '<div class="rt-panel" style="max-width:640px"><div class="rt-panel-head">' + esc(title) + '</div>' +
+      '<div class="rt-panel-body"><p style="font-family:var(--mono);font-size:13px;color:var(--text2);margin:0 0 14px;line-height:1.6">' + esc(sub) + '</p>' +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap">' + actions.map(function (a, i) { return '<button class="rt-btn' + (i === 0 ? ' rt-btn--green' : '') + '" data-sact="' + i + '">' + esc(a[0]) + '</button>'; }).join('') + '</div>' +
+      '<div id="studio-out" style="margin-top:14px"></div></div></div>';
+    body.querySelectorAll('[data-sact]').forEach(function (b) { b.onclick = actions[+b.getAttribute('data-sact')][1]; });
+  }
+  // Open a full HTML tool to create a NEW doc, then persist via the cdoc adapter.
+  // Embed a doc editor (cdoc bridge) full-page in the ACTIVE tab; ← Back re-renders the tab.
+  function openDocEmbed(type, name, tool) {
+    var host = el('tab-content'); if (!host) return;
+    var backTool = activeToolId();
+    var url = tool + '?cdoc=1&cid=' + encodeURIComponent(sess.id) + '&ctype=' + type + '&cname=' + encodeURIComponent(name);
+    host.className = 'tab-content';
+    host.innerHTML = '<div class="cd-embed"><div class="cd-embed-bar"><button class="app-btn" id="se-back">← Back</button><span class="cd-embed-name">' + esc(idOf(name)) + '</span></div><iframe class="cd-embed-frame" id="se-frame" src="' + esc(url) + '"></iframe></div>';
+    el('se-back').onclick = function () {
+      var fr = el('se-frame'), win = fr && fr.contentWindow, ad = win && win.__cdocAdapter, obj;
+      try { obj = ad && ad.serialize(); } catch (e) { obj = null; }
+      var done = function () { toolRender(backTool, host); };
+      if (obj == null) return done();
+      api('PUT', 'campaigns/' + encodeURIComponent(sess.id) + '/' + type + '/' + encodeURIComponent(name), obj).then(done, done);
+    };
+  }
+  function openToolEmbed(url, name) {
+    var host = el('tab-content'); if (!host) return;
+    var backTool = activeToolId();
+    host.className = 'tab-content';
+    host.innerHTML = '<div class="cd-embed"><div class="cd-embed-bar"><button class="app-btn" id="se-back">← Back</button><span class="cd-embed-name">' + esc(name) + '</span></div><iframe class="cd-embed-frame" src="' + esc(url) + '"></iframe></div>';
+    el('se-back').onclick = function () { toolRender(backTool, host); };
+  }
+  function studioNewDoc(type, tool) {
+    prompt1('New ' + (type === 'orgs' ? 'organisation' : 'NPC'), 'Name', '', function (name) {
+      name = (name || '').trim(); if (!name) return;
+      api('POST', 'campaigns/' + encodeURIComponent(sess.id) + '/' + type, { name: name, json: {} }).then(function () { openDocEmbed(type, name, tool); });
+    });
+  }
+  function studioOpenTool(url, name) { openToolEmbed(url, name); }
+
+  /* ── Bestiary — saved campaign NPCs (list + dossier + reveal) ── */
+  function renderBestiary(panel) {
+    if (!panel) return;
+    var gm = sess.role === 'gm';
+    var acts = gm ? '<button class="rt-btn" id="be-gen">Generate</button><button class="rt-btn" id="be-out">Outfit</button><button class="rt-btn" id="be-new">+ New NPC</button>' : '';
+    panel.innerHTML = rtHead('☺', 'NPC', gm ? 'Bestiary · generators · contacts' : 'Contacts & public NPCs', acts) +
+      '<div class="rt-two" style="grid-template-columns:minmax(0,320px) minmax(0,1fr)">' +
+        '<div class="rt-panel" style="min-height:calc(100vh - 250px)"><div class="rt-panel-head">Library <span class="rt-panel-act" id="be-count"></span></div>' +
+          '<div class="rt-panel-body" style="overflow:auto;max-height:calc(100vh - 300px)"><input class="rt-input" id="be-search" placeholder="name or faction…" style="margin-bottom:10px"><div id="be-list"></div></div></div>' +
+        '<div id="be-dossier"><div class="rt-panel"><div class="rt-panel-head">Dossier</div><div class="rt-panel-body"><div class="app-empty">Select an NPC.</div></div></div></div>' +
+      '</div>';
+    if (gm) {
+      el('be-new').onclick = function () {
+        prompt1('New NPC', 'Name', '', function (name) {
+          name = (name || '').trim(); if (!name) return;
+          api('POST', 'campaigns/' + encodeURIComponent(sess.id) + '/npcs', { name: name, json: {} }).then(function () { openDocEmbed('npcs', name, 'npc-sheet.html'); });
+        });
+      };
+      el('be-gen').onclick = function () { if (window.archetypeGenModal) archetypeGenModal({ onSave: function (sheets) { saveGeneratedNPCs(sess.id, sheets, function () { renderBestiary(panel); }); } }); };
+      el('be-out').onclick = function () { openToolEmbed('outfit-designer.html', 'Outfit Designer'); };
+    }
+    api('GET', 'campaigns/' + encodeURIComponent(sess.id)).then(function (d) {
+      var npcs = ((d.docs && d.docs.npcs) || []).filter(function (x) { return !/^_/.test(x.name); });
+      var pub = (((d.meta || {}).prep || {}).npcPublic) || [];
+      var contacts = [];
+      if (!gm) {
+        npcs = npcs.filter(function (n) { return pub.indexOf(n.name) >= 0; });
+        // contacts from the player's own sheet
+        var rec = sess.camp && sess.camp.getSheet && sess.camp.getSheet(sess.sheetId);
+        contacts = (rec && rec.json && rec.json.contacts) || [];
+      }
+      var order = (((d.meta || {}).prep || {}).npcOrder) || [];
+      if (gm && order.length) npcs.sort(function (a, b) { var ia = order.indexOf(a.name), ib = order.indexOf(b.name); return (ia < 0 ? 9999 : ia) - (ib < 0 ? 9999 : ib); });
+      el('be-count').textContent = npcs.length + (contacts.length ? ' + ' + contacts.length : '');
+      function paint(filter) {
+        var f = (filter || '').toLowerCase();
+        var npcRows = npcs.filter(function (n) { return !f || idOf(n.name).toLowerCase().indexOf(f) >= 0; }).map(function (n) {
+          var isPub = pub.indexOf(n.name) >= 0;
+          if (gm) return '<div class="be-row" data-name="' + esc(n.name) + '" draggable="true"><span class="be-grab">⠿</span>' +
+            '<button class="be-open" data-npc="' + esc(n.name) + '">' + esc(idOf(n.name)) + '</button>' +
+            '<button class="rt-link be-act" data-bereveal="' + esc(n.name) + '" title="Cast reveal">⇄</button>' +
+            '<button class="rt-link be-act' + (isPub ? ' on' : '') + '" data-bepub="' + esc(n.name) + '" title="Public to players">' + (isPub ? '◉' : '◌') + '</button>' +
+            '<button class="rt-link be-act be-del" data-bedel="' + esc(n.name) + '" title="Delete">✕</button></div>';
+          return '<button class="file-row" data-npc="' + esc(n.name) + '">' + esc(idOf(n.name)) + '</button>';
+        }).join('');
+        var contactRows = contacts.filter(function (c) { return !f || (c.name || '').toLowerCase().indexOf(f) >= 0; }).map(function (c, i) {
+          return '<button class="file-row" data-contact="' + i + '">' + esc(c.name || 'Contact') + ' <span class="rt-badge rt-badge--grey" style="font-size:8px;padding:1px 4px">CONTACT</span></button>';
+        }).join('');
+        el('be-list').innerHTML = (npcRows + contactRows) || '<div class="app-empty">No NPC matches.</div>';
+        function mark(b) { el('be-list').querySelectorAll('.file-row,.be-open').forEach(function (x) { x.classList.remove('active'); }); b.classList.add('active'); }
+        el('be-list').querySelectorAll('[data-npc]').forEach(function (b) { b.onclick = function () { mark(b); if (gm) beOpen(b.getAttribute('data-npc')); else beDossier(b.getAttribute('data-npc')); }; });
+        el('be-list').querySelectorAll('[data-contact]').forEach(function (b) { b.onclick = function () { mark(b); beContact(contacts[+b.getAttribute('data-contact')]); }; });
+        el('be-list').querySelectorAll('[data-bereveal]').forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); var nm = b.getAttribute('data-bereveal'); fetch('/__api/campaigns/' + encodeURIComponent(sess.id) + '/npcs/' + encodeURIComponent(nm)).then(function (r) { return r.json(); }).then(function (s) { castReveal({ kind: 'event', preset: 'dossier', title: idOf(nm), portrait: (s && s.photo) || '', text: (s && (s.notes || s.role)) || '' }); }); }; });
+        el('be-list').querySelectorAll('[data-bepub]').forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); var nm = b.getAttribute('data-bepub'); ensureCdData(function () { var p = prep().npcPublic || (prep().npcPublic = []); var i = p.indexOf(nm); if (i >= 0) p.splice(i, 1); else p.push(nm); savePrep(function () { renderBestiary(panel); }); }); }; });
+        el('be-list').querySelectorAll('[data-bedel]').forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); var nm = b.getAttribute('data-bedel'); confirm1('Delete NPC "' + idOf(nm) + '"?', function () { api('DELETE', 'campaigns/' + encodeURIComponent(sess.id) + '/npcs/' + encodeURIComponent(nm)).then(function () { renderBestiary(panel); }); }); }; });
+        el('be-list').querySelectorAll('.be-row').forEach(function (r) {
+          r.ondragstart = function (e) { e.dataTransfer.setData('text/plain', r.getAttribute('data-name')); };
+          r.ondragover = function (e) { e.preventDefault(); };
+          r.ondrop = function (e) { e.preventDefault(); reorderNpc(e.dataTransfer.getData('text/plain'), r.getAttribute('data-name'), npcs, panel); };
+        });
+      }
+      paint('');
+      el('be-search').oninput = function () { paint(el('be-search').value); };
+    });
+  }
+  function beDossier(name) {
+    var host = el('be-dossier'); if (!host) return;
+    host.innerHTML = '<div class="rt-panel"><div class="rt-panel-head">Dossier</div><div class="rt-panel-body"><div class="app-empty">Loading…</div></div></div>';
+    fetch('/__api/campaigns/' + encodeURIComponent(sess.id) + '/npcs/' + encodeURIComponent(name)).then(function (r) { return r.json(); }).then(function (s) {
+      s = s || {}; var statKeys = ['INT', 'REF', 'TECH', 'COOL', 'BODY', 'MA'];
+      var statsHtml = (s.stats ? statKeys.map(function (k) { return '<div class="rt-stat"><div class="rt-stat-l">' + k + '</div><div class="rt-stat-v">' + (s.stats[k] != null ? s.stats[k] : '—') + '</div></div>'; }).join('') : '');
+      var gear = [].concat((s.weapons || []).map(function (w) { return esc(w.name || w); }), (s.cyberware || []).map(function (c) { return esc(c.name || c); }));
+      var gm = sess.role === 'gm';
+      var linkedShop = shopsLinkedTo('npc', idOf(name))[0];
+      var acts = gm ? '<button class="rt-btn rt-btn--gold" id="be-pub" title="Visible to players">◌ Public</button><button class="rt-btn rt-btn--red" id="be-reveal">Reveal</button><button class="rt-btn" id="be-edit">Open</button>' : '';
+      if (linkedShop) acts += '<button class="rt-btn" id="be-shop" title="This NPC sells">▣ Shop</button>';
+      host.innerHTML = '<div class="rt-panel"><div class="rt-panel-head">Dossier<span class="rt-panel-act">' + acts + '</span></div>' +
+        '<div class="rt-panel-body"><div class="rt-head-title" style="font-size:24px">' + esc(idOf(name)) + '</div>' +
+        '<div class="rt-head-sub">' + esc((s.role || 'NPC') + (s.sa ? ' · ' + s.sa : '')) + '</div>' +
+        (s.notes ? '<p style="font-family:var(--mono);font-size:13px;margin:10px 0;line-height:1.6">' + esc(s.notes) + '</p>' : '') +
+        (statsHtml ? '<div class="rt-stats" style="margin:12px 0">' + statsHtml + '</div>' : '') +
+        (gear.length ? '<div class="rt-field-l">Gear &amp; chrome</div>' + gear.map(function (g) { return '<div class="rt-rowline"><span>' + g + '</span></div>'; }).join('') : '') +
+        '</div></div>';
+      var bsh = el('be-shop'); if (bsh) bsh.onclick = function () { openShopFor('npc', idOf(name)); };
+      if (gm) {
+        el('be-reveal').onclick = function () { castReveal({ kind: 'event', preset: 'dossier', title: idOf(name), portrait: s.photo || '', text: (s.notes || s.role || '') }); };
+        el('be-edit').onclick = function () { openDocEmbed('npcs', name, 'npc-sheet.html'); };
+        ensureCdData(function () {
+          var pub = prep().npcPublic || (prep().npcPublic = []), on = pub.indexOf(name) >= 0;
+          var pb = el('be-pub'); if (pb) { pb.textContent = on ? '◉ Public' : '◌ Public'; pb.classList.toggle('rt-btn--gold', on);
+            pb.onclick = function () { var i = pub.indexOf(name); if (i >= 0) pub.splice(i, 1); else pub.push(name); savePrep(function () { beDossier(name); }); }; }
+        });
+      }
+    }).catch(function () { host.innerHTML = '<div class="rt-panel"><div class="rt-panel-head">Dossier</div><div class="rt-panel-body"><div class="app-empty">Could not load.</div></div></div>'; });
+  }
+  function beContact(c) {
+    var host = el('be-dossier'); if (!host || !c) return;
+    host.innerHTML = '<div class="rt-panel"><div class="rt-panel-head">Contact</div><div class="rt-panel-body">' +
+      '<div class="rt-head-title" style="font-size:24px">' + esc(c.name || 'Contact') + '</div>' +
+      '<div class="rt-head-sub">' + esc([c.type, c.org, c.attitude].filter(Boolean).join(' · ')) + '</div>' +
+      (c.relationship ? '<div class="rt-rowline"><span>Relationship</span><span>' + esc(c.relationship) + '</span></div>' : '') +
+      (c.description ? '<p style="font-family:var(--mono);font-size:13px;margin:10px 0;line-height:1.6">' + esc(c.description) + '</p>' : '') +
+      '</div></div>';
+  }
+  // Open the REAL NPC sheet editor in the right pane (replaces the read-only dossier).
+  function beOpen(name) {
+    var host = el('be-dossier'); if (!host) return;
+    var url = 'npc-sheet.html?cdoc=1&cid=' + encodeURIComponent(sess.id) + '&ctype=npcs&cname=' + encodeURIComponent(name);
+    host.innerHTML = '<div class="rt-panel" style="min-height:calc(100vh - 250px)"><div class="rt-panel-head">' + esc(idOf(name)) +
+      '<span class="rt-panel-act"><button class="rt-btn rt-btn--red" id="beo-reveal">Reveal</button><button class="rt-btn rt-btn--green" id="beo-save">Save</button></span></div>' +
+      '<div class="rt-panel-body" style="padding:0"><iframe id="beo-frame" src="' + esc(url) + '" style="width:100%;height:calc(100vh - 304px);border:0;display:block"></iframe></div></div>';
+    el('beo-save').onclick = function () {
+      var fr = el('beo-frame'), win = fr && fr.contentWindow, ad = win && win.__cdocAdapter, obj;
+      try { obj = ad && ad.serialize(); } catch (e) { obj = null; }
+      if (obj != null) api('PUT', 'campaigns/' + encodeURIComponent(sess.id) + '/npcs/' + encodeURIComponent(name), obj).then(function () { var b = el('beo-save'); if (b) b.textContent = 'Saved ✓'; });
+    };
+    el('beo-reveal').onclick = function () { fetch('/__api/campaigns/' + encodeURIComponent(sess.id) + '/npcs/' + encodeURIComponent(name)).then(function (r) { return r.json(); }).then(function (s) { castReveal({ kind: 'event', preset: 'dossier', title: idOf(name), portrait: (s && s.photo) || '', text: (s && (s.notes || s.role)) || '' }); }); };
+  }
+  function reorderNpc(from, to, npcs, panel) {
+    if (from === to) return;
+    ensureCdData(function () {
+      var names = npcs.map(function (n) { return n.name; });
+      var fi = names.indexOf(from), ti = names.indexOf(to); if (fi < 0 || ti < 0) return;
+      var m = names.splice(fi, 1)[0]; names.splice(ti, 0, m);
+      cdData.meta.prep.npcOrder = names; savePrep(function () { renderBestiary(panel); });
+    });
+  }
+  function studioOpenDocFrom(secKey, type, name, tool) { openDocEmbed(type, name, tool); }
+
+  /* ── Combat tab = encounter + combatant/squad generators ── */
+  function renderCombatTab(host) {
+    var tab = sess.combatTab || 'setup';
+    var m = (sess.camp && sess.camp.combatMeta && sess.camp.combatMeta()) || {};
+    host.innerHTML = rtHead('◎', 'Combat', 'Encounter · generate · squads — launch a fight',
+      '<button class="rt-btn ' + (m.active ? 'rt-btn--red' : 'rt-btn--green') + '" id="cb-launch">' + (m.active ? 'Resume combat' : 'Set up combat') + '</button>') +
+      '<div class="rt-tabs">' + [['setup', 'Setup'], ['combatant', 'Combatant'], ['squad', 'Squad']].map(function (t) { return '<button class="rt-tab' + (t[0] === tab ? ' active' : '') + '" data-cbtab="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div><div id="cb-body"></div>';
+    el('cb-launch').onclick = sessCombat;
+    host.querySelectorAll('[data-cbtab]').forEach(function (b) { b.onclick = function () { sess.combatTab = b.getAttribute('data-cbtab'); renderCombatTab(host); }; });
+    var body = el('cb-body');
+    if (tab === 'combatant') renderGenCombatant(body);
+    else if (tab === 'squad') renderGenSquad(body);
+    else {
+      var q = (sess.pendingCombat || []).length;
+      body.innerHTML = '<div class="rt-panel"><div class="rt-panel-head">Status</div><div class="rt-panel-body">' +
+        (m.active ? '<div class="rt-rowline"><span>Combat is <b>live</b></span><span>round ' + (m.round || 1) + '</span></div>' : '<div class="app-empty">No active combat. Set up picks your players + any queued combatants.</div>') +
+        '<div class="rt-rowline"><span>Queued combatants</span><span>' + q + (q ? ' <button class="rt-link" id="cb-clr">clear</button>' : '') + '</span></div>' +
+        '<p style="font-family:var(--mono);font-size:12px;color:var(--text2);margin-top:10px;line-height:1.6">Generate a <b>Combatant</b> or <b>Squad</b> → <b>+ Add to combat</b> queues them; <b>Set up combat</b> drops them into initiative with your players.</p></div></div>';
+      var c = el('cb-clr'); if (c) c.onclick = function () { sess.pendingCombat = []; renderCombatTab(host); };
+    }
+  }
+
+  /* ── ORG tab = saved orgs + generator + custom org ── */
+  function renderOrgTab(host) {
+    host.innerHTML = rtHead('⌗', 'Organisations', 'Saved orgs · generator · custom', '<button class="rt-btn" id="org-new">+ New org</button>') +
+      '<div id="org-saved"></div><div id="org-gen" style="margin-top:14px"></div>';
+    el('org-new').onclick = function () { studioNewDoc('orgs', 'organisations.html'); };
+    api('GET', 'campaigns/' + encodeURIComponent(sess.id)).then(function (d) {
+      var orgs = ((d.docs && d.docs.orgs) || []).filter(function (x) { return !/^_/.test(x.name); });
+      var host2 = el('org-saved'); if (!host2) return;
+      host2.innerHTML = '<div class="rt-panel"><div class="rt-panel-head">Saved organisations</div><div class="rt-panel-body">' +
+        (orgs.length ? orgs.map(function (n) { var hasShop = shopsLinkedTo('org', idOf(n.name))[0]; return '<div class="rt-rowline"><span>' + esc(idOf(n.name)) + '</span><span>' + (hasShop ? '<button class="rt-link" data-orgshop="' + esc(idOf(n.name)) + '">▣ shop</button> ' : '') + '<button class="rt-link" data-orgopen="' + esc(n.name) + '">open</button></span></div>'; }).join('') : '<div class="app-empty">No saved orgs yet — generate one below.</div>') + '</div></div>';
+      host2.querySelectorAll('[data-orgopen]').forEach(function (b) { b.onclick = function () { openDocEmbed('orgs', b.getAttribute('data-orgopen'), 'organisations.html'); }; });
+      host2.querySelectorAll('[data-orgshop]').forEach(function (b) { b.onclick = function () { openShopFor('org', b.getAttribute('data-orgshop')); }; });
+    });
+    if (sess.role === 'gm') renderStudioOrg(el('org-gen')); else { var g = el('org-gen'); if (g) g.innerHTML = ''; }
+  }
+
+  /* ── Database — gear / weapons / corporations reference ── */
+  var DB_CACHE = null;
+  var DB_DEFS = [
+    ['weapons', 'Weapons', 'data/cp2020weapons.json'], ['cyberware', 'Cyberware', 'data/cyberware.json'],
+    ['gear', 'Gear', 'data/cp2020gear.json'], ['vehicles', 'Vehicles', 'data/cp2020-vehicles.json'],
+    ['decks', 'Cyberdecks', 'data/cp2020decks.json'], ['programs', 'Programs', 'data/cp2020programs.json'],
+    ['skills', 'Skills', 'data/cp2020skills.json'], ['roles', 'Roles', 'data/cp2020rolesext.json'],
+    ['corps', 'Corporations', 'data/corporations.json'],
+  ];
+  var DB_IDS = DB_DEFS.map(function (d) { return d[0]; });
+  // All scalar columns present in the data (so nothing — ROF, conc, avail… — is dropped).
+  function dbCols(rows) {
+    var cols = [], seen = {};
+    rows.slice(0, 60).forEach(function (r) { Object.keys(r || {}).forEach(function (k) { if (k === '_custom' || k === 'id' || k === 'cat' || seen[k]) return; var v = r[k]; if (v && typeof v === 'object') return; seen[k] = 1; cols.push(k); }); });
+    if (!cols.length) cols = ['name'];
+    var ni = cols.indexOf('name'); if (ni > 0) { cols.splice(ni, 1); cols.unshift('name'); }
+    return cols;
+  }
+  function renderDatabase(panel) {
+    if (!panel) return;
+    var tab = sess.dbTab || 'weapons';
+    var refTab = DB_IDS.indexOf(tab) >= 0;
+    var tabs = DB_DEFS.map(function (t) { return [t[0], t[1]]; }).concat([['npcs', 'NPCs'], ['orgs', 'Orgs']]);
+    ensureCdData(function () {
+      var custom = (prep().customDb || (prep().customDb = []));
+      panel.innerHTML = rtHead('▤', 'Database', 'Reference + your saved & custom records',
+        (refTab ? '<button class="rt-btn rt-btn--green" id="db-add">+ Custom</button>' : '')) +
+        '<div class="rt-tabs">' + tabs.map(function (t) { return '<button class="rt-tab' + (t[0] === tab ? ' active' : '') + '" data-dbtab="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' +
+        '<div style="display:flex;gap:14px;align-items:center;margin-bottom:12px">' +
+          '<input class="rt-input" id="db-search" placeholder="search…" style="max-width:360px">' +
+          (refTab ? '<label class="rt-switch"><input type="checkbox" id="db-custom"' + (sess.dbCustomOnly ? ' checked' : '') + '><span class="rt-switch-track"></span> Custom only</label>' : '') +
+        '</div><div id="db-out"><div class="app-empty">Loading…</div></div>';
+      panel.querySelectorAll('[data-dbtab]').forEach(function (b) { b.onclick = function () { sess.dbTab = b.getAttribute('data-dbtab'); renderDatabase(panel); }; });
+      var addb = el('db-add'); if (addb) addb.onclick = function () { dbCustomForm(tab, panel); };
+      var cb = el('db-custom'); if (cb) cb.onchange = function () { sess.dbCustomOnly = cb.checked; paintDb(); };
+      var se = el('db-search'); if (se) se.oninput = paintDb;
+
+      if (!refTab) { paintDocs(); return; }
+      if (!DB_CACHE) {
+        DB_CACHE = {};
+        Promise.all(DB_DEFS.map(function (d) { return fetch(d[2]).then(function (r) { return r.json(); }).then(function (j) { DB_CACHE[d[0]] = Array.isArray(j) ? j : (j.items || j.roles || []); }).catch(function () { DB_CACHE[d[0]] = []; }); })).then(paintDb);
+      } else paintDb();
+
+      function paintDb() {
+        var f = (el('db-search') && el('db-search').value || '').toLowerCase();
+        var base = sess.dbCustomOnly ? [] : (DB_CACHE[tab] || []);
+        var mine = custom.filter(function (c) { return c.cat === tab; });
+        var cols = dbCols((DB_CACHE[tab] || []).concat(mine));
+        var rows = mine.concat(base).filter(function (r) { return !f || JSON.stringify(r).toLowerCase().indexOf(f) >= 0; }).slice(0, 600);
+        var out = el('db-out'); if (!out) return;
+        out.innerHTML = rows.length ? '<div class="rt-panel" style="min-height:calc(100vh - 250px)"><div style="overflow:auto;max-height:calc(100vh - 254px)"><table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px">' +
+          '<thead><tr>' + cols.map(function (c) { return '<th style="text-align:left;padding:7px 10px;background:var(--ink);color:#fff;font-family:var(--head);letter-spacing:1px;text-transform:uppercase;font-size:11px;position:sticky;top:0">' + c + '</th>'; }).join('') + '<th style="background:var(--ink)"></th></tr></thead><tbody>' +
+          rows.map(function (r) { return '<tr style="border-bottom:1px solid #eee' + (r._custom ? ';background:var(--acc-soft)' : '') + '">' + cols.map(function (c) { return '<td style="padding:6px 10px">' + esc(r[c] != null ? r[c] : '') + '</td>'; }).join('') + '<td style="padding:6px 10px;text-align:right">' + (r._custom ? '<span class="rt-badge rt-badge--gold" style="font-size:9px;padding:1px 5px">CUSTOM</span> <button class="rt-link" data-dbdel="' + r.id + '" style="padding:0 4px">✕</button>' : '') + '</td></tr>'; }).join('') +
+          '</tbody></table></div></div>' : '<div class="app-empty">No records match your query.</div>';
+        out.querySelectorAll('[data-dbdel]').forEach(function (b) { b.onclick = function () { var id = b.getAttribute('data-dbdel'); cdData.meta.prep.customDb = custom.filter(function (x) { return x.id !== id; }); savePrep(function () { renderDatabase(panel); }); }; });
+      }
+      function paintDocs() {
+        var out = el('db-out'); if (out) out.innerHTML = '<div class="app-empty">Loading…</div>';
+        // Always fetch fresh so created/deleted/edited NPCs & orgs show immediately.
+        api('GET', 'campaigns/' + encodeURIComponent(sess.id)).then(function (d) {
+          var list = ((d.docs && d.docs[tab]) || []).filter(function (x) { return !/^_/.test(x.name); });
+          var f = (el('db-search') && el('db-search').value || '').toLowerCase();
+          var hits = list.filter(function (n) { return !f || idOf(n.name).toLowerCase().indexOf(f) >= 0; });
+          out = el('db-out'); if (!out) return;
+          out.innerHTML = hits.length ? '<div class="rt-panel" style="min-height:calc(100vh - 250px)"><div class="rt-panel-body" style="overflow:auto;max-height:calc(100vh - 254px)">' + hits.map(function (n) {
+            return '<div class="rt-rowline"><span>' + esc(idOf(n.name)) + '</span><span><button class="rt-link" data-dbopen="' + esc(n.name) + '">open</button></span></div>';
+          }).join('') + '</div></div>' : '<div class="app-empty">No saved ' + tab + ' yet.</div>';
+          out.querySelectorAll('[data-dbopen]').forEach(function (b) { b.onclick = function () { openDocEmbed(tab, b.getAttribute('data-dbopen'), tab === 'orgs' ? 'organisations.html' : 'npc-sheet.html'); }; });
+        });
+      }
+    });
+  }
+  // Custom DB entry — complete form via the shared UI.modal.
+  function dbCustomForm(cat, panel) {
+    var cols = ((DB_CACHE && DB_CACHE[cat]) ? dbCols(DB_CACHE[cat]) : ['name', 'type', 'cost']).filter(function (c) { return c !== 'source'; });
+    var body = cols.map(function (c) { return '<label class="rt-field"><span class="rt-field-l">' + c + '</span><input class="rt-input" data-cf="' + c + '"></label>'; }).join('') +
+      '<label class="rt-field"><span class="rt-field-l">notes</span><textarea class="rt-input" data-cf="notes" rows="2"></textarea></label>';
+    if (!window.UI) { alert('UI not loaded.'); return; }
+    window.UI.modal({
+      title: 'Custom ' + cat + ' entry', body: body,
+      actions: [{ label: 'Cancel' }, { label: 'Save', kind: 'primary', onClick: function (box) {
+        var rec = { id: uid('cdb'), cat: cat, _custom: true };
+        box.querySelectorAll('[data-cf]').forEach(function (i) { rec[i.getAttribute('data-cf')] = i.value; });
+        if (!rec.name) { return false; }
+        ensureCdData(function () { (prep().customDb || (prep().customDb = [])).push(rec); savePrep(function () { renderDatabase(panel); }); });
+      } }]
+    });
+  }
+  /* ── Shop — GM curates Database items into storefronts; players buy → item lands
+     on their sheet + an unpaid line in the buy tray (no auto-deduction). Stock is
+     shared and decrements on purchase. Shops link to a location / NPC / org / URL,
+     a first step toward interconnecting the world. (meta.prep.shops) ── */
+  var SHOP_CATS = [['weapons', 'Weapons', 500], ['gear', 'Gear', 300], ['cyberware', 'Cyberware', 600], ['vehicles', 'Vehicles', 12000], ['decks', 'Cyberdecks', 4000], ['programs', 'Programs', 500]];
+  var SHOP_CAT_LABEL = { weapons: 'Weapons', gear: 'Gear', cyberware: 'Cyberware', vehicles: 'Vehicles', decks: 'Cyberdecks', programs: 'Programs' };
+  function shopCatToArr(cat) { return cat === 'weapons' ? 'weapons' : cat === 'cyberware' ? 'cyberware' : cat === 'vehicles' ? 'vehicles' : 'gear'; }
+  function shopPrice(r) { return parseInt(String(r && r.cost != null ? r.cost : 0).replace(/[^0-9]/g, ''), 10) || 0; }
+  function saveShops(then) { return saveCampaignMeta(sess.id, { prep: prep() }).then(then || function () {}); }
+  // Default "online" basic catalog — derived from the DB by availability + cost ceiling. Unlimited stock.
+  function onlineCatalog() {
+    var out = [];
+    SHOP_CATS.forEach(function (pair) {
+      var cat = pair[0], ceil = pair[2];
+      (DB_CACHE[cat] || []).forEach(function (r) {
+        var av = String(r.avail || r.availability || '').trim().toUpperCase();
+        var cost = shopPrice(r); var common = !av || av[0] === 'E';
+        if (common && cost > 0 && cost <= ceil) out.push({ id: 'on-' + cat + '-' + String(r.name || '').replace(/\W+/g, ''), cat: cat, name: r.name, price: cost, qty: null, data: r });
+      });
+    });
+    return out;
+  }
+  function defaultOnlineShop() { return { id: '__online', name: 'Night Market (online)', kind: 'online', link: { type: 'url', url: '' }, public: true, _virtual: true, items: onlineCatalog() }; }
+  function shopLoadDB(then) {
+    if (DB_CACHE) return then();
+    DB_CACHE = {};
+    Promise.all(DB_DEFS.map(function (d) { return fetch(d[2]).then(function (r) { return r.json(); }).then(function (j) { DB_CACHE[d[0]] = Array.isArray(j) ? j : (j.items || j.roles || []); }).catch(function () { DB_CACHE[d[0]] = []; }); })).then(then);
+  }
+  /* ── Comparison engine: per-category numeric stats so a product can be ranked
+     against the player's owned gear and the rest of the database. ── */
+  function shopNum(v) { var n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.\-]/g, '')); return isNaN(n) ? null : n; }
+  function shopDmgAvg(v) { var m = String(v || '').match(/(\d+)\s*d\s*(\d+)\s*([+\-]\s*\d+)?/i); if (!m) return shopNum(v); var n = +m[1], f = +m[2], b = m[3] ? parseInt(m[3].replace(/\s/g, ''), 10) : 0; return n * (f + 1) / 2 + b; }
+  var SHOP_STATS = {
+    weapons: [['damage', 'DMG', shopDmgAvg, true], ['wa', 'WA', shopNum, true], ['rof', 'ROF', shopNum, true], ['range', 'Range', shopNum, true], ['shots', 'Shots', shopNum, true]],
+    cyberware: [['hc', 'Humanity cost', shopNum, false]],
+    vehicles: [['topspeed', 'Top speed', shopNum, true], ['sdp', 'SDP', shopNum, true], ['sp', 'SP', shopNum, true], ['accelerate', 'Accel', shopNum, true]],
+    decks: [['mu', 'MU', shopNum, true], ['speed', 'Speed', shopNum, true], ['datawall', 'Data wall', shopNum, true]],
+    programs: [['str', 'STR', shopNum, true]],
+    gear: []
+  };
+  function shopStatList(cat) { return SHOP_STATS[cat] || []; }
+  function shopPlayerJson() { if (!sess.sheetId) return null; var r = sess.camp && sess.camp.getSheet && sess.camp.getSheet(sess.sheetId); return r && r.json; }
+  function shopOwnedItems(cat) { var j = shopPlayerJson(); if (!j) return []; var a = j[shopCatToArr(cat)] || []; return a.slice(); }
+  // All linkable locations: NC-map public places (synced) + custom maps + lists + prep fallbacks.
+  function shopLocations() {
+    var ov = ovGet(), out = [], seen = {};
+    function add(nm, sub) { nm = (nm || '').trim(); if (!nm || seen[nm.toLowerCase()]) return; seen[nm.toLowerCase()] = 1; out.push({ name: nm, sub: sub || '' }); }
+    (ov.locations || []).forEach(function (p) { add(p.name || (p.district ? p.district + ' #' + (p.building || '?') : ''), 'Night City' + (p.district ? ' · ' + p.district : '')); });
+    (ov.locMaps || []).forEach(function (m) { (m.gmEntries || m.entries || []).forEach(function (e) { add(e.name || e.building, (m.kind === 'list' ? 'List' : 'Map') + ' · ' + (m.name || '')); }); });
+    (prep().locations || []).forEach(function (p) { add(p.name || p.id, 'Prep'); });
+    (prep().locbooks || []).forEach(function (b) { (b.places || []).forEach(function (p) { add(p.name || p.id, b.name || 'Prep'); }); });
+    return out;
+  }
+  function renderShop(panel) {
+    if (!panel) return;
+    panel.classList.add('shop-tab');
+    panel.innerHTML = rtHead('▣', 'Shop', sess.role === 'gm' ? 'Storefronts & catalog — curate, link, publish' : 'Browse, compare & buy — purchases land on your sheet', '') +
+      '<div id="shop-body"><div class="app-empty">Loading…</div></div>';
+    shopLoadDB(function () {
+      // Always fetch fresh so the GM's shops/stock show immediately for players.
+      api('GET', 'campaigns/' + encodeURIComponent(sess.id)).then(function (d) {
+        cdData = d; state.campaignId = sess.id;
+        var body = el('shop-body'); if (!body) return;
+        if (sess.role === 'gm') renderShopGM(body); else renderShopPlayer(body);
+      }).catch(function () { var b = el('shop-body'); if (b) b.innerHTML = '<div class="app-empty">Could not load campaign.</div>'; });
+    });
+  }
+  function allShopsGM() { return [defaultOnlineShop()].concat(prep().shops || []); }
+  function shopById(id) { if (id === '__online') return defaultOnlineShop(); return (prep().shops || []).filter(function (s) { return s.id === id; })[0] || null; }
+
+  /* ════════ GM curation: shop rail + drag-and-drop catalog ════════ */
+  function renderShopGM(body) {
+    var shops = allShopsGM();
+    var sel = sess.shopSel && shopById(sess.shopSel) ? sess.shopSel : (shops[0] && shops[0].id);
+    sess.shopSel = sel;
+    var railHtml = shops.map(function (s) {
+      var n = (s.items || []).length;
+      return '<button class="shop-card-rail' + (s.id === sel ? ' active' : '') + '" data-shopsel="' + esc(s.id) + '">' +
+        '<span class="shop-card-rail-name">' + esc(s.name || 'Shop') + '</span>' +
+        '<span class="shop-card-rail-meta">' + (s._virtual ? '<span class="rt-badge">auto</span>' : (s.public ? '<span class="rt-badge rt-badge--green">public</span>' : '<span class="rt-badge rt-badge--grey">draft</span>')) + ' <span class="shop-card-rail-n">' + n + '</span></span>' +
+        (s.link && (s.link.ref || s.link.url) ? '<span class="shop-card-rail-link">' + esc(shopLinkLabel(s)) + '</span>' : '') +
+      '</button>';
+    }).join('');
+    body.innerHTML = '<div class="shop-gm">' +
+      '<aside class="shop-gm-rail">' + railHtml + '<button class="rt-btn rt-btn--green rt-btn--block" id="shop-new" style="margin-top:10px">+ New shop</button></aside>' +
+      '<section class="shop-gm-edit" id="shop-edit"></section></div>';
+    body.querySelectorAll('[data-shopsel]').forEach(function (b) { b.onclick = function () { sess.shopSel = b.getAttribute('data-shopsel'); renderShopGM(body); }; });
+    el('shop-new').onclick = function () { shopNewModal(body); };
+    renderShopEdit(el('shop-edit'), shopById(sel));
+  }
+  function shopNewModal(body) {
+    if (!window.UI) { alert('UI not loaded.'); return; }
+    var kindOpts = [['location', 'Location'], ['fixer', 'Fixer / NPC'], ['site', 'Organisation site'], ['online', 'Online']].map(function (k) { return '<option value="' + k[0] + '">' + k[1] + '</option>'; }).join('');
+    window.UI.modal({
+      title: 'New shop', body:
+        '<label class="rt-field"><span class="rt-field-l">Name</span><input class="rt-input" id="ns-name" placeholder="e.g. Kabuki black clinic"></label>' +
+        '<label class="rt-field"><span class="rt-field-l">Kind</span><select class="rt-select" id="ns-kind">' + kindOpts + '</select></label>' +
+        '<label class="rt-switch" style="margin-top:8px"><input type="checkbox" id="ns-pub"><span class="rt-switch-track"></span> Public to players</label>',
+      actions: [{ label: 'Cancel' }, { label: 'Create', kind: 'primary', onClick: function (box) {
+        var name = (box.querySelector('#ns-name').value || '').trim(); if (!name) return false;
+        var s = { id: uid('shop'), name: name, kind: box.querySelector('#ns-kind').value, link: { type: '', ref: '', url: '' }, public: box.querySelector('#ns-pub').checked, items: [] };
+        var arr = prep().shops || (prep().shops = []); arr.push(s); sess.shopSel = s.id;
+        saveShops(function () { renderShopGM(body); });
+      } }]
+    });
+  }
+  function shopLinkLabel(s) {
+    if (!s || !s.link || !s.link.type) return '';
+    var t = s.link.type, ref = t === 'url' ? s.link.url : s.link.ref;
+    if (!ref) return '';
+    var ic = t === 'location' ? '◵' : t === 'npc' ? '☺' : t === 'org' ? '⌗' : '↗';
+    return ic + ' ' + ref;
+  }
+  function renderShopEdit(host, s) {
+    if (!host) return;
+    if (!s) { host.innerHTML = '<div class="rt-panel"><div class="rt-panel-body"><div class="app-empty">Select or create a shop.</div></div></div>'; return; }
+    if (s._virtual) {
+      host.innerHTML = '<div class="rt-panel"><div class="rt-panel-head">' + esc(s.name) + ' <span class="rt-badge">auto</span></div><div class="rt-panel-body">' +
+        '<p style="font-family:var(--mono);font-size:13px;color:var(--text2);line-height:1.7">Auto-generated basic catalog — common, affordable gear, weapons, chrome and vehicles, always available online to every player. Unlimited stock. To curate a custom storefront with limited stock and a location / fixer / org link, create a new shop.</p>' +
+        '<div class="rt-rowline"><span>Items in catalog</span><b>' + (s.items || []).length + '</b></div>' +
+        '</div></div>';
+      return;
+    }
+    host.innerHTML =
+      '<div class="shop-edit-head">' +
+        '<div class="shop-edit-title" id="shop-name">' + esc(s.name) + '</div>' +
+        '<div class="shop-edit-acts">' +
+          '<button class="shop-link-btn" id="shop-link">' + (s.link && (s.link.ref || s.link.url) ? esc(shopLinkLabel(s)) : '+ link to world') + '</button>' +
+          '<label class="rt-switch"><input type="checkbox" id="shop-pub"' + (s.public ? ' checked' : '') + '><span class="rt-switch-track"></span> Public</label>' +
+          '<button class="rt-link" id="shop-ren">rename</button><button class="rt-link" id="shop-del">delete</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="shop-curate">' +
+        '<div class="shop-pal"><div class="shop-pal-head">Database — drag items onto the shelves →</div>' +
+          '<div class="rt-tabs shop-pal-tabs" id="shop-pal-tabs"></div>' +
+          '<input class="rt-input" id="shop-pal-search" placeholder="search…" style="margin:8px;width:calc(100% - 16px)">' +
+          '<div class="shop-pal-list" id="shop-pal-list"></div>' +
+        '</div>' +
+        '<div class="shop-shelf" id="shop-shelf"><div class="shop-shelf-head">Shelves · <b id="shop-shelf-n">' + (s.items || []).length + '</b> items</div><div class="shop-shelf-grid" id="shop-shelf-grid"></div></div>' +
+      '</div>';
+    el('shop-link').onclick = function () { shopLinkModal(s); };
+    el('shop-pub').onchange = function () { s.public = el('shop-pub').checked; saveShops(function () { renderShopGM(el('shop-body')); }); };
+    el('shop-ren').onclick = function () { prompt1('Rename shop', 'New name', s.name || '', function (v) { if (!v) return; s.name = v; saveShops(function () { renderShopGM(el('shop-body')); }); }); };
+    el('shop-del').onclick = function () { confirm1('Delete this shop?', function () { prep().shops = (prep().shops || []).filter(function (x) { return x.id !== s.id; }); sess.shopSel = null; saveShops(function () { renderShopGM(el('shop-body')); }); }); };
+    paintShopPalette(s);
+    paintShopShelf(s);
+    // Shelf is a drop target for palette drags.
+    var shelf = el('shop-shelf');
+    shelf.addEventListener('dragover', function (e) { e.preventDefault(); shelf.classList.add('drop'); });
+    shelf.addEventListener('dragleave', function () { shelf.classList.remove('drop'); });
+    shelf.addEventListener('drop', function (e) {
+      e.preventDefault(); shelf.classList.remove('drop');
+      var raw; try { raw = JSON.parse(e.dataTransfer.getData('text/plain')); } catch (x) { return; }
+      shopAddFromPalette(s, raw.cat, raw.name);
+    });
+  }
+  function shopPalCats() { return SHOP_CATS; }
+  function paintShopPalette(s) {
+    var cat = sess.shopPalCat || 'weapons';
+    var tabs = el('shop-pal-tabs'); if (!tabs) return;
+    tabs.innerHTML = shopPalCats().map(function (p) { return '<button class="rt-tab' + (p[0] === cat ? ' active' : '') + '" data-palcat="' + p[0] + '">' + p[1] + '</button>'; }).join('');
+    tabs.querySelectorAll('[data-palcat]').forEach(function (b) { b.onclick = function () { sess.shopPalCat = b.getAttribute('data-palcat'); paintShopPalette(s); }; });
+    var se = el('shop-pal-search'); if (se) se.oninput = function () { paintPalList(s, cat); };
+    paintPalList(s, cat);
+  }
+  function paintPalList(s, cat) {
+    var host = el('shop-pal-list'); if (!host) return;
+    var f = (el('shop-pal-search') && el('shop-pal-search').value || '').toLowerCase();
+    var custom = (prep().customDb || []).filter(function (x) { return x.cat === cat; });
+    var rows = custom.concat(DB_CACHE[cat] || []).filter(function (r) { return !f || JSON.stringify(r).toLowerCase().indexOf(f) >= 0; }).slice(0, 250);
+    var have = {}; (s.items || []).forEach(function (it) { have[it.cat + ':' + it.name] = 1; });
+    host.innerHTML = rows.length ? rows.map(function (r) {
+      var added = have[cat + ':' + r.name];
+      return '<div class="shop-pal-row' + (added ? ' added' : '') + '" draggable="' + (added ? 'false' : 'true') + '" data-pname="' + esc(r.name) + '">' +
+        '<span class="shop-pal-grip">⋮⋮</span><span class="shop-pal-name">' + esc(r.name || '') + (r._custom ? ' <span class="rt-badge rt-badge--gold">custom</span>' : '') + '</span>' +
+        '<span class="shop-pal-price">' + shopPrice(r) + 'eb</span>' +
+        (added ? '<span class="rt-badge rt-badge--green">in</span>' : '<button class="shop-pal-add" data-paladd="' + esc(r.name) + '" title="Add">+</button>') +
+      '</div>';
+    }).join('') : '<div class="app-empty">No matches.</div>';
+    host.querySelectorAll('.shop-pal-row[draggable="true"]').forEach(function (row) {
+      row.addEventListener('dragstart', function (e) { e.dataTransfer.setData('text/plain', JSON.stringify({ cat: cat, name: row.getAttribute('data-pname') })); e.dataTransfer.effectAllowed = 'copy'; });
+    });
+    host.querySelectorAll('[data-paladd]').forEach(function (b) { b.onclick = function () { shopAddFromPalette(s, cat, b.getAttribute('data-paladd')); }; });
+  }
+  function shopAddFromPalette(s, cat, name) {
+    if ((s.items || []).some(function (it) { return it.cat === cat && it.name === name; })) return;
+    var pool = (prep().customDb || []).filter(function (x) { return x.cat === cat; }).concat(DB_CACHE[cat] || []);
+    var r = pool.filter(function (x) { return x.name === name; })[0]; if (!r) return;
+    (s.items || (s.items = [])).push({ id: uid('si'), cat: cat, name: r.name, price: shopPrice(r), qty: null, pitch: '', data: JSON.parse(JSON.stringify(r)) });
+    saveShops(function () { paintShopShelf(s); paintPalList(s, cat); var n = el('shop-shelf-n'); if (n) n.textContent = (s.items || []).length; });
+  }
+  function paintShopShelf(s) {
+    var grid = el('shop-shelf-grid'); if (!grid) return;
+    var items = s.items || [];
+    if (!items.length) { grid.innerHTML = '<div class="shop-shelf-empty">Drag items here, or hit “+” in the database list.</div>'; return; }
+    grid.innerHTML = items.map(function (it) {
+      return '<div class="shop-shelf-card">' +
+        '<div class="shop-shelf-card-top"><span class="rt-badge">' + esc(SHOP_CAT_LABEL[it.cat] || it.cat) + '</span><button class="shop-shelf-x" data-itemdel="' + esc(it.id) + '" title="Remove">✕</button></div>' +
+        '<div class="shop-shelf-card-name">' + esc(it.name || '') + '</div>' +
+        '<div class="shop-shelf-stats">' + shopStatChips(it) + '</div>' +
+        '<div class="shop-shelf-fields">' +
+          '<label class="shop-mini">eb<input class="rt-input shop-num" data-price="' + esc(it.id) + '" value="' + (it.price || 0) + '"></label>' +
+          '<label class="shop-mini">stock<input class="rt-input shop-num" data-qty="' + esc(it.id) + '" value="' + (it.qty == null ? '' : it.qty) + '" placeholder="∞"></label>' +
+        '</div>' +
+        '<input class="rt-input shop-pitch" data-pitch="' + esc(it.id) + '" placeholder="sales pitch (optional)…" value="' + esc(it.pitch || '') + '">' +
+      '</div>';
+    }).join('');
+    grid.querySelectorAll('[data-price]').forEach(function (i) { i.onchange = function () { var it = items.filter(function (x) { return x.id === i.getAttribute('data-price'); })[0]; if (it) { it.price = parseInt(i.value, 10) || 0; saveShops(); } }; });
+    grid.querySelectorAll('[data-qty]').forEach(function (i) { i.onchange = function () { var it = items.filter(function (x) { return x.id === i.getAttribute('data-qty'); })[0]; if (it) { it.qty = i.value === '' ? null : (parseInt(i.value, 10) || 0); saveShops(); } }; });
+    grid.querySelectorAll('[data-pitch]').forEach(function (i) { i.onchange = function () { var it = items.filter(function (x) { return x.id === i.getAttribute('data-pitch'); })[0]; if (it) { it.pitch = i.value; saveShops(); } }; });
+    grid.querySelectorAll('[data-itemdel]').forEach(function (b) { b.onclick = function () { s.items = items.filter(function (x) { return x.id !== b.getAttribute('data-itemdel'); }); saveShops(function () { paintShopShelf(s); paintShopPalette(s); var n = el('shop-shelf-n'); if (n) n.textContent = (s.items || []).length; }); }; });
+  }
+  // A compact stat-chip strip for a shop item (uses its DB data).
+  function shopStatChips(it) {
+    var d = it.data || {}, out = [];
+    shopStatList(it.cat).forEach(function (st) { var v = d[st[0]]; if (v != null && v !== '') out.push('<span class="shop-chip">' + st[1] + ' ' + esc(v) + '</span>'); });
+    if (it.cat === 'weapons' && d.conc) out.push('<span class="shop-chip">CONC ' + esc(d.conc) + '</span>');
+    if (d.avail || d.availability) out.push('<span class="shop-chip">AV ' + esc(d.avail || d.availability) + '</span>');
+    return out.join('') || '<span class="shop-chip shop-chip-dim">no stats</span>';
+  }
+  /* ════════ Rich link picker (modal) ════════ */
+  function shopLinkModal(s) {
+    if (!window.UI) { alert('UI not loaded.'); return; }
+    var type = (s.link && s.link.type) || 'location';
+    var docs = cdData.docs || {};
+    window.UI.modal({
+      title: 'Link “' + (s.name || 'shop') + '” to the world', size: 'wide',
+      body: '<div class="rt-tabs" id="lk-tabs">' + [['location', 'Location'], ['npc', 'NPC'], ['org', 'Org'], ['url', 'URL'], ['', 'None']].map(function (t) {
+          return '<button class="rt-tab' + (t[0] === type ? ' active' : '') + '" data-lktype="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' +
+        '<input class="rt-input" id="lk-search" placeholder="search…" style="margin-bottom:10px">' +
+        '<div id="lk-list" style="max-height:44vh;overflow:auto"></div>',
+      actions: [{ label: 'Done', kind: 'primary' }]
+    });
+    var box = document.querySelector('.ui-modal') || document;
+    function setLink(t, ref, url) { s.link = { type: t, ref: ref || '', url: url || '' }; saveShops(function () { renderShopGM(el('shop-body')); }); }
+    function paint() {
+      var f = (box.querySelector('#lk-search').value || '').toLowerCase(), list = box.querySelector('#lk-list'), rows = [];
+      var cur = (s.link && s.link.ref) || (s.link && s.link.url) || '';
+      if (type === 'location') rows = shopLocations().map(function (p) { return { ref: p.name, label: p.name, sub: p.sub }; });
+      else if (type === 'npc') rows = (docs.npcs || []).map(function (d) { return { ref: idOf(d.name), label: idOf(d.name), sub: 'NPC' }; });
+      else if (type === 'org') rows = (docs.orgs || []).map(function (d) { return { ref: idOf(d.name), label: idOf(d.name), sub: 'Organisation' }; });
+      if (type === 'url') { list.innerHTML = '<input class="rt-input" id="lk-url" placeholder="https://…" value="' + esc((s.link && s.link.url) || '') + '"><button class="rt-btn rt-btn--green" id="lk-url-go" style="margin-top:8px">Set URL</button>'; box.querySelector('#lk-url-go').onclick = function () { setLink('url', '', box.querySelector('#lk-url').value); UI.close(); }; return; }
+      if (type === '') { list.innerHTML = '<button class="rt-btn rt-btn--red" id="lk-none">Remove link</button>'; box.querySelector('#lk-none').onclick = function () { setLink('', '', ''); UI.close(); }; return; }
+      rows = rows.filter(function (r) { return !f || r.label.toLowerCase().indexOf(f) >= 0; });
+      list.innerHTML = rows.length ? rows.map(function (r) {
+        return '<button class="shop-lk-row' + (r.ref === cur && type === (s.link && s.link.type) ? ' active' : '') + '" data-lkref="' + esc(r.ref) + '"><span class="shop-lk-name">' + esc(r.label) + '</span><span class="shop-lk-sub">' + esc(r.sub) + '</span></button>';
+      }).join('') : '<div class="app-empty">Nothing here yet' + (type === 'location' ? ' — open the Map and mark places public.' : '.') + '</div>';
+      list.querySelectorAll('[data-lkref]').forEach(function (b) { b.onclick = function () { setLink(type, b.getAttribute('data-lkref'), ''); UI.close(); }; });
+    }
+    box.querySelectorAll('[data-lktype]').forEach(function (b) { b.onclick = function () { type = b.getAttribute('data-lktype'); box.querySelectorAll('[data-lktype]').forEach(function (x) { x.classList.remove('active'); }); b.classList.add('active'); paint(); }; });
+    box.querySelector('#lk-search').oninput = paint;
+    paint();
+  }
+
+  /* ════════ Player storefront: rail · card grid · detail drawer · cart ════════ */
+  function shopAccessible() { return [defaultOnlineShop()].concat((prep().shops || []).filter(function (s) { return s.public; })); }
+  function renderShopPlayer(body) {
+    var shops = shopAccessible();
+    var sel = sess.shopSel && shops.filter(function (s) { return s.id === sess.shopSel; })[0] ? sess.shopSel : shops[0].id;
+    sess.shopSel = sel;
+    var cur = shops.filter(function (s) { return s.id === sel; })[0] || shops[0];
+    var cats = []; (cur.items || []).forEach(function (it) { if (cats.indexOf(it.cat) < 0) cats.push(it.cat); });
+    if (!sess.shopCat || (sess.shopCat !== 'all' && cats.indexOf(sess.shopCat) < 0)) sess.shopCat = 'all';
+    var railShops = shops.map(function (s) {
+      return '<button class="shop-rail-shop' + (s.id === sel ? ' active' : '') + '" data-pshop="' + esc(s.id) + '">' +
+        '<span class="shop-rail-shop-name">' + esc(s.name || 'Shop') + '</span>' +
+        (s.link && (s.link.ref || s.link.url) ? '<span class="shop-rail-shop-loc">' + esc(shopLinkLabel(s)) + '</span>' : (s._virtual ? '<span class="shop-rail-shop-loc">always online</span>' : '')) +
+      '</button>';
+    }).join('');
+    var catChips = [['all', 'All']].concat(cats.map(function (c) { return [c, SHOP_CAT_LABEL[c] || c]; }))
+      .map(function (c) { return '<button class="shop-catchip' + (c[0] === sess.shopCat ? ' active' : '') + '" data-pcat="' + c[0] + '">' + esc(c[1]) + '</button>'; }).join('');
+    body.innerHTML = '<div class="shop-wrap">' +
+      '<aside class="shop-rail"><div class="shop-rail-h">Storefronts</div>' + railShops + '</aside>' +
+      '<main class="shop-main">' +
+        '<div class="shop-main-head"><input class="rt-input" id="shop-psearch" placeholder="search this shop…"><div class="shop-catchips">' + catChips + '</div></div>' +
+        '<div class="shop-grid" id="shop-grid"></div>' +
+      '</main>' +
+      '<div class="shop-drawer" id="shop-drawer"></div>' +
+    '</div>' +
+    '<div class="shop-cartbar" id="shop-cartbar"></div>';
+    body.querySelectorAll('[data-pshop]').forEach(function (b) { b.onclick = function () { sess.shopSel = b.getAttribute('data-pshop'); sess.shopCat = 'all'; renderShopPlayer(body); }; });
+    body.querySelectorAll('[data-pcat]').forEach(function (b) { b.onclick = function () { sess.shopCat = b.getAttribute('data-pcat'); paintGrid(); body.querySelectorAll('[data-pcat]').forEach(function (x) { x.classList.remove('active'); }); b.classList.add('active'); }; });
+    var se = el('shop-psearch'); if (se) se.oninput = paintGrid;
+    function paintGrid() {
+      var f = (el('shop-psearch') && el('shop-psearch').value || '').toLowerCase();
+      var items = (cur.items || []).filter(function (it) { return (sess.shopCat === 'all' || it.cat === sess.shopCat) && (!f || (it.name || '').toLowerCase().indexOf(f) >= 0); });
+      var grid = el('shop-grid'); if (!grid) return;
+      grid.innerHTML = items.length ? items.map(function (it) { return shopProductCard(cur, it); }).join('') : '<div class="app-empty">Nothing for sale here.</div>';
+      grid.querySelectorAll('[data-card]').forEach(function (c) { c.onclick = function (e) { if (e.target.closest('[data-cart]')) return; shopOpenDetail(cur, (cur.items || []).filter(function (x) { return x.id === c.getAttribute('data-card'); })[0]); }; });
+      grid.querySelectorAll('[data-cart]').forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); shopCartAdd(cur, (cur.items || []).filter(function (x) { return x.id === b.getAttribute('data-cart'); })[0]); }; });
+    }
+    paintGrid();
+    renderCartBar();
+  }
+  function shopProductCard(shop, it) {
+    var out = it.qty != null && it.qty <= 0;
+    return '<div class="shop-pcard' + (out ? ' sold' : '') + '" data-card="' + esc(it.id) + '">' +
+      '<div class="shop-pcard-cat">' + esc(SHOP_CAT_LABEL[it.cat] || it.cat) + '</div>' +
+      '<div class="shop-pcard-name">' + esc(it.name || '') + '</div>' +
+      (it.pitch ? '<div class="shop-pcard-pitch">' + esc(it.pitch) + '</div>' : '') +
+      '<div class="shop-pcard-chips">' + shopStatChips(it) + '</div>' +
+      '<div class="shop-pcard-foot"><span class="shop-pcard-price">' + Math.round(it.price || 0) + 'eb</span>' +
+        '<span class="shop-pcard-stock">' + (it.qty == null ? 'in stock' : (out ? 'sold out' : it.qty + ' left')) + '</span>' +
+        (out ? '' : '<button class="shop-pcard-cart" data-cart="' + esc(it.id) + '" title="Add to cart">+ cart</button>') +
+      '</div>' +
+    '</div>';
+  }
+  function shopOpenDetail(shop, it) {
+    if (!it) return;
+    var d = el('shop-drawer'); if (!d) return;
+    var out = it.qty != null && it.qty <= 0;
+    d.innerHTML = '<div class="shop-drawer-in">' +
+      '<button class="shop-drawer-x" id="shop-dx">✕</button>' +
+      '<div class="shop-drawer-cat">' + esc(SHOP_CAT_LABEL[it.cat] || it.cat) + '</div>' +
+      '<div class="shop-drawer-name">' + esc(it.name || '') + '</div>' +
+      (it.pitch ? '<div class="shop-drawer-pitch">“' + esc(it.pitch) + '”</div>' : '') +
+      '<div class="shop-drawer-price">' + Math.round(it.price || 0) + 'eb <span class="shop-drawer-stock">· ' + (it.qty == null ? 'unlimited stock' : (out ? 'sold out' : it.qty + ' in stock')) + '</span></div>' +
+      '<div class="shop-drawer-acts">' +
+        (out ? '<button class="rt-btn is-disabled" disabled>Sold out</button>'
+             : '<button class="rt-btn rt-btn--green" id="shop-dbuy">Buy now</button><button class="rt-btn" id="shop-dcart">+ Add to cart</button>') +
+      '</div>' +
+      '<div class="shop-drawer-sec">Specs</div>' + shopSpecTable(it) +
+      shopCompareBlock(it) +
+    '</div>';
+    d.classList.add('open');
+    el('shop-dx').onclick = function () { d.classList.remove('open'); };
+    var bb = el('shop-dbuy'); if (bb) bb.onclick = function () { shopBuy(shop, it, bb); };
+    var cb = el('shop-dcart'); if (cb) cb.onclick = function () { shopCartAdd(shop, it); };
+  }
+  function shopSpecTable(it) {
+    var d = it.data || {}, rows = [];
+    var keys = Object.keys(d).filter(function (k) { return k !== 'name' && k !== 'cost' && k !== '_custom' && k !== 'id' && k !== 'cat' && d[k] != null && d[k] !== '' && typeof d[k] !== 'object'; });
+    keys.forEach(function (k) { rows.push('<div class="shop-spec"><span class="shop-spec-k">' + esc(k) + '</span><span class="shop-spec-v">' + esc(d[k]) + '</span></div>'); });
+    return '<div class="shop-specs">' + (rows.join('') || '<div class="app-empty">No detailed specs.</div>') + '</div>';
+  }
+  // A weapon's class so melee gear is never compared against firearms (and vice-versa).
+  function shopWeaponClass(d) { return String((d && d.type) || '').toUpperCase() === 'MEL' ? 'melee' : 'ranged'; }
+  function shopSameClass(cat, prodData, arr) {
+    if (cat !== 'weapons') return (arr || []).slice();
+    var pc = shopWeaponClass(prodData);
+    return (arr || []).filter(function (x) { return shopWeaponClass(x) === pc; });
+  }
+  // Comparison vs the player's owned same-category items + the rest of the database.
+  // Superior value = green, inferior = red (per stat, This vs Your best).
+  function shopCompareBlock(it) {
+    var stats = shopStatList(it.cat); if (!stats.length) return '';
+    var pdata = it.data || it;
+    var owned = shopSameClass(it.cat, pdata, shopOwnedItems(it.cat));
+    var db = shopSameClass(it.cat, pdata, DB_CACHE[it.cat] || []);
+    var wins = 0, tot = 0;
+    var rows = stats.map(function (st) {
+      var key = st[0], label = st[1], parse = st[2], hi = st[3];
+      var mine = parse(pdata[key]);
+      function best(arr) { var b = null, bn = null; (arr || []).forEach(function (x) { var v = parse(x[key]); if (v == null) return; if (bn == null || (hi ? v > bn : v < bn)) { bn = v; b = x; } }); return { v: bn, item: b }; }
+      var yours = best(owned), cat = best(db);
+      // Colour This vs Your best: better → green, worse → red.
+      var thisCls = '', yourCls = '';
+      if (mine != null && yours.v != null && mine !== yours.v) {
+        var betterMine = hi ? mine > yours.v : mine < yours.v;
+        thisCls = betterMine ? 'shop-cmp-up' : 'shop-cmp-down';
+        yourCls = betterMine ? 'shop-cmp-down' : 'shop-cmp-up';
+      }
+      if (mine != null) { tot++; if (yours.v == null || (hi ? mine >= yours.v : mine <= yours.v)) wins++; }
+      var num = function (v) { return v == null ? '—' : (Math.round(v * 10) / 10); };
+      return '<tr><th>' + esc(label) + '</th>' +
+        '<td class="' + thisCls + '">' + num(mine) + '</td>' +
+        '<td class="' + yourCls + '">' + (yours.v == null ? '<span class="shop-cmp-dim">—</span>' : num(yours.v) + '<span class="shop-cmp-name">' + esc((yours.item && yours.item.name) || '') + '</span>') + '</td>' +
+        '<td>' + (cat.v == null ? '—' : num(cat.v) + '<span class="shop-cmp-name">' + esc((cat.item && cat.item.name) || '') + '</span>') + '</td>' +
+      '</tr>';
+    }).join('');
+    var kind = it.cat === 'weapons' ? (shopWeaponClass(pdata) === 'melee' ? 'melee weapons' : 'ranged weapons') : 'gear';
+    var verdict = !owned.length ? 'You own no comparable ' + kind + ' yet.' : (wins === tot && tot ? 'Beats or matches your ' + kind + ' on every stat.' : wins ? 'Better on ' + wins + ' of ' + tot + ' stats vs your ' + kind + '.' : 'Your current ' + kind + ' are stronger.');
+    return '<div class="shop-drawer-sec">Compare' + (it.cat === 'weapons' ? ' · ' + (shopWeaponClass(pdata) === 'melee' ? 'melee' : 'ranged') : '') + '</div>' +
+      '<div class="shop-cmp-verdict">' + esc(verdict) + '</div>' +
+      '<table class="shop-cmp"><thead><tr><th></th><th>This</th><th>Your best</th><th>Catalog best</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+  /* ── Cart + checkout ── */
+  function shopCart() { return sess.shopCartArr || (sess.shopCartArr = []); }
+  function shopCartAdd(shop, it) {
+    if (!it) return;
+    if (it.qty != null && it.qty <= 0) { alert('Out of stock.'); return; }
+    shopCart().push({ shopId: shop.id, virtual: !!shop._virtual, itemId: it.id, cat: it.cat, name: it.name, price: Math.round(it.price || 0), data: it.data });
+    renderCartBar();
+    var bar = el('shop-cartbar'); if (bar) { bar.classList.add('pulse'); setTimeout(function () { bar.classList.remove('pulse'); }, 300); }
+  }
+  function renderCartBar() {
+    var bar = el('shop-cartbar'); if (!bar) return;
+    var c = shopCart();
+    if (!c.length) { bar.className = 'shop-cartbar'; bar.innerHTML = ''; return; }
+    var total = c.reduce(function (t, x) { return t + (x.price || 0); }, 0);
+    bar.className = 'shop-cartbar on';
+    bar.innerHTML = '<span class="shop-cart-n">🛒 ' + c.length + ' item' + (c.length > 1 ? 's' : '') + '</span>' +
+      '<span class="shop-cart-total">' + total.toLocaleString() + 'eb</span>' +
+      '<button class="rt-btn rt-btn--sm" id="shop-cart-clear">Clear</button>' +
+      '<button class="rt-btn rt-btn--green rt-btn--sm" id="shop-cart-go">Checkout</button>';
+    el('shop-cart-clear').onclick = function () { sess.shopCartArr = []; renderCartBar(); };
+    el('shop-cart-go').onclick = shopCheckoutModal;
+  }
+  function shopCheckoutModal() {
+    if (!window.UI) return;
+    if (sess.role !== 'player' || !sess.sheetId) { alert('No character sheet linked.'); return; }
+    var c = shopCart(); if (!c.length) return;
+    var json = shopPlayerJson() || {};
+    var ls = json.lifestyle || {};
+    var cash = parseFloat(ls.cash != null ? ls.cash : (json.money || 0)) || 0;
+    var accs = (ls.accounts || []).filter(function (a) { return !a.closed; });
+    var total = c.reduce(function (t, x) { return t + (x.price || 0); }, 0);
+    var srcOpts = '<option value="">Leave unpaid (buy-tray)</option><option value="cash">Cash (' + cash.toLocaleString() + 'eb)</option>' +
+      accs.map(function (a) { return '<option value="' + esc(a.id) + '">' + esc(a.name) + ' (' + (parseFloat(a.balance) || 0).toLocaleString() + 'eb)</option>'; }).join('');
+    window.UI.modal({
+      title: 'Checkout — ' + c.length + ' item' + (c.length > 1 ? 's' : ''),
+      body: '<div class="shop-co-list">' + c.map(function (x, i) { return '<div class="rt-rowline"><span>' + esc(x.name) + ' <span class="rt-badge">' + (SHOP_CAT_LABEL[x.cat] || x.cat) + '</span></span><span>' + (x.price || 0).toLocaleString() + 'eb <button class="rt-link" data-corm="' + i + '">✕</button></span></div>'; }).join('') + '</div>' +
+        '<div class="rt-rowline" style="border:0;font-size:15px;margin-top:6px"><b>Total</b><b>' + total.toLocaleString() + 'eb</b></div>' +
+        '<label class="rt-field" style="margin-top:10px"><span class="rt-field-l">Pay from</span><select class="rt-select" id="co-src">' + srcOpts + '</select></label>',
+      actions: [{ label: 'Cancel' }, { label: 'Confirm', kind: 'primary', onClick: function (box) {
+        var src = box.querySelector('#co-src').value;
+        shopCheckout(c, src);
+      } }]
+    });
+    var box = document.querySelector('.ui-modal') || document;
+    box.querySelectorAll('[data-corm]').forEach(function (b) { b.onclick = function () { c.splice(+b.getAttribute('data-corm'), 1); UI.close(); renderCartBar(); if (c.length) shopCheckoutModal(); }; });
+  }
+  function shopCheckout(cart, src) {
+    var sid = idOf(sess.sheetId);
+    var rec = sess.camp && sess.camp.getSheet && sess.camp.getSheet(sid); if (!rec || !rec.json) { alert('Could not load your sheet.'); return; }
+    var json = rec.json, total = 0;
+    cart.forEach(function (x) { shopWriteItem(json, x); total += (x.price || 0); });
+    if (src) {
+      // Pay now from the chosen source (deduct + ledger), no unpaid lines.
+      if (src === 'cash') { json.lifestyle = json.lifestyle || {}; json.lifestyle.cash = (parseFloat(json.lifestyle.cash != null ? json.lifestyle.cash : (json.money || 0)) || 0) - total; }
+      else { var acc = ((json.lifestyle && json.lifestyle.accounts) || []).filter(function (a) { return a.id === src; })[0]; if (acc) { acc.balance = (parseFloat(acc.balance) || 0) - total; acc.ledger = acc.ledger || []; acc.ledger.unshift({ id: 'sx-' + Date.now().toString(36), type: 'expense', label: 'Shop purchase (' + cart.length + ')', amount: total }); } }
+    } else {
+      // Leave as unpaid buy-tray lines.
+      json.pending = json.pending || [];
+      cart.forEach(function (x) { json.pending.push({ id: 'shop-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: x.name, cost: Math.round(x.price || 0), kind: x.cat }); });
+    }
+    sess.camp.publishSheet(sid, json.handle || json.name || sid, json);
+    // Decrement shared stock for real (non-virtual) shop lines.
+    var touched = false;
+    cart.forEach(function (x) { if (x.virtual) return; var s = (prep().shops || []).filter(function (y) { return y.id === x.shopId; })[0]; if (!s) return; var li = (s.items || []).filter(function (y) { return y.id === x.itemId; })[0]; if (li && li.qty != null) { li.qty = Math.max(0, li.qty - 1); touched = true; } });
+    if (touched) saveShops();
+    logSession('Bought ' + cart.length + ' item' + (cart.length > 1 ? 's' : '') + ' — ' + total.toLocaleString() + 'eb' + (src ? ' (paid)' : ' (unpaid)'));
+    sess.shopCartArr = [];
+    renderShopPlayer(el('shop-body'));
+  }
+  function shopBuy(shop, it, btn) {
+    if (sess.role !== 'player' || !sess.sheetId) { alert('No character sheet linked to receive the purchase.'); return; }
+    if (it.qty != null && it.qty <= 0) { alert('Out of stock.'); return; }
+    if (!applyPurchaseToSheet(sess.sheetId, it)) { alert('Could not write to your sheet — is it loaded?'); return; }
+    if (it.qty != null && !shop._virtual) {
+      var s = (prep().shops || []).filter(function (x) { return x.id === shop.id; })[0];
+      if (s) { var li = (s.items || []).filter(function (x) { return x.id === it.id; })[0]; if (li && li.qty != null) li.qty = Math.max(0, li.qty - 1); }
+      saveShops();
+    }
+    logSession('Bought "' + (it.name || 'item') + '" — ' + Math.round(it.price || 0) + 'eb (on sheet · unpaid)');
+    if (btn) { btn.textContent = '✓ on your sheet'; btn.disabled = true; }
+    setTimeout(function () { renderShopPlayer(el('shop-body')); }, 650);
+  }
+  // Append one bought item to the right sheet array (shared writer for buy / cart).
+  function shopWriteItem(json, it) {
+    var arr = shopCatToArr(it.cat);
+    if (!Array.isArray(json[arr])) json[arr] = [];
+    var obj = it.data ? JSON.parse(JSON.stringify(it.data)) : { name: it.name };
+    delete obj._custom; delete obj.cat; delete obj.id;
+    if (arr === 'gear') obj.category = obj.category || (it.cat === 'decks' ? 'CYBERDECK' : it.cat === 'programs' ? 'PROGRAM' : (obj.category || 'GEAR'));
+    json[arr].push(obj);
+  }
+  // Instant buy → item on the sheet + an unpaid buy-tray line (no auto-deduction).
+  // The unpaid line carries NO buyId (the sheet re-normalizes items and strips it).
+  function applyPurchaseToSheet(sid, it) {
+    sid = idOf(sid);
+    var rec = sess.camp && sess.camp.getSheet && sess.camp.getSheet(sid); if (!rec || !rec.json) return false;
+    var json = rec.json;
+    shopWriteItem(json, it);
+    if (!Array.isArray(json.pending)) json.pending = [];
+    json.pending.push({ id: 'shop-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6), name: it.name || 'Item', cost: Math.round(it.price || 0), kind: it.cat });
+    sess.camp.publishSheet(sid, json.handle || json.name || sid, json);
+    return true;
+  }
+  // Map — role-aware Night City (GM planner / player overlay view).
+  function renderMap(panel) {
     if (!panel) return;
     panel.classList.add('sess-sec-files');
-    panel.innerHTML = '<iframe class="sess-livesheet" src="nightcity.html?campaign=' + encodeURIComponent(sess.id) + '&ncrole=player"></iframe>';
-    var fr = panel.querySelector('iframe'); if (fr) fr.onload = ncSyncToFrame;
+    var role = sess.role === 'gm' ? 'gm' : 'player';
+    panel.innerHTML = '<iframe class="sess-livesheet" src="nightcity.html?campaign=' + encodeURIComponent(sess.id) + '&ncrole=' + role + '"></iframe>';
+    var fr = panel.querySelector('iframe'); if (fr) fr.onload = function () { ncSyncToFrame(); ncPostShopLocs(fr); };
+  }
+  // Tell the map which location names host a shop, so it can show an "open shop" affordance.
+  function shopLocationNames() { return (prep().shops || []).filter(function (s) { return s.link && s.link.type === 'location' && s.link.ref; }).map(function (s) { return s.link.ref; }); }
+  function ncPostShopLocs(fr) {
+    ensureCdData(function () {
+      try { fr.contentWindow.postMessage({ type: 'nc-shop-locs', names: shopLocationNames() }, '*'); } catch (e) {}
+    });
+  }
+  // Log — session journal (meta.sessions[].log), newest first.
+  function logTag(msg) {
+    var m = msg || '';
+    if (/reveal|cast|▸|⏱/i.test(m)) return ['CAST', 'var(--acc-danger)'];
+    if (/combat|round|◆|damage/i.test(m)) return ['COMBAT', 'var(--ink)'];
+    if (/loot|€|eddies|❖/i.test(m)) return ['LOOT', 'var(--yellow)'];
+    if (/live|●|session/i.test(m)) return ['SESSION', 'var(--green)'];
+    return ['LOG', 'var(--text2)'];
+  }
+  function renderLog(panel) {
+    if (!panel) return;
+    panel.innerHTML = rtHead('☰', 'Log', 'Session history — everything revealed & cast', '') +
+      '<div class="rt-panel"><div class="rt-panel-head">Timeline</div><div class="rt-panel-body" id="log-scroll"><div class="app-empty">Loading…</div></div></div>';
+    api('GET', 'campaigns/' + encodeURIComponent(sess.id)).then(function (d) {
+      var ss = ((d && d.meta && d.meta.sessions) || []);
+      var rows = [];
+      ss.forEach(function (s) { (s.log || []).forEach(function (e) { rows.push({ ts: e.ts || 0, msg: e.msg || '' }); }); });
+      rows.sort(function (a, b) { return b.ts - a.ts; });
+      var host = el('log-scroll'); if (!host) return;
+      host.innerHTML = rows.length ? rows.map(function (r) {
+        var t = r.ts ? new Date(r.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+        var tag = logTag(r.msg);
+        return '<div class="rt-rowline" style="border-bottom:1px solid #eee;gap:10px;align-items:center">' +
+          '<span class="ses-logt" style="min-width:46px;color:var(--text2)">' + esc(t) + '</span>' +
+          '<span class="rt-badge" style="background:' + tag[1] + ';border-color:' + tag[1] + ';color:#fff;font-size:9px;padding:2px 6px">' + tag[0] + '</span>' +
+          '<span style="flex:1">' + esc(r.msg) + '</span></div>';
+      }).join('') : '<div class="app-empty">No log entries yet. Going live and casting records history here.</div>';
+    }).catch(function () {});
   }
 
   /* Overview — online players, actions in progress, campaign name/description,
@@ -1303,6 +2077,12 @@
     leaves.forEach(function (x) {
       if (x.type === 'money') json.money = (parseInt(json.money, 10) || 0) + (+x.amount || 0);
       else if (x.type === 'ip') json.ip = (parseInt(json.ip, 10) || 0) + (+x.amount || 0);
+      else if (x.cat === 'container') {
+        // A looted stash lands as a functional non-portable container on the sheet.
+        if (!Array.isArray(json.fashion)) json.fashion = [];
+        var d = x.data || {};
+        json.fashion.push({ name: x.name || d.name || 'Container', category: 'STORAGE', cost: d.cost || 0, wt: d.wt || 0, notes: (d.notes || '') + (label ? ' · from ' + label : ''), slots: d.slots || 8, isOutfit: false, isArmor: false, nonPortable: true, contents: [] });
+      }
       else {
         var arr = x.cat === 'weapon' ? 'weapons' : x.cat === 'cyberware' ? 'cyberware' : x.cat === 'vehicle' ? 'vehicles' : x.cat === 'armor' ? 'armor' : 'gear';
         if (!Array.isArray(json[arr])) json[arr] = [];
@@ -1388,7 +2168,9 @@
         '<button class="sess-mode' + (mode === 'grid' ? ' active' : '') + '" data-mode="grid">Grid</button>' +
         '<button class="sess-mode' + (mode === 'tabs' ? ' active' : '') + '" data-mode="tabs">Tabs</button>' +
         '<button class="sess-mode' + (mode === 'columns' ? ' active' : '') + '" data-mode="columns">Columns</button>' +
-      '</div></div>';
+      '</div>' +
+      '<button class="sess-mode sess-mode-add" id="pl-add" title="Add a blank character sheet">+ Sheet</button>' +
+    '</div>';
     var body;
     if (!sess.order.length) body = '<div class="cd-empty">No sheets hosted.</div>';
     else if (mode === 'grid') {
@@ -1396,26 +2178,44 @@
         var photo = sheetPhoto(sid);
         return '<button class="pl-card" data-open="' + esc(sid) + '">' +
           '<div class="pl-photo"' + (photo ? ' style="background-image:url(' + esc(photo) + ')"' : '') + '>' + (photo ? '' : '◈') + '</div>' +
-          '<div class="pl-name">' + esc(sid) + '</div></button>';
+          '<div class="pl-name">' + esc(sheetLabel(sid)) + '</div></button>';
       }).join('') + '</div>';
     } else if (mode === 'tabs') {
-      var tabs = sess.order.map(function (sid) { return '<div class="sess-tab' + (sid === sess.active ? ' active' : '') + '" data-sid="' + esc(sid) + '">' + esc(sid) + '</div>'; }).join('');
+      var tabs = sess.order.map(function (sid) { return '<div class="sess-tab' + (sid === sess.active ? ' active' : '') + '" data-sid="' + esc(sid) + '">' + esc(sheetLabel(sid)) + '</div>'; }).join('');
       body = '<div class="sess-tabbar">' + tabs + '</div><div class="sess-tabbody">' + (sess.active ? '<iframe class="sess-col-frame" src="' + frameSrc(sess.active) + '"></iframe>' : '') + '</div>';
     } else {
       var cols = sess.order.map(function (sid, i) {
         return '<div class="sess-col" data-sid="' + esc(sid) + '" draggable="true">' +
-          '<div class="sess-col-head"><span class="sess-col-idx">' + pad(i + 1) + '</span><span class="sess-col-name">' + esc(sid) + '</span><span class="sess-col-grab">⠿</span></div>' +
+          '<div class="sess-col-head"><span class="sess-col-idx">' + pad(i + 1) + '</span><span class="sess-col-name">' + esc(sheetLabel(sid)) + '</span><span class="sess-col-grab">⠿</span></div>' +
           '<iframe class="sess-col-frame" src="' + frameSrc(sid) + '"></iframe></div>';
       }).join('');
       body = '<div class="sess-cols" id="sess-cols">' + cols + '</div>';
     }
     panel.innerHTML = bar + '<div class="sess-stage-wrap">' + body + '</div>';
-    panel.querySelectorAll('.sess-mode').forEach(function (b) { b.onclick = function () { setSessMode(b.getAttribute('data-mode')); }; });
+    panel.querySelectorAll('.sess-mode[data-mode]').forEach(function (b) { b.onclick = function () { setSessMode(b.getAttribute('data-mode')); }; });
+    var addb = el('pl-add'); if (addb) addb.onclick = addBlankSheet;
     panel.querySelectorAll('[data-open]').forEach(function (c) { c.onclick = function () { sess.active = c.getAttribute('data-open'); setSessMode('tabs'); }; });
     if (mode === 'tabs') panel.querySelectorAll('.sess-tab').forEach(function (t) { t.onclick = function () { sess.active = t.getAttribute('data-sid'); rebuildPlayers(); }; });
     if (mode === 'columns') wireColumnReorder();
   }
-  function rebuildPlayers() { var p = el('sec-players'); if (p) renderPlayers(p); }
+  function rebuildPlayers() { var p = el('tab-content') || el('sec-players'); if (p) renderPlayers(p); }
+  // Display name for a hosted sheet: the character's handle/name, else the id.
+  function sheetLabel(sid) {
+    var r = sess.camp && sess.camp.getSheet && sess.camp.getSheet(sid), j = r && r.json;
+    return (j && (j.handle || j.name)) || idOf(sid);
+  }
+  // Add a fresh blank character sheet to the campaign (hosted live; persists as its own file).
+  function addBlankSheet() {
+    if (!(sess.camp && sess.camp.createSheet)) { alert('Not connected to the campaign.'); return; }
+    prompt1('New character sheet', 'Name', 'e.g. V', function (name) {
+      name = (name || '').trim(); if (!name) return;
+      var sid = sess.camp.createSheet(name, { name: name, handle: name });
+      if (sess.order.indexOf(sid) < 0) sess.order.push(sid);
+      if (sess.hosted.indexOf(sid) < 0) sess.hosted.push(sid);
+      sess.active = sid; sess.mode = 'tabs';
+      rebuildPlayers();
+    });
+  }
   function setSessMode(mode) { sess.mode = mode; try { localStorage.setItem(SESS_MODE_KEY, mode); } catch (e) {} rebuildPlayers(); }
 
   /* Live-sheet (player) — their own synced sheet; combat auto-overlay via cs-join. */
@@ -1473,7 +2273,9 @@
   }
   // GM edits public locations/maps in the embedded NC planner → push to players live.
   window.addEventListener('message', function (ev) {
-    var d = ev.data; if (!d || d.type !== 'nc-gm-public') return;
+    var d = ev.data; if (!d) return;
+    if (d.type === 'nc-open-shop') { openShopFor('location', d.name); return; }
+    if (d.type !== 'nc-gm-public') return;
     if (sess.role === 'gm' && sess.camp && sess.camp.setOverview && d.campaign === sess.id) sess.camp.setOverview({ locations: d.places || [], locMaps: d.maps || [], locOrder: d.order || [] });
   });
 
@@ -1596,7 +2398,7 @@
         '<label>Scope<select id="gen-scope">' + opt('one', 'Single NPC', 'one') + opt('team', 'Coherent team', 'one') + '</select></label>' +
         '<label>Count <input type="number" id="gen-count" value="1" min="1" max="12"></label>' +
       '</div>' +
-      '<button class="app-btn app-btn-go" id="gen-roll">' + (ctx.onParams ? '◆ Add to encounter' : '◆ Generate') + '</button>' +
+      '<button class="app-btn app-btn-go" id="gen-roll">' + (ctx.onParams ? '◆ Add to encounter' : 'Generate') + '</button>' +
       '<div id="gen-preview" class="gen-preview"></div>' +
       '</div>' +
       '<div class="app-modal-actions" id="gen-actions"><button class="app-btn" data-x>Close</button></div></div>';
@@ -1639,10 +2441,11 @@
     }
   }
   function clampN(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
-  function slugName(s) { return (s.role + '-' + (s.notes || '')).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40); }
+  // Readable doc name for a generated NPC (name + handle), not the archetype key.
+  function npcDocName(s) { return (s && (s.handle ? (s.name + ' “' + s.handle + '”') : (s.name || s.role))) || 'NPC'; }
   function saveGeneratedNPCs(id, sheets, done) {
     Promise.all(sheets.map(function (s, i) {
-      var nm = slugName(s) + '-' + Date.now().toString(36) + (sheets.length > 1 ? '-' + (i + 1) : '') + '.json';
+      var nm = npcDocName(s) + (sheets.length > 1 ? ' ' + (i + 1) : '') + '.json';
       return api('POST', 'campaigns/' + encodeURIComponent(id) + '/npcs', { name: nm, json: s });
     })).then(done || function () {});
   }
@@ -1664,7 +2467,7 @@
         '<label>Kind<select id="org-kind">' + kindOpts + '</select></label>' +
         '<label>Scale<select id="org-scale">' + scaleOpts + '</select></label>' +
         '<label>Count <input type="number" id="org-count" value="1" min="1" max="8"></label>' +
-      '</div><button class="app-btn app-btn-go" id="org-roll">◆ Generate</button><div id="org-prev" class="gen-preview"></div></div>' +
+      '</div><button class="app-btn app-btn-go" id="org-roll">Generate</button><div id="org-prev" class="gen-preview"></div></div>' +
       '<div class="app-modal-actions" id="org-actions"><button class="app-btn" data-x>Close</button></div></div>';
     ov.onclick = function (e) { if (e.target === ov) close(); };
     document.body.appendChild(ov);
@@ -1683,7 +2486,7 @@
           Promise.all(last.map(function (o) {
             var nm = (o.name || 'org').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) + '-' + Date.now().toString(36) + '.org.json';
             return api('POST', 'campaigns/' + encodeURIComponent(id) + '/orgs', { name: nm, json: o });
-          })).then(function () { close(); renderCampaignDetail(); });
+          })).then(function () { close(); renderTabContent(); });
         };
       });
     };
@@ -1704,20 +2507,20 @@
     api('GET', 'campaigns/' + encodeURIComponent(id)).then(function (d) {
       var npcDocs = (d && d.docs && d.docs.npcs) || [];
       var pcs = sess.order.map(function (sid) {
-        return '<label class="cbs-row"><input type="checkbox" data-pc="' + esc(sid) + '" checked> ◈ ' + esc(sid) + ' <span class="cbs-tag">PC</span></label>';
+        return '<label class="cbs-row"><span class="cbs-name">' + esc(sid) + ' <span class="cbs-tag">PC</span></span><input type="checkbox" data-pc="' + esc(sid) + '" checked></label>';
       }).join('');
       var npcs = npcDocs.map(function (doc) {
         var nm = doc.name;
-        return '<label class="cbs-row"><input type="checkbox" data-npc="' + esc(nm) + '"> ☗ ' + esc(idOf(nm)) +
-          ' <span class="cbs-tag">NPC</span> ×<input type="number" class="cbs-count" data-count="' + esc(nm) + '" value="1" min="1" max="20"></label>';
+        return '<label class="cbs-row"><span class="cbs-name">' + esc(idOf(nm)) + ' <span class="cbs-tag">NPC</span></span>' +
+          '<span class="cbs-rt">×<input type="number" class="cbs-count" data-count="' + esc(nm) + '" value="1" min="1" max="20"><input type="checkbox" data-npc="' + esc(nm) + '"></span></label>';
       }).join('');
       var ov = document.createElement('div'); ov.id = 'app-modal-ov'; ov.className = 'app-modal-ov';
-      ov.innerHTML = '<div class="app-modal app-modal-wide"><div class="app-modal-head">◆ Start combat</div>' +
+      ov.innerHTML = '<div class="app-modal app-modal-wide"><div class="app-modal-head">Start combat</div>' +
         '<div class="app-modal-body">' +
         (((d.meta && d.meta.prep && d.meta.prep.squads) || []).length ? '<div class="app-kicker">// SQUAD</div><div class="cbs-mook">Squad <select id="cbs-enc"><option value="">— none —</option>' + (d.meta.prep.squads).map(function (e, i) { return '<option value="' + i + '">' + esc(e.name || 'Squad') + '</option>'; }).join('') + '</select><button class="app-btn" id="cbs-encload">Load</button></div>' : '') +
         '<div class="app-kicker">// COMBATANTS</div>' + pcs + (npcs || '<div class="cd-empty">No NPCs in this campaign.</div>') +
         (window.NPCGen ? '<div class="app-kicker" style="margin-top:10px">// ARCHETYPES</div>' +
-          '<button class="app-btn app-btn-go" id="cbs-gen">◆ Generate archetype →</button><div id="cbs-gen-list" class="cbs-genlist"></div>' : '') +
+          '<button class="app-btn app-btn-go" id="cbs-gen">Generate archetype →</button><div id="cbs-gen-list" class="cbs-genlist"></div>' : '') +
         '<div class="app-kicker" style="margin-top:10px">// QUICK MOOK</div>' +
         '<div class="cbs-mook">Name <input id="cbs-mname" placeholder="Booster"> REF <input type="number" id="cbs-mref" value="6" style="width:50px"> BODY <input type="number" id="cbs-mbody" value="7" style="width:50px"> Dmg <input id="cbs-mdmg" value="2d6+1" style="width:70px"> ×<input type="number" id="cbs-mcount" value="1" min="1" max="20" style="width:50px"></div>' +
         '<div class="app-kicker" style="margin-top:10px">// RULES</div>' +
@@ -1728,8 +2531,9 @@
       ov.onclick = function (e) { if (e.target === ov) modalClose(); };
       document.body.appendChild(ov);
       ov.querySelector('[data-x]').onclick = modalClose;
-      // Generated archetypes added straight into this encounter.
-      var genExtra = [];
+      // Generated archetypes added straight into this encounter (incl. any queued
+      // via "Add to combat" from Generators / Squad / Bestiary).
+      var genExtra = (sess.pendingCombat || []).slice(); sess.pendingCombat = [];
       function renderGenExtra() {
         var box = el('cbs-gen-list'); if (!box) return;
         box.innerHTML = genExtra.map(function (c, i) {

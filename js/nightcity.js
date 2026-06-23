@@ -55,6 +55,9 @@
   var PLAYER = { entries: [], home: null, gmLayers: [], districtExtras: {}, maps: [], mapOrder: ['nc'] }; // single player notebook
   var GM = { list: [], active: 0, maps: [], order: ['nc'] };  // notebooks (tabs) + custom maps
   var _surface = 'nc';                                   // active map surface: 'nc' | <customMapId>
+  var _shopLocs = {};                                    // lowercased location names that host a shop (from the app shell)
+  // Open the shop linked to this location (the app shell handles the actual navigation).
+  window.ncOpenShop = function (enc) { try { window.parent.postMessage({ type: 'nc-open-shop', name: decodeURIComponent(enc) }, '*'); ncModalClose(); } catch (e) {} };
   // Custom-map places share the full Night City place shape (photos, security…).
   function _migrateCustomPlace(p) { var m = _migratePlace(p || {}); m.pin = (p && p.pin && typeof p.pin.x === 'number') ? { x: p.pin.x, y: p.pin.y } : (m.pin || null); return m; }
   function _migrateMap(m) {
@@ -413,8 +416,8 @@
     var photos = (e.photos || []).map(function (src, i) { return '<img class="nc-thumb" src="' + src + '" onclick="ncLightbox(\'' + e.id + '\',\'p\',' + i + ')">'; }).join('');
     var maps = (e.hackedMaps || []).map(function (m, i) { return '<img class="nc-thumb nc-thumb-map" src="' + m.dataUrl + '" title="' + _esc(m.label || m.filename || 'hacked map') + '" onclick="ncLightbox(\'' + e.id + '\',\'m\',' + i + ')">'; }).join('');
     var actions = readonly
-      ? '<span class="nc-entry-act" onclick="ncCopyToLog(' + layerIdx + ',\'' + e.id + '\')">copy to my log →</span>'
-      : '<span class="nc-entry-act" onclick="ncEntryModal(\'' + e.district + '\',\'' + e.id + '\')">edit</span>';
+      ? '<span class="nc-entry-act" onclick="ncViewEntry(' + layerIdx + ',\'' + e.id + '\')">view</span> <span class="nc-entry-act" onclick="ncCopyToLog(' + layerIdx + ',\'' + e.id + '\')">copy →</span>'
+      : '<span class="nc-entry-act" onclick="ncEntryModal(\'' + e.district + '\',\'' + e.id + '\')">open</span>';
     return '<div class="nc-entry' + (e.visited ? ' nc-visited' : '') + '">' +
       '<div class="nc-entry-head">' +
         '<span class="nc-type-pill" style="background:' + col + '">' + _esc(typeLabel(e.type)) + '</span>' +
@@ -422,6 +425,7 @@
         '<span class="nc-entry-name">' + (isHome ? '⌂ ' : '') + _esc(e.name || '(unnamed)') + '</span>' +
         (e.security !== '' && e.security != null ? '<span class="nc-entry-sec">SEC ' + _esc(e.security) + '</span>' : '') +
         (!readonly && NC_MODE === 'gm' && e.public ? '<span class="nc-entry-pub">PUBLIC</span>' : '') +
+        (e.name && _shopLocs[String(e.name).toLowerCase()] ? '<span class="nc-entry-shop" onclick="ncOpenShop(\'' + encodeURIComponent(e.name) + '\')" title="Open the shop here">▣ shop</span>' : '') +
         '<span class="nc-entry-act-wrap">' + actions + '</span>' +
       '</div>' +
       (e.notes ? '<div class="nc-entry-notes">' + _esc(e.notes) + '</div>' : '') +
@@ -430,11 +434,13 @@
   }
 
   /* ═══ ENTRY MODAL ═══ */
-  var _modalEntryId = null, _modalDistrict = null, _modalDraft = null, _modalMapId = null, _modalReadonly = false;
+  var _modalEntryId = null, _modalDistrict = null, _modalDraft = null, _modalMapId = null, _modalReadonly = false, _modalLayerIdx = null, _modalMode = 'view';
+  window.ncModalEdit = function () { _modalMode = 'edit'; _renderModal(); };
   window.ncEntryModal = function (districtCode, entryId, pin) {
     _modalDistrict = districtCode;
     _modalEntryId = entryId || null;
-    _modalMapId = null; _modalReadonly = false;
+    _modalMapId = null; _modalReadonly = false; _modalLayerIdx = null;
+    _modalMode = entryId ? 'view' : 'edit';   // existing → view first; new → straight to the form
     var existing = entryId ? findEntry(activeEntries(), entryId) : null;
     _modalDraft = existing ? JSON.parse(JSON.stringify(existing)) : makePlace(districtCode);
     if (pin && !existing) _modalDraft.pin = { x: pin.x, y: pin.y };
@@ -450,8 +456,10 @@
     var typeOpts = TYPES.map(function (t) { return '<option value="' + t.key + '"' + (e.type === t.key ? ' selected' : '') + '>' + t.label + '</option>'; }).join('');
     var isCustomType = !typeMeta(e.type);
     typeOpts += '<option value="__custom"' + (isCustomType ? ' selected' : '') + '>+ custom…</option>';
-    var photos = (e.photos || []).map(function (src, i) { return '<div class="nc-mthumb"><img src="' + src + '"><span onclick="ncModalRmImg(\'p\',' + i + ')">✕</span></div>'; }).join('');
-    var maps = (e.hackedMaps || []).map(function (m, i) { return '<div class="nc-mthumb"><img src="' + m.dataUrl + '"><span onclick="ncModalRmImg(\'m\',' + i + ')">✕</span></div>'; }).join('');
+    var rmX = function (kind, i) { return ro ? '' : '<span class="nc-loc-img-x" onclick="ncModalRmImg(\'' + kind + '\',' + i + ')" title="Remove">✕</span>'; };
+    var photos = (e.photos || []).map(function (src, i) { return '<figure class="nc-loc-img"><img src="' + src + '">' + rmX('p', i) + '</figure>'; }).join('');
+    var maps = (e.hackedMaps || []).map(function (m, i) { return '<figure class="nc-loc-img nc-loc-img-map"><img src="' + m.dataUrl + '"><figcaption>' + _esc(m.label || m.filename || 'hacked map') + '</figcaption>' + rmX('m', i) + '</figure>'; }).join('');
+    var gallery = (photos || maps) ? (photos + maps) : '<div class="nc-loc-noimg">NO VISUAL INTEL</div>';
     // Location header: districts/building on Night City; pin coords on custom maps.
     var locHeader;
     if (custom) {
@@ -472,6 +480,21 @@
           '<label class="nc-modal-lbl">Floor<input id="nc-m-floor" value="' + _esc(e.floor) + '" placeholder="opt."></label>' +
         '</div>';
     }
+    // ── Header badges: type, address, security, status ──
+    var addr = custom
+      ? (e.pin ? '📍 ' + Math.round(e.pin.x * 100) + '%, ' + Math.round(e.pin.y * 100) + '%' : '—')
+      : ('#' + _esc(e.building || '?') + (e.floor ? ' · F' + _esc(e.floor) : '') + (code ? ' · ' + _esc(code) : ''));
+    var badges = '<div class="nc-loc-badges">' +
+      '<span class="nc-type-pill" style="background:' + typeColor(e.type) + '">' + _esc(typeLabel(e.type)) + '</span>' +
+      '<span class="nc-loc-addr">' + addr + '</span>' +
+      (e.security !== '' && e.security != null ? '<span class="nc-loc-badge nc-loc-badge-sec">SEC ' + _esc(e.security) + '</span>' : '') +
+      (NC_MODE === 'gm' && e.public ? '<span class="nc-loc-badge nc-loc-badge-pub">PUBLIC</span>' : '') +
+      (e.visited ? '<span class="nc-loc-badge nc-loc-badge-vis">VISITED</span>' : '') +
+      (isPlayer && !custom && PLAYER.home === e.id ? '<span class="nc-loc-badge">⌂ HOME</span>' : '') +
+    '</div>';
+    var isShop = e.name && _shopLocs[String(e.name).toLowerCase()];
+    var shopBtn = isShop ? '<button class="nc-loc-shop" onclick="ncOpenShop(\'' + encodeURIComponent(e.name) + '\')">▣ Open this shop</button>' : '';
+    // ── Editable form fields (right pane) ──
     var fields =
       locHeader +
       '<label class="nc-modal-lbl">Name<input id="nc-m-name" value="' + _esc(e.name) + '" placeholder="location name"></label>' +
@@ -483,20 +506,37 @@
       '<label class="nc-modal-lbl">Notes<textarea id="nc-m-notes" rows="4" placeholder="legend / details…">' + _esc(e.notes) + '</textarea></label>' +
       (isPlayer ? '<label class="nc-modal-check"><input type="checkbox" id="nc-m-visited"' + (e.visited ? ' checked' : '') + '> Visited</label>' : '') +
       (isPlayer && !custom ? '<label class="nc-modal-check"><input type="checkbox" id="nc-m-home"' + (PLAYER.home === e.id ? ' checked' : '') + '> Set as home (⌂)</label>' : '') +
-      (NC_MODE === 'gm' ? '<label class="nc-modal-check"><input type="checkbox" id="nc-m-public"' + (e.public ? ' checked' : '') + '> Public — visible to players in session</label>' : '') +
-      '<div class="nc-modal-imgs"><div class="nc-modal-imgs-row">' +
-        '<label class="nc-btn nc-file nc-btn-sm">＋ Photo<input type="file" accept="image/*" onchange="ncModalAddImg(\'p\',event)"></label>' +
-        '<label class="nc-btn nc-file nc-btn-sm">＋ Hacked map<input type="file" accept="image/*" onchange="ncModalAddImg(\'m\',event)"></label>' +
-      '</div><div class="nc-mthumbs">' + photos + maps + '</div></div>';
-    var actions =
-      '<div class="nc-modal-actions">' +
-        ((_modalEntryId && !ro) ? '<button class="nc-btn nc-btn-danger" onclick="ncDeleteEntry()">Delete</button>' : '') +
+      (NC_MODE === 'gm' ? '<label class="nc-modal-check"><input type="checkbox" id="nc-m-public"' + (e.public ? ' checked' : '') + '> Public — visible to players in session</label>' : '');
+    var editing = !ro && _modalMode === 'edit';
+    var addImgs = !editing ? '' : '<div class="nc-loc-addimgs">' +
+      '<label class="nc-btn nc-file nc-btn-sm">＋ Photo<input type="file" accept="image/*" onchange="ncModalAddImg(\'p\',event)"></label>' +
+      '<label class="nc-btn nc-file nc-btn-sm">＋ Hacked map<input type="file" accept="image/*" onchange="ncModalAddImg(\'m\',event)"></label>' +
+    '</div>';
+    var main;
+    if (editing) {
+      // ── EDIT: the form ──
+      var editActions = '<div class="nc-modal-actions">' +
+        (_modalEntryId ? '<button class="nc-btn nc-btn-danger" onclick="ncDeleteEntry()">Delete</button>' : '') +
         '<span style="flex:1"></span>' +
-        '<button class="nc-btn" onclick="ncModalClose()">' + (ro ? 'Close' : 'Cancel') + '</button>' +
-        (ro ? '' : '<button class="nc-btn nc-btn-cy" onclick="ncSaveEntry()">Save</button>') +
-      '</div>';
-    var body = (ro ? '<fieldset disabled style="border:none;margin:0;padding:0">' + fields + '</fieldset>' : fields) + actions;
-    _ncModalOpen((_modalEntryId ? (ro ? 'Location' : 'Edit location') : 'New location'), body);
+        '<button class="nc-btn" onclick="ncModalClose()">Cancel</button>' +
+        '<button class="nc-btn nc-btn-cy" onclick="ncSaveEntry()">Save</button></div>';
+      main = '<div class="nc-loc-main">' + shopBtn + fields + editActions + '</div>';
+    } else {
+      // ── VIEW: a real read-only layout (no inputs) ──
+      var notesHtml = e.notes
+        ? '<div class="nc-loc-notes">' + _esc(e.notes) + '</div>'
+        : '<div class="nc-loc-notes nc-loc-empty">No details recorded.</div>';
+      var viewActions = '<div class="nc-modal-actions"><span style="flex:1"></span>' +
+        '<button class="nc-btn" onclick="ncModalClose()">Close</button>' +
+        (!ro ? '<button class="nc-btn nc-btn-cy" onclick="ncModalEdit()">✎ Edit</button>'
+             : (_modalLayerIdx != null ? '<button class="nc-btn nc-btn-cy" onclick="ncCopyToLog(' + _modalLayerIdx + ',\'' + e.id + '\');ncModalClose();">copy to my log</button>' : '')) +
+        '</div>';
+      main = '<div class="nc-loc-main">' + badges + shopBtn + notesHtml + viewActions + '</div>';
+    }
+    var media = '<div class="nc-loc-media">' + gallery + addImgs + '</div>';
+    var body = '<div class="nc-loc">' + media + main + '</div>';
+    var title = (e.name || (_modalEntryId ? 'Location' : 'New location'));
+    _ncModalOpen(editing ? (_modalEntryId ? '✎ ' + title : 'New location') : title, body, true);
   }
   window.ncModalTypeChange = function () {
     var sel = document.getElementById('nc-m-type');
@@ -584,6 +624,14 @@
   /* ═══ GM-layer (imported) actions ═══ */
   window.ncToggleLayer = function (i) { var L = PLAYER.gmLayers[i]; if (!L) return; L.hidden = !L.hidden; _schedSave(); ncAfterChange(); };
   window.ncRemoveLayer = function (i) { if (!confirm('Remove this imported GM layer?')) return; PLAYER.gmLayers.splice(i, 1); _schedSave(); ncRenderSidePanel(); ncRenderCtxBar(); ncAfterChange(); };
+  // Read-only detail popup for a synced GM location (so players can view + open its shop).
+  window.ncViewEntry = function (layerIdx, entryId) {
+    var L = PLAYER.gmLayers[layerIdx]; if (!L) return;
+    var src = findEntry(L.entries, entryId); if (!src) return;
+    _modalDistrict = src.district; _modalEntryId = entryId; _modalMapId = null; _modalReadonly = true; _modalLayerIdx = layerIdx; _modalMode = 'view';
+    _modalDraft = JSON.parse(JSON.stringify(src));
+    _renderModal();
+  };
   window.ncCopyToLog = function (layerIdx, entryId) {
     var L = PLAYER.gmLayers[layerIdx]; if (!L) return;
     var src = findEntry(L.entries, entryId); if (!src) return;
@@ -674,13 +722,13 @@
   };
 
   /* ═══ Minimal modal ═══ */
-  function _ncModalOpen(title, bodyHtml) {
+  function _ncModalOpen(title, bodyHtml, wide) {
     ncModalClose();
     var ov = document.createElement('div');
     ov.id = 'nc-modal-ov';
     ov.className = 'nc-modal-ov';
     ov.onclick = function (e) { if (e.target === ov) ncModalClose(); };
-    ov.innerHTML = '<div class="nc-modal-card"><div class="nc-modal-head">' + _esc(title) + '</div><div class="nc-modal-body"></div></div>';
+    ov.innerHTML = '<div class="nc-modal-card' + (wide ? ' nc-modal-card--wide' : '') + '"><div class="nc-modal-head">' + _esc(title) + '</div><div class="nc-modal-body"></div></div>';
     document.body.appendChild(ov);
     ov.querySelector('.nc-modal-body').innerHTML = bodyHtml;
   }
@@ -789,17 +837,8 @@
     ncEntryModal(ncGuessDistrict(x, y), null, { x: x, y: y });
   };
   window.ncArmPlace = function (id) { _placingId = id; ncRenderAtlas(); };
-  window.ncPinInfo = function (id, layerIdx) {
-    var L = PLAYER.gmLayers[layerIdx]; var e = L ? findEntry(L.entries, id) : null; if (!e) return;
-    var body =
-      '<div class="nc-modal-row"><b>' + _esc(e.district || '??') + '</b> · #' + _esc(e.building || '?') + (e.floor ? '·F' + _esc(e.floor) : '') +
-        ' <span class="nc-type-pill" style="background:' + typeColor(e.type) + '">' + _esc(typeLabel(e.type)) + '</span></div>' +
-      (e.notes ? '<div class="nc-entry-notes">' + _esc(e.notes) + '</div>' : '') +
-      '<div class="nc-modal-actions"><span style="flex:1"></span>' +
-        '<button class="nc-btn" onclick="ncModalClose()">Close</button>' +
-        '<button class="nc-btn nc-btn-cy" onclick="ncCopyToLog(' + layerIdx + ',\'' + e.id + '\');ncModalClose();">copy to my log</button></div>';
-    _ncModalOpen(e.name || '(unnamed)', body);
-  };
+  // Clicking a pin opens the full read-only location popup (gallery + Open-shop button).
+  window.ncPinInfo = function (id, layerIdx) { window.ncViewEntry(layerIdx, id); };
 
   /* ═══ Hook into the reference engine ═══ */
   function _installHooks() {
@@ -967,8 +1006,9 @@
     var m = _findMap(mapId);
     var ex = placeId ? _findPlace(m, placeId) : null;
     var own = ex && (m.entries || []).some(function (p) { return p.id === placeId; });
-    _modalMapId = mapId; _modalDistrict = ''; _modalEntryId = placeId || null;
+    _modalMapId = mapId; _modalDistrict = ''; _modalEntryId = placeId || null; _modalLayerIdx = null;
     _modalReadonly = !!ex && !own;
+    _modalMode = placeId ? 'view' : 'edit';
     _modalDraft = ex ? JSON.parse(JSON.stringify(ex)) : makePlace('');
     if (pin && !ex) _modalDraft.pin = { x: pin.x, y: pin.y };
     _renderModal();
@@ -1013,5 +1053,13 @@
     }
     if (NC_MODE !== 'player') window.ncSetMode('player');
     else { ncRenderSidePanel(); ncRenderMapsBar(); ncAfterChange(); if (_surface !== 'nc') ncRenderCustomMap(_surface); }
+  });
+  // App shell tells the map which locations host a shop → show an "open shop" chip.
+  window.addEventListener('message', function (ev) {
+    var d = ev.data; if (!d || d.type !== 'nc-shop-locs') return;
+    _shopLocs = {}; (d.names || []).forEach(function (n) { if (n) _shopLocs[String(n).toLowerCase()] = 1; });
+    try { ncRenderSidePanel(); } catch (e) {}
+    try { ncAfterChange(); } catch (e) {}
+    try { if (_surface !== 'nc') ncRenderCustomMap(_surface); } catch (e) {}
   });
 })();

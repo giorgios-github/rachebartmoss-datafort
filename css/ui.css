@@ -1,0 +1,86 @@
+/* ════════════════════════════════════════════════════════════════════
+   ui.css — shared design system (tokens + component library).
+   Loaded AFTER css/main.css on both the public site and the app, so its
+   :root ADDS tokens (it never overrides the site's existing --bg/--text/
+   --accent). Goal: one vocabulary (surfaces, type scale, spacing, accents)
+   and one component set (modal, button, card, list, status) so the app
+   reaches the clarity of the site. Vanilla, no build. Measured motion only.
+   ════════════════════════════════════════════════════════════════════ */
+:root {
+  /* ── Surfaces (dark app chrome) ── */
+  --bg-darkest: #0c0c0e;     /* nav bar, role chooser backdrop */
+  --bg-panel:   #16181b;     /* sidebars / session rails */
+  --bg-surface: #1b1d20;     /* dark cards / sub-top bands */
+  --bg-surface-2: #1c1f22;   /* nested dark surface (player chips) */
+  --line-dk:    #2a2a2a;     /* borders on dark */
+  --line-dk-2:  #383838;     /* stronger border on dark */
+  --bg-hover:   #1f2124;     /* hover state on dark nav/cards */
+
+  /* ── Text ── */
+  --text-inv:   #ffffff;
+  --text-dim:   #9a9a9a;
+  --text-faint: #6a6a6a;
+
+  /* ── Accents (semantic; names unused by the site so this is additive) ── */
+  --acc: #b8860b;  --acc-2: #caa022;          /* amber — primary */
+  --acc-live: #1a7a2e; --acc-live-2: #3ec46a; /* green — connected / live */
+  --acc-danger: #c0392b; --acc-danger-2: #e07b6f; /* red — pause / end */
+  --acc-loot: #7a5ab8;                         /* loot tree hierarchy */
+  --acc-pc: #2980b9;                           /* player-character marker (blue) */
+  --acc-deep: #6b5a2a;                         /* dark amber text on soft amber bg */
+  --acc-soft: #faf7ee;                         /* soft amber surface (pins/chips) */
+  --ink: #111;
+  --panel-dk: #16181a;
+
+  /* ── Typography scale ── */
+  --type-xs: 11px; --type-sm: 12px; --type-base: 13px; --type-lg: 16px; --type-xl: 20px;
+  --ls-1: 1px; --ls-2: 2px; --ls-3: 3px;
+
+  /* ── Spacing (8px base) ── */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+  --radius: 0px;
+
+  /* ── Elevation / motion ── */
+  --z-overlay: 1000; --z-modal: 1001;
+  --motion: .14s ease;
+  --clip-corner: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+}
+
+/* ── Typography utilities ── */
+.t-kicker { font-family: var(--mono); font-size: var(--type-xs); letter-spacing: var(--ls-3); color: var(--acc); text-transform: uppercase; }
+.t-title  { font-family: var(--head); font-size: var(--type-xl); letter-spacing: var(--ls-2); }
+.t-label  { font-family: var(--mono); font-size: var(--type-xs); letter-spacing: var(--ls-1); color: var(--text-faint); text-transform: uppercase; }
+.t-data   { font-family: var(--mono); font-size: var(--type-base); }
+
+/* ── Buttons ── */
+.ui-btn { font-family: var(--mono); font-size: var(--type-sm); padding: 5px 10px; border: 1px solid var(--line-dk-2); background: #1a1a1a; color: #ddd; cursor: pointer; transition: background var(--motion), color var(--motion), border-color var(--motion); }
+.ui-btn:hover { background: #000; color: #fff; border-color: #888; }
+.ui-btn--primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+.ui-btn--primary:hover { background: var(--acc); color: var(--ink); border-color: var(--acc); }
+.ui-btn--go { background: #fff; border-color: var(--acc-live); color: var(--acc-live); font-family: var(--head); letter-spacing: var(--ls-2); }
+.ui-btn--go:hover { background: var(--acc-live); color: #fff; }
+.ui-btn--danger { background: #fff; border-color: var(--acc-danger); color: var(--acc-danger); }
+.ui-btn--danger:hover { background: var(--acc-danger); color: #fff; }
+.ui-btn--ghost { background: transparent; border-color: var(--line-dk-2); color: var(--text-dim); }
+.ui-btn--ghost:hover { background: rgba(255,255,255,.06); color: #fff; }
+.ui-btn--sm { font-size: var(--type-xs); padding: 3px 7px; }
+.ui-btn.is-active { background: var(--acc-live); color: #fff; border-color: var(--acc-live); }
+
+/* ── Status chip ── */
+.ui-status { font-family: var(--mono); font-size: var(--type-xs); letter-spacing: var(--ls-1); color: var(--acc); border: 1px solid var(--line-dk-2); padding: 3px 10px; }
+.ui-status.is-live { color: var(--acc-live-2); border-color: var(--acc-live); }
+
+/* ── Modal (single system: replaces .app-modal / aligns .cs-modal / .tuto-popup) ── */
+.ui-modal-ov { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: var(--z-overlay); display: flex; align-items: center; justify-content: center; animation: ui-fade .14s ease both; }
+@keyframes ui-fade { from { opacity: 0; } to { opacity: 1; } }
+.ui-modal { background: #fff; border: 2px solid var(--ink); width: 420px; max-width: 92vw; max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 14px 40px rgba(0,0,0,.5); clip-path: var(--clip-corner); }
+.ui-modal--wide { width: 620px; }
+.ui-modal--dark { background: var(--bg-surface); color: #eee; border-color: #000; }
+.ui-modal-head { background: var(--ink); color: #fff; font-family: var(--head); letter-spacing: var(--ls-2); text-transform: uppercase; font-size: var(--type-base); padding: 10px 14px; flex: 0 0 auto; }
+.ui-modal-body { padding: 14px; font-size: var(--type-base); overflow: auto; }
+.ui-modal-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 14px; border-top: 1px solid #eee; flex: 0 0 auto; }
+
+/* ── Form fields ── */
+.ui-field-label { display: block; font-size: var(--type-xs); color: var(--text-faint); margin-bottom: 4px; }
+.ui-input, .ui-modal-body input, .ui-modal-body select, .ui-modal-body textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--ink); font-family: var(--mono); font-size: 14px; }
+.ui-modal-body textarea { resize: vertical; }

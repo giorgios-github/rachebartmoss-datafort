@@ -6,6 +6,7 @@
 <title>Rache Bartmoss' Datafort</title>
 <link rel="icon" href="img/favicon.ico">
 <link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/ui.css">
 <link rel="stylesheet" href="css/reader.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&display=swap">
 </head>
@@ -51,6 +52,7 @@
           </div>
           <details class="home-changelog">
             <summary>Changelog</summary>
+            <p> - 22.06 v0.9 : Run Table rework. The campaign screen is now a unified, browser-style tabbed workspace (Party, Cast, Map, Combat, Clocks, NPC, ORG, Shop, Database, Log) with a Go-live toggle that casts reveals to players in a Silver-Case "Film Window". New Shop system: the GM curates Database items (drag &amp; drop) into storefronts linked to locations, NPCs or orgs; players browse a card storefront, compare gear against what they own, and buy — purchases land on the sheet and in the buy tray. Redesigned the Night City location popups (view-first, image gallery, open-shop from the map) and the Character Sheet role picker (poster carousel of the nine base roles + a searchable list of all the rest).</p>
             <p> - 11.06 v0.7 : Multiplayer (beta). The GM Hub is now a downloadable desktop app (macOS & Windows) — it serves the toolkit on your local network and syncs player sheets live, no cloud or account. A campaign manager (sheets, NPCs, orgs, Night City, documents), live session dashboard, and a player CONNECT mode (receive or send your sheet). See the Multi tab.</p>
             <p> - 06.06 v0.6 : New LOGOTYPE (poor legibility but I care very little for now) (maybe a global graphic rework coming soon, just trying to get the systems right first)!! Reworked navigation into a sidebar system with a horizontal category menu. Added a custom sheet builder on the Character Sheet (see Settings/Customize mode) : you can now add your own categories, sub-categories, panels, typed fields, collections, remove the stuff you don't like, edit some default fields to fit the setting, reorganize the sheet, etc, and export all that into a shareable json template. Paving the way for a greater level of distinction betwenn GM and player experience.</p>
             <p> - 02.06 v0.5 : Changes coming to the NPC sheet to get ready for diversified PDF exports (which will then be ported to the PC sheet). Added NPC tab system. Added View/Edit infrastructure for NPC sheets, with varied, though barebones for now, and somewhat lore friendly views for the content of the sheets.</p>
@@ -68,7 +70,7 @@
               <div class="tool-card" onclick="showTool('charsheet')"><div class="tool-card-icon">⒜</div><div class="tool-card-title">Character Sheet</div><div class="tool-card-desc">Full PC sheet: stats, skills, gear, lifepath, cyberdeck, lifestyle &amp; banking.</div></div>
               <div class="tool-card" onclick="showTool('npcsheet')"><div class="tool-card-icon">⒝</div><div class="tool-card-title">NPC Sheet</div><div class="tool-card-desc">Quick stat block for NPCs, contacts and adversaries.</div></div>
               <div class="tool-card" onclick="showTool('orgs')"><div class="tool-card-icon">⒞</div><div class="tool-card-title">Organisations</div><div class="tool-card-desc">Build corps, gangs &amp; agencies: hierarchy, market, jobs.</div></div>
-              <div class="tool-card" onclick="showTool('ncmap')"><div class="tool-card-icon">⒟</div><div class="tool-card-title">Night City Map</div><div class="tool-card-desc">Interactive district map of Night City.</div></div>
+              <div class="tool-card" onclick="showTool('ncmap')"><div class="tool-card-icon">⒟</div><div class="tool-card-title">Map</div><div class="tool-card-desc">Interactive district map of Night City.</div></div>
               <div class="tool-card" onclick="showTool('galmap')"><div class="tool-card-icon">⒠</div><div class="tool-card-title">Galactic Map</div><div class="tool-card-desc">Procedural galactic flashmap for deep-space campaigns.</div></div>
               <div class="tool-card" onclick="showTool('outfit')"><div class="tool-card-icon">⒡</div><div class="tool-card-title">Outfit Designer</div><div class="tool-card-desc">Design armor &amp; clothing loadouts to import into sheets.</div></div>
             </div>
@@ -118,10 +120,26 @@
           </div>
 
           <div class="mp-dl">
-            <a class="mp-btn" id="dl-mac" target="_blank" rel="noopener" href="https://github.com/giorgios-github/rache-bartmoss-datafort/releases/latest">Download — macOS <small>.dmg</small></a>
-            <a class="mp-btn" id="dl-win" target="_blank" rel="noopener" href="https://github.com/giorgios-github/rache-bartmoss-datafort/releases/latest">Download — Windows <small>.exe</small></a>
+            <a class="mp-btn" id="dl-mac" target="_blank" rel="noopener" href="https://github.com/giorgios-github/rachebartmoss-datafort/releases/latest">Download — macOS <small>.dmg</small></a>
+            <a class="mp-btn" id="dl-win" target="_blank" rel="noopener" href="https://github.com/giorgios-github/rachebartmoss-datafort/releases/latest">Download — Windows <small>.exe</small></a>
           </div>
           <p class="mp-note">First launch isn't code-signed yet: macOS → right-click ▸ Open, Windows → More info ▸ Run anyway. Allow it through the firewall so players can connect. Tap the ⓘ above for how a session works.</p>
+
+          <details class="home-changelog mp-features">
+            <summary>All app features</summary>
+            <p> - <b>Campaigns &amp; sessions</b> : create campaigns, store sheets / NPCs / orgs / Night City maps / documents per campaign on the GM's machine. Open a campaign into a unified, browser-style tabbed workspace.</p>
+            <p> - <b>Go live &amp; cast</b> : a Go-live toggle turns the workspace into a live session. The GM casts reveals — text, images, NPC dossiers, locations — to every player as a Silver-Case "Film Window" overlay, with a control monitor showing what's on air.</p>
+            <p> - <b>Party &amp; live sheets</b> : every connected player's sheet, embedded and editable live by the GM, in columns, tabs or a grid. Players edit their own; changes sync both ways instantly.</p>
+            <p> - <b>Map</b> : the full Night City district map plus custom maps and off-map location lists, with GM/player layers, public/private places, and a redesigned location popup (image gallery, view/edit, open-shop).</p>
+            <p> - <b>Combat</b> : the real CP2020 combat engine — initiative, damage, wounds, ammo, status — launched with the party plus generated NPCs or saved squads; turns can be cast to players.</p>
+            <p> - <b>NPC &amp; ORG</b> : a bestiary of campaign NPCs (quick generator or the full NPC sheet), an organisation generator and the full Organisations tool, each saveable and revealable.</p>
+            <p> - <b>Shop</b> : the GM curates Database items (drag &amp; drop) into storefronts linked to locations, NPCs or orgs, with prices, stock and sales pitches. Players browse a card storefront, compare gear against what they own, and buy — purchases land on the sheet and in the buy tray; a default online catalogue is always available.</p>
+            <p> - <b>Generators</b> : roll combat-ready NPCs, whole squads, and nested loot containers (money, IP, items) that can be granted straight onto player sheets.</p>
+            <p> - <b>Clocks</b> : tension trackers in several visual styles, advanced and cast to players.</p>
+            <p> - <b>Database</b> : every reference list from the site (weapons, cyberware, gear, vehicles, decks, programs, skills, roles, corporations) plus your saved NPCs, orgs and custom entries — searchable, with a custom-entry form.</p>
+            <p> - <b>Log &amp; Sourcebooks</b> : a timestamped session journal of casts, combat and loot, and the "Établi" sourcebook reader for your PDFs.</p>
+            <p> - <b>Local-first</b> : everything runs on the GM's machine over the LAN — no accounts, no cloud, no fees. Sheets persist as plain JSON files in a visible campaign folder.</p>
+          </details>
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 {
   "name": "bartmoss-datafort",
   "private": true,
-  "version": "0.7.0",
+  "version": "0.9.0",
   "description": "Rache Bartmoss' Datafort — Cyberpunk 2020 companion. Static app + local-first sync layer.",
   "scripts": {
     "build:sync": "vite build",

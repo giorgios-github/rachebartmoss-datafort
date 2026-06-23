@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="css/main.css">
 <link rel="stylesheet" href="css/combat.css">
 <link rel="stylesheet" href="css/onboarding.css">
+<link rel="stylesheet" href="css/role-picker.css">
 <!-- <link rel="stylesheet" href="css/themes.css"> -->
 </head>
 <body data-mode="cs">
@@ -44,7 +45,7 @@
         <div class="id-fields">
           <div class="field"><label>Name</label><input id="cs-name" placeholder="..."></div>
           <div class="field"><label>Handle</label><input id="cs-handle" placeholder="..."></div>
-          <div class="field"><label>Role</label><input id="cs-role" list="role-list" placeholder="..."><datalist id="role-list"></datalist></div>
+          <div class="field"><label>Role</label><input id="cs-role" readonly placeholder="Click to choose a role…" title="Choose a role" class="cs-role-pick"></div>
           <div class="field"><label>Age</label><input id="cs-age" type="number" min="14" max="99"></div>
           <div class="field"><label>Special Ability</label><input id="cs-sa" readonly></div>
           <div class="field"><label>Reputation</label><input id="cs-reputation" type="number" min="0" value="0"></div>
@@ -351,5 +352,6 @@
 <script src="js/cs-join.js"></script>
 <script src="js/campaign-doc.js"></script>
 <script src="js/onboarding.js"></script>
+<script src="js/role-picker.js"></script>
 </body>
 </html>
