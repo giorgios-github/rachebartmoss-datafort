@@ -2,7 +2,7 @@
 Rache Bartmoss Datafort is a web-based companion app for Cyberpunk 2020, the Roleplaying Game of the Dark Future.
 
 It is divided in two tools with different scopes :
-1. The *website* features a set of autonomous tools with limited interconnection that allow anyone to build data elements for Cyberpunk 2020 play. Mainly, it can be used to generate a full character sheet, NPC sheets, Night City locations, outfits, etc. You can also find reference under Data.
+1. The [*website*](https://bartmoss-datafort.neocities.org) features a set of autonomous tools with limited interconnection that allow anyone to build data elements for Cyberpunk 2020 play. Mainly, it can be used to generate a full character sheet, NPC sheets, Night City locations, outfits, etc. You can also find reference under Data.
 2. The *app* is two things at once :
 	- A link between GM and player devices that allows for sync and data sharing on the same Wi-Fi network.
 	- A set of tools built on, or utilizing, this link. It live-syncs character sheets, map informations and more between GM and players. Full features are listed below.
