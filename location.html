@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rache Bartmoss' Datafort — Location</title>
+<link rel="icon" href="img/favicon.ico">
+<link rel="stylesheet" href="css/main.css">
+<style>
+  .loc-wrap { max-width: 860px; margin: 0 auto; padding: 18px 16px 60px; }
+  .loc-photo { position: relative; border: 2px solid #111; min-height: 180px; max-height: 340px; overflow: hidden;
+    display: flex; align-items: center; justify-content: center; cursor: pointer; background: #f4f4f4; }
+  .loc-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .loc-photo .ph-text { font-family: var(--head); letter-spacing: 3px; color: #767676; font-size: 13px; }
+  .loc-photo .img-clear { position: absolute; top: 8px; right: 10px; background: #111; color: #fff; border: none;
+    width: 24px; height: 24px; cursor: pointer; font-size: 12px; }
+  .loc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 22px; }
+  .loc-grid .field.wide { grid-column: 1 / 3; }
+  textarea.loc-ta { width: 100%; min-height: 140px; border: none; border-bottom: 1.5px solid #111; font-family: var(--mono);
+    font-size: 15px; padding: 5px 2px; resize: vertical; background: #fff; }
+  textarea.loc-ta:focus { outline: none; border-bottom-color: #555; }
+</style>
+<link rel="stylesheet" href="css/editor-embed.css">
+</head>
+<body>
+<div id="topnav" style="justify-content:space-between;">
+  <h1 class="title" style="margin:0;padding:0;font-size:17px;letter-spacing:4px;">LOCATION</h1>
+  <div style="display:flex;gap:6px;align-items:center;">
+    <button id="loc-back-btn" class="btn btn-sm" onclick="window.location.href='index.html'">← Back</button>
+  </div>
+</div>
+
+<div class="loc-wrap">
+  <div class="cs-section">
+    <div class="cs-section-head"><h2>Identity</h2></div>
+    <div class="cs-section-body">
+      <div class="loc-photo" onclick="document.getElementById('loc-photo-input').click()" title="Location image (full-bleed)">
+        <span class="ph-text" id="loc-photo-ph">IMAGE — CLICK TO ADD</span>
+        <img id="loc-photo-img" style="display:none">
+        <button class="img-clear" id="loc-photo-clear" style="display:none" title="Remove">✕</button>
+        <input type="file" id="loc-photo-input" accept="image/*" style="display:none">
+      </div>
+      <div class="loc-grid" style="margin-top:12px;">
+        <div class="field"><label>Name</label><input id="loc-name" placeholder="Afterlife, Corpo Plaza…"></div>
+        <div class="field"><label>District</label><input id="loc-district" placeholder="Watson, Combat Zone…"></div>
+        <div class="field"><label>Type</label><input id="loc-type" placeholder="bar, clinic, HQ, ruin…"></div>
+        <div class="field"><label>Mood</label><input id="loc-mood" placeholder="neutral, hostile, classy…"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cs-section">
+    <div class="cs-section-head"><h2>Description</h2></div>
+    <div class="cs-section-body">
+      <textarea class="loc-ta" id="loc-desc" placeholder="What the players see, smell, hear…"></textarea>
+    </div>
+  </div>
+
+  <div class="cs-section">
+    <div class="cs-section-head"><h2>GM Notes</h2></div>
+    <div class="cs-section-body">
+      <textarea class="loc-ta" id="loc-notes" placeholder="Secrets, hooks, dangers — never shown to players…"></textarea>
+    </div>
+  </div>
+</div>
+
+<script src="js/location-editor.js"></script>
+<script src="js/campaign-doc.js"></script>
+<script>if (window.self !== window.top) { var b = document.getElementById('loc-back-btn'); if (b) b.style.display = 'none'; }</script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+/* Command palette (⌘K) — Datafort DS overlay: white paper, 2px ink frame,
+   square corners. Same language as the sidebar search results (app-aside).
+   Hidden until .is-open; appended to <body>. */
+.cmdk { position:fixed; inset:0; z-index:99999; display:none; }
+.cmdk.is-open { display:block; }
+.cmdk-back { position:absolute; inset:0; background:rgba(0,0,0,.45); animation:cmdkBack .12s ease both; }
+@keyframes cmdkBack { from { opacity:0; } to { opacity:1; } }
+
+.cmdk-box {
+  position:absolute; left:50%; top:14vh; transform:translateX(-50%);
+  width:min(640px, 92vw); max-height:70vh; display:flex; flex-direction:column;
+  background:#fff; color:#111; border:2px solid #111;
+  box-shadow:0 10px 36px rgba(0,0,0,.45);
+  animation:cmdkIn .14s cubic-bezier(.2,0,.2,1) both;
+}
+@keyframes cmdkIn { from { opacity:0; transform:translate(-50%,-6px); } to { opacity:1; transform:translate(-50%,0); } }
+
+.cmdk-inwrap { display:flex; align-items:center; gap:10px; padding:12px 14px; border-bottom:2px solid #111; }
+.cmdk-prompt { font-family:var(--mono, monospace); font-size:11px; letter-spacing:1px; color:#fff; background:#111; padding:3px 7px; flex-shrink:0; }
+.cmdk-input { flex:1; background:none; border:none; outline:none; color:#111; font-family:var(--mono, monospace); font-size:16px; letter-spacing:.3px; }
+.cmdk-input::placeholder { color:#999; }
+
+.cmdk-list { overflow-y:auto; padding:6px 0; min-height:40px; }
+.cmdk-group { font-family:var(--head, sans-serif); font-size:10px; letter-spacing:2px; text-transform:uppercase; color:#999; padding:9px 14px 4px; }
+.cmdk-item { display:flex; align-items:center; gap:10px; padding:7px 14px; cursor:pointer; border-left:2px solid transparent; transition:background .08s ease; }
+.cmdk-item.is-sel { background:#f2f2f2; border-left-color:#111; }
+.cmdk-glyph { display:none; }
+.cmdk-lab { font-family:var(--head, sans-serif); font-size:14px; letter-spacing:.4px; color:#111; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cmdk-sub { margin-left:auto; font-family:var(--mono, monospace); font-size:11px; color:#999; white-space:nowrap; flex-shrink:0; padding-left:12px; }
+.cmdk-empty { padding:22px 14px; text-align:center; color:#999; font-family:var(--mono, monospace); font-size:13px; }
+
+.cmdk-foot { display:flex; gap:18px; padding:8px 14px; border-top:1px solid #ddd; font-family:var(--mono, monospace); font-size:10px; letter-spacing:1px; color:#999; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cmdk-back, .cmdk-box { animation:none; }
+}

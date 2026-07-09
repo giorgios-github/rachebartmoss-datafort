@@ -40,6 +40,20 @@
         UI._esc = function (e) { if (e.key === 'Escape') UI.close(); };
         document.addEventListener('keydown', UI._esc);
       }
+      // Enter in a single-line field commits the primary action (textareas keep
+      // their newline; fields that wire their own Enter run first and close).
+      var primaryIdx = (opts.actions || []).map(function (a) { return a.kind; }).indexOf('primary');
+      if (primaryIdx >= 0) {
+        box.addEventListener('keydown', function (e) {
+          if (e.key !== 'Enter' || e.defaultPrevented) return;
+          if (!box.isConnected) return;   // an input-level Enter handler already closed the modal
+          var t = e.target;
+          if (!t || t.tagName !== 'INPUT') return;
+          e.preventDefault();
+          var b = box.querySelector('[data-act="' + primaryIdx + '"]');
+          if (b) b.click();
+        });
+      }
       if (opts.onShow) opts.onShow(box);
       return box;
     },

@@ -139,6 +139,26 @@ export class Campaign {
     return () => this.clog().unobserve(h);
   }
 
+  // ── net (shared via the doc) — live board posts per site (LWW array per key
+  //    'b:<siteId>'; fine for table-scale concurrency). The GM client flushes
+  //    these to the site entity so they survive a hub restart. ──
+  private net() { return this.store.doc.getMap('net'); }
+  getNetPosts(siteId: string): Record<string, unknown>[] {
+    return ((this.net().get('b:' + siteId) as Record<string, unknown>[]) || []).slice();
+  }
+  putNetPost(siteId: string, post: Record<string, unknown>): void {
+    const key = 'b:' + siteId;
+    const arr = ((this.net().get(key) as Record<string, unknown>[]) || []).slice();
+    arr.push(post);
+    this.net().set(key, arr);
+  }
+  setNetBoard(siteId: string, posts: Record<string, unknown>[]): void { this.net().set('b:' + siteId, posts); }
+  onNetChange(cb: () => void): () => void {
+    const h = () => cb();
+    this.net().observe(h);
+    return () => this.net().unobserve(h);
+  }
+
   // ── presence (awareness): who's online / future combat turn ──
   setPresence(state: Record<string, unknown>): void {
     Object.keys(state).forEach((k) => this.provider.awareness.setLocalStateField(k, state[k]));

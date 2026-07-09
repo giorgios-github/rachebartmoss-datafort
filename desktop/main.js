@@ -56,6 +56,9 @@ async function startHub() {
 function appUrl() { return `http://127.0.0.1:${hub.port}/app.html`; }
 function lanAppUrl() { return `http://${hub.primaryHost}:${hub.port}/app.html`; }
 
+// Forward a tab/palette shortcut to the focused window's renderer (see preload).
+function sendNav(action) { const w = BrowserWindow.getFocusedWindow(); if (w) w.webContents.send('nav-shortcut', action); }
+
 function buildMenu() {
   const template = [
     // Explicit app menu (instead of role:'appMenu') so the macOS menu bar shows
@@ -96,9 +99,29 @@ function buildMenu() {
         { label: 'Restart hub', click: async () => { await startHub(); if (liveWin()) liveWin().loadURL(appUrl()); else createWindow(); } },
       ],
     },
+    {
+      label: 'Tabs',
+      submenu: [
+        { label: 'New tab', accelerator: 'CmdOrCtrl+T', click: () => sendNav('newtab') },
+        { label: 'Close tab', accelerator: 'CmdOrCtrl+W', click: () => sendNav('closetab') },
+        { label: 'Reopen closed tab', accelerator: 'Shift+CmdOrCtrl+T', click: () => sendNav('reopen') },
+        { type: 'separator' },
+        { label: 'Command palette…', accelerator: 'CmdOrCtrl+K', click: () => sendNav('palette') },
+      ],
+    },
     { role: 'editMenu' },
     { role: 'viewMenu' },
-    { role: 'windowMenu' },
+    // Custom Window menu: the default windowMenu binds ⌘W to "Close window",
+    // which we re-map to ⌘⇧W so plain ⌘W closes the active tab instead.
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        { type: 'separator' },
+        { label: 'Close window', accelerator: 'Shift+CmdOrCtrl+W', role: 'close' },
+      ],
+    },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }

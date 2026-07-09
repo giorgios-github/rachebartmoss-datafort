@@ -9,7 +9,36 @@
 <link rel="stylesheet" href="css/combat.css">
 <link rel="stylesheet" href="css/onboarding.css">
 <link rel="stylesheet" href="css/role-picker.css">
-<!-- <link rel="stylesheet" href="css/themes.css"> -->
+<link rel="stylesheet" href="css/ctxmenu.css">
+<link rel="stylesheet" href="css/editor-embed.css">
+<style>
+  /* Fit the sheet in a narrow (half-page) column. The Damage Calculator used to
+     sit beside the wound track (min-width 400px) and collide with it; stack the
+     Life row instead — health on top, calculator below — each full width, and
+     compact the 6-location table so it never overflows the column. */
+  .life-container { flex-direction:column; gap:14px; }
+  .life-health, .life-damage { flex:none; width:100%; min-width:0; }
+  .life-damage { overflow-x:auto; }
+  .dmg-table { font-size:12px; width:100%; }
+  .dmg-table th, .dmg-table td { padding:2px 4px; }
+  .dmg-table th { letter-spacing:.3px; white-space:normal; line-height:1.05; }
+  .dmg-table td:first-child, .dmg-table th:first-child { font-size:10px; }
+  .dmg-table input { width:100%; min-width:26px; box-sizing:border-box; }
+  .dmg-table .btn-sm { padding:2px 5px; font-size:10px; }
+  /* Lifepath "Motivations" overflow: the block is the 3rd column of a fixed
+     3-col grid whose breakpoint is VIEWPORT-based, so in a narrow sheet column
+     the three columns stay cramped and Motivations spills. Make the grid follow
+     the CONTAINER width instead — columns wrap when there isn't room. */
+  .lp-fields { grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)) !important; }
+  .lp-group { min-width:0; }
+  .lp-row { flex-wrap:wrap; }
+  .lp-label { width:auto; min-width:64px; }
+  .lp-input { min-width:0; }
+  /* and keep the Motivations block tight vertically */
+  .lp-group[data-group="motivations"] .lp-row { margin:0 0 3px; }
+  .lp-group[data-group="motivations"] .lp-label { font-size:10px; }
+  .lp-group[data-group="motivations"] .lp-input { padding:3px 6px; font-size:12px; }
+</style>
 </head>
 <body data-mode="cs">
 <div id="topnav" style="justify-content:space-between;">
@@ -53,6 +82,7 @@
       </div>
       <div id="net-identity-wrap"></div>
       <input type="file" id="net-icon-photo-input" accept="image/*" style="display:none" onchange="netLoadIconPhoto(event)">
+      <div id="press-section"></div>
     </div>
   </div>
 
@@ -202,6 +232,14 @@
     </div>
   </div>
 
+  <!-- COMPUTER (Net access device + deliveries) -->
+  <div class="cs-section" id="sec-computer">
+    <div class="cs-section-head" onclick="toggleSec(this)"><h2>Computer &amp; Web</h2><span class="toggle"></span></div>
+    <div class="cs-section-body">
+      <div id="computer-section"></div>
+    </div>
+  </div>
+
   <!-- WEAPONS -->
   <div class="cs-section" id="sec-weapons">
     <div class="cs-section-head" onclick="toggleSec(this)"><h2>Weapons</h2><span class="toggle"></span></div>
@@ -343,9 +381,10 @@
 
 </div>
 
-<!-- <script src="js/theme.js"></script> -->
 <script src="js/vendor/jspdf.umd.min.js"></script>
 <script src="js/sync.bundle.js"></script>
+<script src="js/ctxmenu.js"></script>
+<script src="js/desktop-os-catalog.js"></script><!-- shared OS catalog: lets the sheet install an OS on the machine -->
 <script src="js/main.js"></script>
 <script src="js/combat-engine.js"></script>
 <script src="js/combat-ui.js"></script>

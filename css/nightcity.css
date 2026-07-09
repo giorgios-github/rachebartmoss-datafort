@@ -12,6 +12,29 @@
 #nc-ctxbar { display:none; align-items:center; flex-wrap:wrap; gap:8px; padding:7px 14px; background:#f3f3f3; border-bottom:2px solid #111; }
 .nc-ctx-title { font-family:var(--head, sans-serif); font-size:12px; letter-spacing:2px; }
 .nc-ctx-hint { font-family:var(--mono, monospace); font-size:11px; color:#666; margin-left:auto; }
+/* Planner hamburger (right of the maps-bar) + its dropdown (plans / new / import-export). */
+.nc-mtab-ham { margin-left:auto; font-size:15px; line-height:1; padding:5px 11px; border:2px solid #111; background:#fff; color:#111; cursor:pointer; }
+.nc-mtab-ham:hover { background:#111; color:#fff; }
+.nc-planner-menu { position:fixed; z-index:11000; min-width:200px; background:#fff; border:2px solid #111; box-shadow:0 12px 30px rgba(0,0,0,.22); display:flex; flex-direction:column; padding:5px; }
+.nc-planner-menu .npm-h { font-family:var(--head, sans-serif); font-size:11px; letter-spacing:2px; color:#666; padding:5px 8px 3px; }
+.nc-planner-menu .npm-info { font-family:var(--mono, monospace); font-size:11px; color:#666; padding:2px 8px 5px; }
+.nc-planner-menu .npm-plan { display:flex; align-items:center; gap:6px; font-family:var(--mono, monospace); font-size:12px; padding:6px 8px; cursor:pointer; border:1px solid transparent; }
+.nc-planner-menu .npm-plan:hover { background:#f1f1f1; }
+.nc-planner-menu .npm-plan.active { border-color:#111; background:#111; color:#fff; }
+.nc-planner-menu .npm-plan-label { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.nc-planner-menu .npm-x { opacity:.6; padding:0 2px; }
+.nc-planner-menu .npm-x:hover { opacity:1; color:var(--red, #c0392b); }
+.nc-planner-menu .npm-item { display:flex; align-items:center; gap:6px; font-family:var(--mono, monospace); font-size:12px; text-align:left; padding:7px 8px; border:0; background:none; color:#111; cursor:pointer; }
+.nc-planner-menu .npm-item:hover { background:#111; color:#fff; }
+.nc-planner-menu .npm-new { color:#111; }
+.nc-planner-menu .npm-file { position:relative; overflow:hidden; }
+.nc-planner-menu .npm-file input { position:absolute; inset:0; opacity:0; cursor:pointer; }
+.nc-planner-menu .npm-sep { height:1px; background:#ddd; margin:4px 0; }
+.nc-planner-menu .npm-mode { display:block; width:100%; text-align:left; font-family:var(--mono,monospace); font-size:12px; padding:7px 8px; border:0; background:none; color:#111; cursor:pointer; }
+.nc-planner-menu .npm-mode:hover { background:#f1f1f1; }
+.nc-planner-menu .npm-mode.active { background:#111; color:#fff; }
+/* Mode switcher moved into the hamburger → hide the in-Night-City mode bar */
+#nc-modebar { display:none !important; }
 
 /* Buttons */
 .nc-btn { font-family:var(--mono, monospace); font-size:12px; padding:4px 9px; border:1px solid #111; background:#fff; color:#111; cursor:pointer; display:inline-flex; align-items:center; gap:4px; }
@@ -148,14 +171,136 @@ body[data-nc-mode="gm"] #dv-sec { display:none; }
 @media (max-width:760px) { .nc-atlas-wrap { flex-direction:column; } .nc-atlas-legend { width:100%; } }
 
 /* ── Custom maps & off-NC lists (Inc 3) ── */
-#nc-maps-bar { display:flex; align-items:center; gap:6px; flex-wrap:wrap; flex-shrink:0; padding:8px 12px; background:#f3f3f3; border-bottom:2px solid #111; }
-.nc-mtab { font-family:var(--head,sans-serif); font-size:11px; letter-spacing:1px; padding:5px 11px; border:2px solid #111; background:#fff; color:#111; cursor:pointer; display:flex; align-items:center; gap:6px; }
-.nc-mtab.active { background:#111; color:#fff; }
-.nc-mtab-mv { font-size:10px; color:#888; padding:0 2px; cursor:pointer; }
-.nc-mtab.active .nc-mtab-mv { color:#bbb; }
-.nc-mtab-mv:hover { color:#1a7a2e; }
-.nc-mtab-add { font-family:var(--mono,monospace); font-size:11px; padding:5px 9px; border:1px dashed #999; background:#fff; color:#555; cursor:pointer; }
-.nc-mtab-add:hover { border-color:#111; color:#111; }
+/* ── Map navigation sidebar (left) — replaces the old top maps-bar ── */
+#nc-mapnav { width:236px; min-width:236px; background:var(--bg1,#f3f3f3); border-right:2px solid #111; display:none; flex-direction:column; overflow:hidden; }
+#nc-mapnav.on { display:flex; }
+/* MAPS bar — white-on-black like the app's PARTY bar, 46px to line up with the
+   shell's sidebar header; hamburger adapted to sit on the ink bar. */
+.mn-head { display:flex; align-items:center; gap:8px; height:46px; padding:0 12px; box-sizing:border-box; background:#111; border-bottom:none; }
+.mn-head-title { font-family:var(--head,sans-serif); font-size:13px; letter-spacing:3px; flex:1; color:#fff; text-transform:uppercase; }
+.mn-ham { font-size:14px; line-height:1; padding:5px 9px; border:1px solid #555; background:transparent; color:#fff; cursor:pointer; }
+.mn-ham:hover { background:#fff; color:#111; border-color:#fff; }
+.mn-tree { flex:1; overflow:auto; padding:6px 4px; }
+.mn-row { display:flex; align-items:center; gap:4px; font-family:var(--mono,monospace); font-size:12px; padding:5px 6px; cursor:pointer; border:1px solid transparent; border-radius:2px; }
+.mn-row:hover { background:rgba(0,0,0,.06); }
+.mn-row.active { background:#111; color:#fff; }
+.mn-row.active .mn-loc-x, .mn-row.active .mn-mv { color:#bbb; }
+.mn-tw { width:12px; text-align:center; color:#888; flex-shrink:0; cursor:pointer; user-select:none; }
+.mn-ico { width:15px; text-align:center; flex-shrink:0; }
+.mn-lbl { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mn-row.loc { font-size:11px; color:#555; }
+.mn-row.loc.active { color:#fff; }
+.mn-mv { font-size:10px; color:#999; padding:0 1px; }
+.mn-mv:hover { color:#1a7a2e; }
+.mn-loc-x { font-size:10px; color:#bbb; padding:0 2px; }
+.mn-loc-x:hover { color:#c0392b; }
+.mn-actions { display:flex; gap:6px; padding:8px 10px; border-top:1px solid #ccc; }
+.mn-act { flex:1; font-family:var(--mono,monospace); font-size:11px; padding:6px 4px; border:1px dashed #999; background:#fff; color:#555; cursor:pointer; }
+.mn-act:hover { border-color:#111; color:#111; }
+.mn-toggle { display:flex; align-items:center; gap:7px; padding:8px 10px; border-top:2px solid #111; font-family:var(--mono,monospace); font-size:11px; cursor:pointer; }
+.mn-toggle input { cursor:pointer; }
+/* legacy top bar (kept in DOM but unused) */
+#nc-maps-bar { display:none !important; }
+.nc-mtab, .nc-mtab-add, .nc-mtab-mv, .nc-mtab-x {}
+
+/* ═══ World map surface (true vector, viewBox pan/zoom, white field) ═══ */
+#view-world { position:relative; height:100%; background:#fff; }
+/* Leaflet map fills the surface; white field so the map's black labels read. */
+#view-world .wm-map { position:absolute; inset:0; background:#fff; }
+#view-world .leaflet-container { background:#fff; font-family:var(--mono,monospace); }
+/* Substitute the (unembedded) Inkscape pixel font with the site mono so labels are legible. */
+#view-world svg text, #view-world svg tspan { font-family:'Terminal Grotesque','Space Mono',monospace !important; }
+/* Night City marker (divIcon over the city icon — amber dot + label, grows on hover) */
+#view-world .wm-ncwrap { overflow:visible; }
+#view-world .wm-ncmark { white-space:nowrap; cursor:pointer; transition:transform .12s ease; transform-origin:7px 7px; }
+#view-world .wm-ncmark:hover { transform:scale(1.4); }
+#view-world .wm-ncdot { display:inline-block; width:11px; height:11px; border-radius:50%; background:#b8860b; border:2px solid #111; vertical-align:middle; box-shadow:0 1px 4px rgba(0,0,0,.4); }
+#view-world .wm-nclbl { font-family:var(--head,sans-serif); font-size:11px; letter-spacing:1px; color:#111; background:rgba(255,255,255,.85); padding:1px 5px; margin-left:4px; vertical-align:middle; }
+/* Live vector city icons over the raster base — clickable, smooth hover-grow.
+   The scale lives on an inner <g> so the group's own positioning transform is untouched.
+   NB: Leaflet's `.leaflet-pane > svg path { pointer-events:none }` would kill hits on our
+   icons, so we re-enable pointer-events on the city groups AND all their descendants with a
+   higher-specificity (ID-scoped) selector. */
+/* City/transport icons are individual Leaflet markers (positioned by Leaflet → exact alignment).
+   .wm-cm-z scales every icon with the zoom (via the --wm-iscale var set per-zoom on the marker pane);
+   .wm-cm-h grows on hover around its own centre — no drift, no jitter. */
+#view-world .wm-cm { background:none; border:0; }
+#view-world .wm-cm .wm-cm-z { width:100%; height:100%; transform:scale(var(--wm-iscale,1)); transform-origin:center center; }
+#view-world .wm-cm .wm-cm-h { width:100%; height:100%; transition:transform .12s ease; transform-origin:center center; }
+#view-world .wm-cm .wm-cm-h[data-name] { cursor:pointer; }
+#view-world .wm-cm .wm-cm-h.grow { transform:scale(1.4); }
+/* Snappier, smoother Leaflet zoom animation (only applied during zoom). */
+#view-world .leaflet-zoom-anim .leaflet-zoom-animated { transition:transform .2s cubic-bezier(.25,.8,.25,1); }
+/* Floating controls — top-right, horizontal row */
+#view-world .wm-overctrls { position:absolute; top:14px; right:14px; display:flex; flex-direction:row; gap:6px; z-index:1000; }
+#view-world .wm-cbtn { font-family:var(--mono,monospace); font-size:15px; width:34px; height:34px; border:2px solid #111; background:#fff; color:#111; cursor:pointer; }
+#view-world .wm-cbtn:hover { background:#111; color:#fff; }
+/* Panels open below the control row, top-right */
+#view-world .wm-layers { position:absolute; top:58px; right:14px; width:248px; max-height:60%; overflow:auto; background:#fff; border:2px solid #111; padding:10px 12px; z-index:1000; box-shadow:0 10px 30px rgba(0,0,0,.18); }
+#view-world .wm-panel-h { font-family:var(--head,sans-serif); font-size:12px; letter-spacing:3px; margin-bottom:8px; }
+#view-world .wm-layers-note { font-family:var(--mono,monospace); font-size:11px; line-height:1.6; color:#666; }
+#view-world .wm-lrow { display:flex; align-items:center; gap:8px; font-family:var(--mono,monospace); font-size:12px; color:#222; padding:3px 2px; cursor:pointer; }
+#view-world .wm-lrow:hover { color:#000; }
+#view-world .wm-lrow input { accent-color:#b8860b; }
+/* Legend overlay (lazy-loaded vector) — top-left. No box here: the legend SVG has its own. */
+#view-world .wm-legend { position:absolute; left:14px; top:14px; width:min(420px,46%); max-height:74%; overflow:auto; z-index:1000; }
+#view-world .wm-legend svg { width:100%; height:auto; display:block; }
+#view-world .wm-hint { position:absolute; left:14px; bottom:12px; font-family:var(--mono,monospace); font-size:11px; letter-spacing:.5px; color:#555; background:rgba(255,255,255,.82); padding:3px 8px; pointer-events:none; z-index:1000; }
+#view-world .wm-msg { padding:24px; font-family:var(--mono,monospace); font-size:13px; color:#555; }
+/* Night City popup (Leaflet) — datafort styling */
+.wm-leaflet-pop .leaflet-popup-content-wrapper { border-radius:0; border:2px solid #111; box-shadow:0 12px 36px rgba(0,0,0,.25); }
+.wm-leaflet-pop .leaflet-popup-content { margin:12px 14px; }
+.wm-leaflet-pop .wm-pop-k { font-family:var(--mono,monospace); font-size:9px; letter-spacing:2px; color:#888; }
+.wm-leaflet-pop .wm-pop-t { font-family:var(--head,sans-serif); font-size:18px; letter-spacing:2px; margin:2px 0; }
+.wm-leaflet-pop .wm-pop-s { font-family:var(--mono,monospace); font-size:11px; color:#666; margin-bottom:10px; }
+.wm-leaflet-pop .wm-pop-go { font-family:var(--head,sans-serif); font-size:12px; letter-spacing:1px; width:100%; padding:7px; border:2px solid #b8860b; background:#b8860b; color:#111; cursor:pointer; }
+.wm-leaflet-pop .wm-pop-go:hover { background:#caa022; }
+/* City info window — datafort card */
+.wm-cpop-wrap .leaflet-popup-content-wrapper { border-radius:0; border:2px solid #111; padding:0; box-shadow:0 14px 40px rgba(0,0,0,.3); }
+.wm-cpop-wrap .leaflet-popup-content { margin:0; }
+.wm-cpop-wrap .leaflet-popup-tip { border:2px solid #111; }
+.wm-cpop { font-family:var(--mono,monospace); }
+.wm-cpop-type { display:inline-block; font-family:var(--head,sans-serif); font-size:9px; letter-spacing:2px; text-transform:uppercase; color:#fff; background:#111; padding:3px 8px; margin:12px 14px 0; }
+.wm-cpop-title { font-family:var(--head,sans-serif); font-size:21px; letter-spacing:1px; line-height:1.1; margin:8px 14px 6px; }
+.wm-cpop-desc { font-family:var(--mono,monospace); font-size:12px; line-height:1.55; color:#333; margin:0 14px 12px; }
+.wm-cpop-empty { color:#999; font-style:italic; }
+.wm-cpop-btn { display:block; width:100%; box-sizing:border-box; font-family:var(--head,sans-serif); font-size:12px; letter-spacing:1px; padding:9px; border:0; border-top:2px solid #111; background:#b8860b; color:#111; cursor:pointer; }
+.wm-cpop-btn:hover { background:#caa022; }
+.wm-cpop-row { font-family:var(--mono,monospace); font-size:12px; color:#333; margin:0 14px 4px; }
+.wm-cpop-row b { font-family:var(--head,sans-serif); font-size:10px; letter-spacing:1px; color:#111; margin-right:6px; }
+.wm-cpop-row:first-of-type { margin-top:2px; }
+/* Redesigned info window: name on black full-width, type in colour, diegetic body */
+.wm-cpop2 .wm-cpop-name { font-family:var(--head,sans-serif); font-size:19px; letter-spacing:1px; line-height:1.15; color:#fff; background:#111; padding:11px 14px 9px; }
+.wm-cpop2 .wm-cpop-sub { font-family:var(--head,sans-serif); font-size:11px; letter-spacing:2px; text-transform:uppercase; font-weight:700; padding:8px 14px 2px; }
+.wm-cpop2 .wm-cpop-stats { margin:4px 0 6px; }
+.wm-cpop2 .wm-cpop-lore { font-family:var(--mono,monospace); font-size:12px; line-height:1.55; color:#333; margin:4px 14px 10px; }
+.wm-cpop2 .wm-cpop-note { font-family:var(--mono,monospace); font-size:11px; line-height:1.5; color:#333; margin:0 14px 8px; padding:6px 8px; background:#f4f4f4; border-left:2px solid #999; }
+.wm-cpop2 .wm-cpop-note-gm { border-left-color:#b8860b; background:#fbf4e2; }
+.wm-cpop2 .wm-cpop-note-k { display:block; font-family:var(--head,sans-serif); font-size:9px; letter-spacing:1.5px; color:#888; margin-bottom:2px; }
+.wm-cpop2 .wm-cpop-actions { display:flex; flex-direction:column; }
+.wm-cpop-btn2 { background:#fff; color:#111; border-top:1px solid #ccc; }
+.wm-cpop-btn2:hover { background:#111; color:#fff; }
+.wm-form-maprow { font-family:var(--mono,monospace); font-size:12px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:6px 0; border-top:1px solid #ddd; }
+/* Highlight-custom mode: dim built-in map icons, keep logged locations black */
+#view-world.wm-highlight-custom .wm-cm:not(.wm-cm-loc) .wm-cm-h { opacity:.22; }
+
+/* Custom logged locations — type picker grid + detail form */
+.wm-typegrid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.wm-typecell { display:flex; flex-direction:column; align-items:center; gap:5px; padding:10px 6px; border:2px solid #111; background:#fff; cursor:pointer; }
+.wm-typecell:hover { background:#111; }
+.wm-typecell:hover .wm-typelbl { color:#fff; }
+.wm-typecell:hover .wm-typeic svg { filter:invert(1); }
+.wm-typecell-other { grid-column:1 / -1; flex-direction:row; justify-content:center; gap:10px; }
+.wm-typeic { display:block; width:40px; height:40px; }
+.wm-typeic svg { width:100%; height:100%; display:block; }
+.wm-typeic-sm { width:26px; height:26px; }
+.wm-typelbl { font-family:var(--mono,monospace); font-size:11px; letter-spacing:.5px; text-align:center; color:#111; }
+.wm-form { display:flex; flex-direction:column; gap:10px; min-width:300px; }
+.wm-form-type { display:flex; align-items:center; gap:10px; padding-bottom:8px; border-bottom:1px solid #ddd; }
+.wm-form-typelbl { font-family:var(--head,sans-serif); font-size:13px; letter-spacing:2px; text-transform:uppercase; }
+.wm-form-actions { display:flex; align-items:center; gap:8px; margin-top:6px; }
+.wm-form-spacer { flex:1; }
+
 #view-custom { padding:16px; }
 .nc-cm-head { display:flex; align-items:center; gap:10px; margin-bottom:12px; border-bottom:2px solid #111; padding-bottom:8px; }
 .nc-cm-name { font-family:var(--head,sans-serif); font-size:18px; letter-spacing:1px; border:1px solid #ccc; padding:4px 8px; flex:1; }

@@ -12058,5 +12058,645 @@
     "wt": 0.4,
     "notes": "Expandable tote with snap-in organiser panels. 6 slots.",
     "source": "custom"
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Pocket Agent",
+    "notes": "Throwaway pocket phone. Text and old-web only, loud on the towers.",
+    "cost": 300,
+    "wt": 0,
+    "reach": 0,
+    "power": 1,
+    "connection": "cellular",
+    "stealth": 0,
+    "perk": "",
+    "maker": "Zetatech",
+    "class": "phone",
+    "legal": true,
+    "rarity": "common",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "NET-54 Handvid",
+    "notes": "Antique handvid. Renders old-web like a dream; corpo pages melt it.",
+    "cost": 150,
+    "wt": 0,
+    "reach": 0,
+    "power": 1,
+    "connection": "cellular",
+    "stealth": 0,
+    "perk": "retro",
+    "maker": "Raven Microcyb",
+    "class": "phone",
+    "legal": true,
+    "rarity": "antique",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Kendachi Burner",
+    "notes": "Prepaid burner on a ghosted SIM. Dumb, but nobody knows it's you.",
+    "cost": 500,
+    "wt": 0,
+    "reach": 0,
+    "power": 1,
+    "connection": "cellular",
+    "stealth": 3,
+    "perk": "",
+    "maker": "Kendachi",
+    "class": "phone",
+    "legal": true,
+    "rarity": "street",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Arasaka CitizenLink",
+    "notes": "Subsidized citizen handset. Cheap — because Arasaka reads every packet.",
+    "cost": 250,
+    "wt": 0,
+    "reach": 1,
+    "power": 2,
+    "connection": "cellular",
+    "stealth": 0,
+    "perk": "sublock",
+    "maker": "Arasaka",
+    "class": "phone",
+    "legal": true,
+    "rarity": "common",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Militech Grunt-Fone",
+    "notes": "Ruggedized field phone. Survives a fall off a hovercar.",
+    "cost": 650,
+    "wt": 0,
+    "reach": 0,
+    "power": 2,
+    "connection": "cellular",
+    "stealth": 1,
+    "perk": "hardened",
+    "maker": "Militech",
+    "class": "phone",
+    "legal": true,
+    "rarity": "street",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Streetdeck Terminal",
+    "notes": "Street pocket deck. Handles a chat app and light media on the move.",
+    "cost": 800,
+    "wt": 0,
+    "reach": 1,
+    "power": 2,
+    "connection": "cellular",
+    "stealth": 1,
+    "perk": "compress",
+    "maker": "Raven Microcyb",
+    "class": "pocket",
+    "legal": true,
+    "rarity": "street",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Microtech AGENTPad",
+    "notes": "Consumer slate with a chatty little AI copilot.",
+    "cost": 1400,
+    "wt": 0,
+    "reach": 1,
+    "power": 3,
+    "connection": "cellular",
+    "stealth": 1,
+    "perk": "ai",
+    "maker": "Microtech",
+    "class": "pocket",
+    "legal": true,
+    "rarity": "common",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Zetatech RoadPocket",
+    "notes": "Ships with Zetatech's ad-scrubbing feed. Blessedly quiet timeline.",
+    "cost": 2400,
+    "wt": 0,
+    "reach": 2,
+    "power": 3,
+    "connection": "cellular",
+    "stealth": 2,
+    "perk": "adblock",
+    "maker": "Zetatech",
+    "class": "pocket",
+    "legal": true,
+    "rarity": "common",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Kiroshi FoldSlate",
+    "notes": "Foldable everyday slate. Solid all-rounder.",
+    "cost": 2600,
+    "wt": 0,
+    "reach": 2,
+    "power": 3,
+    "connection": "cellular",
+    "stealth": 2,
+    "perk": "haggle",
+    "maker": "Kiroshi",
+    "class": "pocket",
+    "legal": true,
+    "rarity": "common",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Militech Shielded Slate",
+    "notes": "Milspec shielded tablet — quiet on the grid, goes where you go.",
+    "cost": 5200,
+    "wt": 0,
+    "reach": 2,
+    "power": 3,
+    "connection": "cellular",
+    "stealth": 3,
+    "perk": "ghostos",
+    "maker": "Militech",
+    "class": "pocket",
+    "legal": true,
+    "rarity": "milspec",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "HotSlate",
+    "notes": "A corp exec's tablet with the serials filed off. Great specs, screams your location.",
+    "cost": 950,
+    "wt": 0,
+    "reach": 2,
+    "power": 4,
+    "connection": "cellular",
+    "stealth": 1,
+    "perk": "hot",
+    "maker": "unknown",
+    "class": "pocket",
+    "legal": false,
+    "rarity": "rare",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Home Cyberterminal",
+    "notes": "The box on your desk. Private line, decent render — but it stays home.",
+    "cost": 1500,
+    "wt": 0,
+    "reach": 1,
+    "power": 3,
+    "connection": "landline",
+    "stealth": 1,
+    "perk": "",
+    "maker": "Zetatech",
+    "class": "desktop",
+    "legal": true,
+    "rarity": "common",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Zetatech Deskmate",
+    "notes": "Solid consumer desktop. Reaches the neighborhood, runs standard sites.",
+    "cost": 2800,
+    "wt": 0,
+    "reach": 2,
+    "power": 3,
+    "connection": "landline",
+    "stealth": 2,
+    "perk": "",
+    "maker": "Zetatech",
+    "class": "desktop",
+    "legal": true,
+    "rarity": "common",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "IEC HearthNode",
+    "notes": "Family hearth-terminal with a clean, filtered feed.",
+    "cost": 3800,
+    "wt": 0,
+    "reach": 2,
+    "power": 4,
+    "connection": "landline",
+    "stealth": 2,
+    "perk": "adblock",
+    "maker": "IEC",
+    "class": "desktop",
+    "legal": true,
+    "rarity": "common",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Microtech Deskstar OC",
+    "notes": "Overclocked render monster. Runs hot and loud — every fan is a fingerprint.",
+    "cost": 5200,
+    "wt": 0,
+    "reach": 2,
+    "power": 5,
+    "connection": "landline",
+    "stealth": 1,
+    "perk": "overclock",
+    "maker": "Microtech",
+    "class": "desktop",
+    "legal": true,
+    "rarity": "rare",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Arasaka Corp Workstation",
+    "notes": "Renders anything — corpo intranets included — behind a hardened line. Desk-bound.",
+    "cost": 4500,
+    "wt": 0,
+    "reach": 2,
+    "power": 5,
+    "connection": "landline",
+    "stealth": 3,
+    "perk": "",
+    "maker": "Arasaka",
+    "class": "desktop",
+    "legal": true,
+    "rarity": "corp",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Zetatech RoadWarrior",
+    "notes": "Trucker's rig with a signal booster — extends your reach in the field.",
+    "cost": 6000,
+    "wt": 0,
+    "reach": 3,
+    "power": 4,
+    "connection": "cellular",
+    "stealth": 2,
+    "perk": "signal",
+    "maker": "Zetatech",
+    "class": "agent",
+    "legal": true,
+    "rarity": "common",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Raven NomadRig",
+    "notes": "Smuggler's rig with a courier net baked in — your orders arrive fast.",
+    "cost": 5800,
+    "wt": 0,
+    "reach": 3,
+    "power": 4,
+    "connection": "cellular",
+    "stealth": 1,
+    "perk": "courier",
+    "maker": "Raven Microcyb",
+    "class": "agent",
+    "legal": true,
+    "rarity": "street",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Militech FieldNode",
+    "notes": "Field powerhouse. Distant reach and heavy render from anywhere in the city.",
+    "cost": 6500,
+    "wt": 0,
+    "reach": 3,
+    "power": 4,
+    "connection": "cellular",
+    "stealth": 2,
+    "perk": "",
+    "maker": "Militech",
+    "class": "agent",
+    "legal": true,
+    "rarity": "milspec",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Militech Recon Slate",
+    "notes": "Recon unit. Mid-power, ghost-silent, sees far.",
+    "cost": 7200,
+    "wt": 0,
+    "reach": 3,
+    "power": 3,
+    "connection": "cellular",
+    "stealth": 3,
+    "perk": "ghostos",
+    "maker": "Militech",
+    "class": "agent",
+    "legal": true,
+    "rarity": "milspec",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Arasaka ExecPad",
+    "notes": "Executive device. Runs everything, whisper-quiet, priced like a car.",
+    "cost": 11000,
+    "wt": 0,
+    "reach": 3,
+    "power": 5,
+    "connection": "cellular",
+    "stealth": 3,
+    "perk": "haggle",
+    "maker": "Arasaka",
+    "class": "agent",
+    "legal": true,
+    "rarity": "corp",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Nomad BadlandsDish",
+    "notes": "Nomad off-grid mesh dish. Modest render, unkillable signal.",
+    "cost": 7000,
+    "wt": 0,
+    "reach": 4,
+    "power": 3,
+    "connection": "satellite",
+    "stealth": 2,
+    "perk": "mesh",
+    "maker": "Snake Nation",
+    "class": "agent",
+    "legal": true,
+    "rarity": "street",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "WorldSat Uplink Rig",
+    "notes": "Sees the whole grid from the badlands — but that dish is a beacon.",
+    "cost": 9000,
+    "wt": 0,
+    "reach": 4,
+    "power": 4,
+    "connection": "satellite",
+    "stealth": 1,
+    "perk": "",
+    "maker": "WorldSat",
+    "class": "agent",
+    "legal": true,
+    "rarity": "rare",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Militech SatCom Field Set",
+    "notes": "EMP-hardened satellite set. Nothing short of a nuke drops it.",
+    "cost": 10500,
+    "wt": 0,
+    "reach": 4,
+    "power": 4,
+    "connection": "satellite",
+    "stealth": 2,
+    "perk": "hardened",
+    "maker": "Militech",
+    "class": "agent",
+    "legal": true,
+    "rarity": "milspec",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Orbital Relay Console",
+    "notes": "Endgame rig: the entire Net, every block rendered, off-grid. Costs a fortune.",
+    "cost": 14000,
+    "wt": 0,
+    "reach": 4,
+    "power": 5,
+    "connection": "satellite",
+    "stealth": 2,
+    "perk": "",
+    "maker": "WorldSat",
+    "class": "agent",
+    "legal": true,
+    "rarity": "rare",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Kiroshi WristLink",
+    "notes": "Wristwatch agent with a helpful little AI.",
+    "cost": 2200,
+    "wt": 0,
+    "reach": 1,
+    "power": 2,
+    "connection": "cellular",
+    "stealth": 2,
+    "perk": "ai",
+    "maker": "Kiroshi",
+    "class": "wrist",
+    "legal": true,
+    "rarity": "common",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Microtech HaloBand",
+    "notes": "Sleek wearable band. Always on your wrist, always online.",
+    "cost": 3000,
+    "wt": 0,
+    "reach": 2,
+    "power": 3,
+    "connection": "cellular",
+    "stealth": 1,
+    "perk": "compress",
+    "maker": "Microtech",
+    "class": "wrist",
+    "legal": true,
+    "rarity": "common",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Chipware Cortex Modem",
+    "notes": "Skull-jack modem. Always with you, utterly silent — needs a ripperdoc.",
+    "cost": 8500,
+    "wt": 0,
+    "reach": 2,
+    "power": 3,
+    "connection": "cellular",
+    "stealth": 3,
+    "perk": "ghostos",
+    "maker": "Raven Microcyb",
+    "class": "implant",
+    "legal": true,
+    "rarity": "milspec",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Kiroshi OptiFeed",
+    "notes": "Optical HUD feed wired to your eyes. The Net, overlaid on the world.",
+    "cost": 9500,
+    "wt": 0,
+    "reach": 2,
+    "power": 4,
+    "connection": "cellular",
+    "stealth": 2,
+    "perk": "ai",
+    "maker": "Kiroshi",
+    "class": "implant",
+    "legal": true,
+    "rarity": "rare",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Thundermount Vehicle Console",
+    "notes": "Car-mounted command console. Immense render, immense signature.",
+    "cost": 12000,
+    "wt": 0,
+    "reach": 3,
+    "power": 5,
+    "connection": "satellite",
+    "stealth": 1,
+    "perk": "signal",
+    "maker": "Militech",
+    "class": "vehicle",
+    "legal": true,
+    "rarity": "rare",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Raven 'Ghost' AI-Agent",
+    "notes": "Semi-autonomous net-agent. Runs errands on the Net for you. Very illegal, very rare.",
+    "cost": 9000,
+    "wt": 0,
+    "reach": 2,
+    "power": 4,
+    "connection": "cellular",
+    "stealth": 3,
+    "perk": "ai",
+    "maker": "Raven Microcyb",
+    "class": "ai",
+    "legal": false,
+    "rarity": "prototype",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
+  },
+  {
+    "category": "COMPUTER",
+    "name": "Salvaged CorpTerm",
+    "notes": "A dead corp terminal, jury-rigged back to life. Free, filthy, and traceable as hell.",
+    "cost": 0,
+    "wt": 0,
+    "reach": 1,
+    "power": 2,
+    "connection": "landline",
+    "stealth": 0,
+    "perk": "hot",
+    "maker": "jury-rig",
+    "class": "salvage",
+    "legal": false,
+    "rarity": "salvage",
+    "source": {
+      "book": "CP20",
+      "page": 0
+    }
   }
 ]

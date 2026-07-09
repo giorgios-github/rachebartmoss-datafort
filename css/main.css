@@ -68,6 +68,28 @@ body { font-family:var(--mono); background:var(--bg); color:var(--text); font-si
 .pc-btn-recv:hover { background:#1a7a2e; border-color:#1a7a2e; }
 .pc-btn-send:hover { background:#b8860b; border-color:#b8860b; color:#111; }
 .pc-err { color:#c0392b; font-size:12px; margin-top:10px; min-height:1em; }
+/* CONNECT popup — clickable character roster + LAN discovery */
+.pc-loading, .pc-empty { font-family:var(--mono); font-size:12px; color:#888; margin:6px 0 2px; }
+.pc-pick { font-family:var(--mono); font-size:12px; color:#444; margin:4px 0 6px; }
+.pc-sec-h { font-family:var(--head); font-size:11px; letter-spacing:2px; text-transform:uppercase; color:#666; margin:12px 0 6px; display:flex; align-items:center; gap:8px; }
+.pc-live { font-family:var(--mono); font-size:9px; letter-spacing:1px; background:#1a7a2e; color:#fff; padding:1px 5px; }
+.pc-chars { display:flex; flex-direction:column; gap:6px; }
+.pc-char { display:flex; align-items:center; gap:11px; width:100%; text-align:left; padding:8px 10px; border:2px solid #111; background:#fff; color:#111; cursor:pointer; }
+.pc-char:hover { background:#111; color:#fff; }
+.pc-char-av { width:34px; height:34px; flex-shrink:0; object-fit:cover; border:1px solid #111; background:#eee; display:flex; align-items:center; justify-content:center; font-family:var(--head); font-size:15px; color:#888; }
+.pc-char:hover .pc-char-noav { background:#333; color:#fff; }
+.pc-char-t { display:flex; flex-direction:column; line-height:1.25; min-width:0; }
+.pc-char-t b { font-family:var(--head); font-size:14px; letter-spacing:.5px; }
+.pc-char-h { font-family:var(--mono); font-size:11px; color:#888; }
+.pc-char:hover .pc-char-h { color:#bbb; }
+.pc-hub { display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:8px 10px; border:2px solid #b8860b; background:#fff; color:#111; cursor:pointer; margin-bottom:6px; }
+.pc-hub:hover { background:#b8860b; }
+.pc-hub-ico { font-size:16px; color:#b8860b; } .pc-hub:hover .pc-hub-ico { color:#111; }
+.pc-hub-t { flex:1; display:flex; flex-direction:column; line-height:1.2; } .pc-hub-t b { font-family:var(--head); font-size:13px; }
+.pc-hub-c { font-family:var(--mono); font-size:11px; color:#888; } .pc-hub:hover .pc-hub-c { color:#333; }
+.pc-hub-go { font-size:14px; color:#b8860b; } .pc-hub:hover .pc-hub-go { color:#111; }
+.pc-manual { margin-top:14px; border-top:1px solid #ddd; padding-top:6px; }
+.pc-manual > summary { font-family:var(--mono); font-size:12px; color:#666; cursor:pointer; padding:4px 0; }
 #plain-btn { display:none; }
 
 #content { flex:1; min-width:0; display:flex; flex-direction:column; }
@@ -1454,6 +1476,7 @@ body.cs-customizing .cs .cs-cust-struct, body.cs-customizing .cs .cs-cust-struct
 .buytray-row { display:flex; align-items:center; gap:8px; padding:6px 12px; font-size:12px; border-bottom:1px solid #222; cursor:pointer; }
 .buytray-row input { accent-color:#b8860b; }
 .buytray-name { flex:1; } .buytray-name i { color:#888; font-style:normal; font-size:10px; letter-spacing:1px; }
+.buytray-qty { color:#b8860b; font-weight:700; margin:0 3px; }
 .buytray-cost { color:#b8860b; }
 .buytray-total { padding:8px 12px; border-top:1px solid #333; font-size:13px; display:flex; justify-content:space-between; }
 .buytray-total b { color:#fff; }
@@ -1465,3 +1488,8 @@ body.cs-customizing .cs .cs-cust-struct, body.cs-customizing .cs .cs-cust-struct
 .buytray-go:hover { background:#22923a; }
 .buytray-clr { background:#1a1a1a; color:#bbb; }
 .buytray-clr:hover { background:#000; color:#fff; }
+
+/* items listed for sale in a player-owned store */
+.inv-item.inv-forsale { box-shadow: inset 3px 0 0 #b8860b; background: rgba(184,134,11,.06); }
+.inv-forsale .inv-name { color: #b8860b; }
+.inv-forsale-tag { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: #b8860b; border: 1px solid #b8860b; border-radius: 3px; padding: 0 4px; margin-left: 6px; vertical-align: middle; }

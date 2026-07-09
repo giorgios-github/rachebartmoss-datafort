@@ -21,10 +21,12 @@
     var b = document.getElementById('cdoc-banner');
     if (!b) {
       b = document.createElement('div'); b.id = 'cdoc-banner';
-      b.style.cssText = 'background:#1a7a2e;color:#fff;font-family:var(--mono,monospace);font-size:12px;letter-spacing:1px;padding:5px 14px;text-align:center;';
+      b.style.cssText = 'font-family:var(--mono,monospace);font-size:12px;letter-spacing:1px;padding:5px 14px;text-align:center;background:#1a7a2e;color:#fff;';
       document.body.insertBefore(b, document.body.firstChild);
     }
     b.style.background = ok === false ? '#c0392b' : (ok === 'idle' ? '#b8860b' : '#1a7a2e');
+    // editor-embed.css restyles the banner via these state classes (body.cdoc pages)
+    b.className = ok === false ? 'cdoc-err' : (ok === 'idle' ? 'cdoc-busy' : 'cdoc-ok');
     b.textContent = text;
   }
 
@@ -35,7 +37,11 @@
     lastSaved = s;
     banner('Editing "' + cname + '" · saving…', 'idle');
     fetch(base, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: s })
-      .then(function (r) { banner('Editing "' + cname + '" · saved', r.ok); }, function () { banner('Editing "' + cname + '" · save failed', false); });
+      .then(function (r) {
+        banner('Editing "' + cname + '" · saved', r.ok);
+        // Tell the embedding shell a save landed so it can refresh views/storefronts.
+        try { if (r.ok && window.parent !== window) window.parent.postMessage({ type: 'cdoc-saved', ctype: ctype, cname: cname }, '*'); } catch (e) {}
+      }, function () { banner('Editing "' + cname + '" · save failed', false); });
   }
   function schedule() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 400); }
 
@@ -53,6 +59,7 @@
   }
 
   function start() {
+    try { document.body.classList.add('cdoc'); } catch (e) {}
     banner('Loading "' + cname + '"…', 'idle');
     fetch(base).then(function (r) { return r.ok ? r.text() : ''; }).then(function (txt) {
       try { pendingJson = txt ? JSON.parse(txt) : {}; } catch (e) { pendingJson = {}; }
@@ -62,6 +69,11 @@
     var poll = setInterval(function () { if (window.__cdocAdapter) { maybeApply(); if (applied) clearInterval(poll); } }, 100);
     setTimeout(function () { clearInterval(poll); }, 10000);
   }
+
+  // The shell's explicit SAVE button asks for an immediate flush.
+  window.addEventListener('message', function (e) {
+    if (e.data && e.data.type === 'cdoc-save-now') { clearTimeout(saveTimer); lastSaved = null; save(); }
+  });
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();

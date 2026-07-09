@@ -1,0 +1,47 @@
+/* editor-embed.css — cdoc coherence layer (WS-L).
+   Loaded by every editor page that can be embedded in the app shell
+   (cs.html, npc-sheet.html, organisations.html, location.html, shop.html).
+   Active ONLY when the page runs through the cdoc file-bridge (body.cdoc,
+   set by campaign-doc.js): the shell already provides tab chrome + the
+   links/props band, so the page's own topnav is redundant noise.
+   Standalone (site) usage is untouched. */
+
+/* the page's own top bar disappears — the shell frames the editor */
+body.cdoc #topnav { display: none; }
+
+/* the shell's pane provides the padding rhythm; tighten page tops */
+body.cdoc { background: #fff; }
+body.cdoc .npc-wrap,
+body.cdoc .loc-wrap { padding-top: 10px; }
+body.cdoc .shop-wrap { height: 100vh; }
+
+/* entry animation matching the shell's pane-in */
+@media (prefers-reduced-motion: no-preference) {
+  body.cdoc > *:not(#cdoc-banner) { animation: cdoc-in .16s ease both; }
+  @keyframes cdoc-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+}
+
+/* slim scrollbars inside embedded editors (webkit) */
+body.cdoc ::-webkit-scrollbar { width: 8px; height: 8px; }
+body.cdoc ::-webkit-scrollbar-thumb { background: #ccc; }
+body.cdoc ::-webkit-scrollbar-thumb:hover { background: #999; }
+body.cdoc ::-webkit-scrollbar-track { background: transparent; }
+
+/* the cdoc status banner: a slim, quiet strip instead of a shouting bar */
+body.cdoc #cdoc-banner {
+  background: #fff !important;
+  color: #999 !important;
+  border-bottom: 1px solid #e5e5e5;
+  font-size: 10px !important;
+  letter-spacing: 2px !important;
+  padding: 3px 12px !important;
+  text-align: right !important;
+  text-transform: uppercase;
+}
+body.cdoc #cdoc-banner.cdoc-err { color: #c0392b !important; }
+body.cdoc #cdoc-banner.cdoc-busy { color: #b8860b !important; }
+
+/* embedded organisations editor: the shell's DATA tree already lists orgs —
+   the tool's own sidebar is redundant chrome in cdoc mode */
+body.cdoc #org-sidebar { display: none; }
+body.cdoc #org-main { margin-left: 0 !important; width: 100% !important; }

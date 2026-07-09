@@ -1,0 +1,526 @@
+/* ════════════════════════════════════════════════════════════════════════
+   app-aside.css — ASIDE-layout shell in the DATAFORT DESIGN SYSTEM language.
+   The browser-style structure (frosted sidebar → search · section grid ·
+   unified tab list) but re-clothed in the house style: black ink on white
+   paper, hard 2px ink borders, square corners, no ambient shadows, Eurostile
+   Extended (display) + Terminal Grotesque (mono), Unicode glyphs (no SVG),
+   inversion-on-hover, fast mechanical motion. Homogenised with the content
+   tools (which are already print) and the two pre-session screens.
+   Loaded last, app.html only. Scoped to #app-shell.asd / body.asd-live.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── TEST: swap the display face (Eurostile → Hiragino Kaku Gothic StdN W8).
+   App-only (this file is loaded by app.html alone); the static site keeps
+   Eurostile. Remove this block + the --head override below to revert. ── */
+@font-face {
+  font-family: 'Hiragino Test';
+  src: url('../Hiragino Kaku Gothic StdN W8.otf') format('opentype');
+  font-display: swap;
+}
+
+/* Layout resilience: the base CSS intermittently collapses <body> to a few px
+   in both dimensions. When the shell is live we pin it to the viewport. */
+html { height:100%; }
+body.asd-live { width:100vw; min-width:100vw; height:100vh; min-height:100vh; }
+
+/* Tokens on :root so the pre-session screens (role chooser is OUTSIDE #app-shell;
+   the roster renders before .asd is added) resolve them too. app-aside.css is
+   loaded only by app.html, so this doesn't leak to other pages. */
+:root {
+  --pin:#111;                 /* ink */
+  --pin-soft:#2a2a2a;
+  --paper:#fff; --paper-2:#fafafa; --paper-3:#f2f2f2;
+  --rule:#ddd;                /* hairline */
+  /* --faint carries MEANINGFUL small text (hints, counts, subs) → must clear
+     AA on paper. #999 was 2.8:1; #767676 is ~4.5:1. */
+  --muted:#666; --faint:#767676;
+  --stamp-red:#c0392b; --stamp-gold:#b8860b; --stamp-green:#1a7a2e;
+  --fast:120ms; --ease:cubic-bezier(.2,0,.2,1);
+  --topbar-h:46px;            /* shared height: sidebar header + tool title bars */
+  --head:'Hiragino Test','Eurostile',sans-serif;   /* TEST font swap (see @font-face above) */
+}
+
+/* session fills app-main; flat paper ground, borders do the dividing */
+#app-shell.asd.in-session #app-nav { display:none; }
+#app-shell.asd .app-view-session { padding:0; }
+#shell-root {
+  position:absolute; inset:0; display:flex; min-height:0;
+  font-family:var(--mono); background:var(--paper); color:var(--pin);
+}
+
+/* ── sidebar (white paper, 2px ink right rule, flat) ── */
+#asd-side {
+  flex:0 0 236px; display:flex; flex-direction:column; min-height:0;
+  background:var(--paper); border-right:2px solid var(--pin); box-sizing:border-box;
+}
+#asd-side > * { flex:0 0 auto; }
+
+/* header — black bar (Panel header), squeezed Eurostile, green stamp = live */
+.asd-head { display:flex; }
+.asd-camp {
+  flex:1; display:flex; align-items:center; gap:9px; height:46px; padding:0 12px;
+  background:var(--pin); color:#fff; border:none; cursor:pointer; text-align:left;
+  font-family:var(--head, 'Eurostile', sans-serif); font-size:13px; letter-spacing:3px; text-transform:uppercase;
+}
+.asd-live { width:8px; height:8px; background:#555; flex:0 0 auto; }         /* square, not round */
+.asd-live.on { background:var(--stamp-green); box-shadow:0 0 7px var(--stamp-green); }
+.asd-camp-n { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; transform:scaleX(.86); transform-origin:left; }
+.asd-camp-more { font-family:var(--mono); font-size:15px; letter-spacing:0; color:#bbb; }
+.asd-camp:hover { background:#000; }
+.asd-camp:hover .asd-camp-more { color:var(--stamp-gold); }
+
+/* search row — back/forward history + bordered mono input, square */
+.asd-search-wrap { position:relative; display:flex; gap:6px; align-items:stretch; padding:10px; border-bottom:2px solid var(--pin); }
+.asd-nav {
+  flex:0 0 auto; width:30px; display:flex; align-items:center; justify-content:center;
+  background:var(--paper); border:2px solid var(--pin); color:var(--pin); cursor:pointer;
+  font-family:var(--mono); font-size:15px; line-height:1; padding:0;
+  transition:background var(--fast) var(--ease), color var(--fast) var(--ease), opacity var(--fast) var(--ease);
+}
+.asd-nav:hover:not(:disabled) { background:var(--pin); color:#fff; }
+.asd-nav:disabled { opacity:.3; cursor:default; }
+.asd-search {
+  flex:1; min-width:0; box-sizing:border-box; padding:8px 10px;
+  background:var(--paper); border:2px solid var(--pin); color:var(--pin);
+  font-family:var(--mono); font-size:13px; outline:none;
+}
+.asd-search::placeholder { color:var(--faint); }
+.asd-search:focus { box-shadow:inset 0 -2px 0 var(--stamp-gold); }
+.asd-results {
+  position:absolute; left:10px; right:10px; top:calc(100% - 2px); z-index:30; max-height:56vh; overflow:auto;
+  background:var(--paper); border:2px solid var(--pin); box-shadow:0 10px 36px rgba(0,0,0,.45);
+}
+.asd-res-g { font-family:var(--head, 'Eurostile', sans-serif); font-size:9.5px; letter-spacing:2px; text-transform:uppercase; color:var(--faint); padding:9px 10px 4px; }
+.asd-res { display:flex; align-items:baseline; gap:8px; padding:7px 10px; cursor:pointer; border-left:2px solid transparent; }
+.asd-res.is-sel { background:var(--paper-3); border-left-color:var(--pin); }
+.asd-res-l { flex:1; min-width:0; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.asd-res-s { font-size:11px; color:var(--faint); flex:0 0 auto; }
+
+/* ── section grid = ToolCards (invert on hover, unicode glyph) ── */
+.asd-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:0; border-bottom:2px solid var(--pin); }
+.asd-tile {
+  position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; text-align:center; padding:13px 6px; min-height:54px;
+  background:var(--paper); border:1px solid var(--rule); margin:-0.5px; cursor:pointer;
+  color:var(--pin); font-family:var(--head, 'Eurostile', sans-serif);
+  transition:background var(--fast) var(--ease), color var(--fast) var(--ease), transform var(--fast) var(--ease);
+}
+.asd-tile:hover { background:var(--pin); color:#fff; transform:translateY(-2px); z-index:2; }
+.asd-tile-l { font-size:12px; letter-spacing:1.5px; text-transform:uppercase; }
+.asd-tile-soon { font-family:var(--mono); font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--faint); line-height:1; }
+.asd-tile.is-disabled { color:var(--faint); }
+.asd-tile.is-disabled:hover { background:var(--paper-3); color:var(--muted); transform:none; }
+
+/* ── unified tab list ── */
+.asd-tabs { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+.asd-tabs-h { display:flex; align-items:center; padding:11px 12px 7px; font-family:var(--head, 'Eurostile', sans-serif); font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--faint); }
+.asd-tabs-h span { flex:1; }
+.asd-newtab { display:flex; align-items:center; justify-content:center; width:20px; height:20px; border:1px solid var(--pin); background:var(--paper); color:var(--pin); cursor:pointer; font-family:var(--head, 'Eurostile', sans-serif); font-size:13px; line-height:1; padding:0; transition:background var(--fast) var(--ease), color var(--fast) var(--ease); }
+.asd-newtab:hover { background:var(--pin); color:#fff; }
+/* tabs = one dense block of pure monospace text, lines stuck together, each a
+   "/url"; the active line inverts to ink; groups get a header + indent. */
+.asd-tablist { flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; padding:4px 0 12px; font-family:var(--mono); }
+.asd-tablist::-webkit-scrollbar { width:10px; }
+.asd-tablist::-webkit-scrollbar-thumb { background:var(--rule); border:3px solid #fff; }
+.asd-tab { display:flex; align-items:center; gap:6px; padding:0 10px; line-height:1.7; cursor:pointer; color:var(--pin); user-select:none; white-space:nowrap; transition:background var(--fast) var(--ease); }
+.asd-tab-l { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; font-size:15px; }
+.asd-tab:hover { background:var(--paper-3); }
+.asd-tab.is-active { background:var(--pin); color:#fff; }
+.asd-tab.is-active .asd-tab-l { color:#fff; }
+.asd-tab-grp { position:relative; }
+.asd-tab-grp .asd-tab-l { padding-left:16px; }
+.asd-tab-grp::before { content:''; position:absolute; left:14px; top:0; bottom:0; border-left:1px solid var(--rule); }
+.asd-tab.is-active.asd-tab-grp::before { border-left-color:#555; }
+.asd-tab-x { display:flex; border:none; background:transparent; color:var(--faint); cursor:pointer; padding:0 2px; font-family:var(--mono); font-size:13px; line-height:1; opacity:0; transition:color var(--fast) var(--ease), opacity var(--fast) var(--ease); }
+.asd-tab:hover .asd-tab-x, .asd-tab.is-active .asd-tab-x { opacity:1; }
+.asd-tab.is-active .asd-tab-x { color:#bbb; }
+.asd-tab-x:hover { color:var(--stamp-red); }
+.asd-tab.asd-drag { opacity:.4; }
+.asd-tab-in { animation:asd-tab-in var(--fast) var(--ease) both; }
+@keyframes asd-tab-in { from { opacity:0; transform:translateX(-4px); } to { opacity:1; transform:none; } }
+/* group header line — same visual language as a tab line (mono, same size) */
+.asd-grp { display:flex; align-items:center; gap:6px; padding:0 10px; line-height:1.7; cursor:pointer; font-family:var(--mono); font-size:15px; color:var(--pin); white-space:nowrap; transition:background var(--fast) var(--ease); }
+.asd-grp:hover { background:var(--paper-3); }
+.asd-grp-car { font-family:var(--mono); width:11px; text-align:center; color:var(--muted); }
+.asd-grp-n { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.asd-grp-c { font-family:var(--mono); color:var(--faint); font-size:13px; }
+.asd-grp-over { background:var(--paper-3); box-shadow:inset 0 0 0 1px var(--pin); }
+
+/* glyph helpers emitted by JS use .asd-ic (mono) — no SVG in the fork */
+.asd-ic { font-family:var(--mono); font-style:normal; line-height:1; }
+
+/* corpus grid cards match the DS card frame (2px ink, like the Corpus tiles) */
+body.asd-live .vw-card { border-width:2px; }
+
+/* ── content stage (flat white; the sidebar rule divides) ── */
+#asd-stage-wrap { flex:1; min-width:0; min-height:0; }
+#app-shell.asd #tab-stage { position:relative; height:100%; min-width:0; background:var(--paper); border:none; overflow:hidden; }
+#app-shell.asd #tab-stage > .tab-content, #app-shell.asd #tab-stage > [data-pane] { position:absolute; inset:0; overflow:auto; }
+.pane-in { animation:asd-pane-in var(--fast) ease both; }
+@keyframes asd-pane-in { from { opacity:0; } to { opacity:1; } }
+
+/* ── sidebar hide / auto-hide ── */
+/* explicit hide button (in the header) + floating show button (when hidden) */
+.asd-foot { flex:0 0 auto; margin-top:auto; border-top:2px solid var(--pin); }
+/* left-aligned: the ‹ lives in a 30px box that MIRRORS the collapsed block
+   (same width, same 2px optical pad, same 15px glyph) — toggling the sidebar
+   keeps the chevron anchored to the corner, it only flips direction */
+.asd-collapse { width:100%; display:flex; align-items:center; justify-content:flex-start; gap:4px; border:none; background:var(--paper); color:var(--muted); cursor:pointer; font-family:var(--head, 'Eurostile', sans-serif); font-size:11px; letter-spacing:2px; text-transform:uppercase; padding:11px 11px 11px 0; transition:background var(--fast) var(--ease), color var(--fast) var(--ease); }
+/* the ‹ lives in the exact same 30px corner box the collapsed › uses */
+.asd-collapse .asd-ic { width:30px; flex:0 0 auto; box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center; font-size:15px; line-height:1; }
+.asd-collapse:hover { background:var(--pin); color:#fff; }
+/* Collapsed: the HIDE button simply STAYS — a black block at the bottom-left
+   (same footprint/baseline as HIDE's bar end) showing a chevron while the rest
+   of the edge remains the normal thin strip. Click = reopen. No stage shift. */
+/* collapsed HIDE remnant: a 30px ink block in the bottom-left corner. Its
+   chevron is centred in that 30px box — the SAME box the open HIDE chevron
+   uses (see .asd-collapse .asd-ic) — so ‹ and › land on the identical x. */
+#asd-show { display:none; position:absolute; bottom:0; left:0; z-index:58; width:30px; height:37px; align-items:center; justify-content:center; border:none; background:var(--pin); color:#fff; cursor:pointer; font-family:var(--mono); font-size:15px; line-height:1; padding:0 3px 0 0; box-sizing:border-box; }   /* padding-right nudges the › ~1.5px left, cancelling the ‹/› glyph asymmetry so it lands exactly on HIDE's ‹ */
+#asd-show:hover { background:var(--stamp-gold); color:var(--pin); }
+#shell-root.side-collapsed #asd-show, #shell-root.side-autohide:not(.side-reveal) #asd-show { display:flex; }
+
+#asd-side { transition:margin-left .16s var(--ease), transform .16s var(--ease); }
+#shell-root.side-collapsed #asd-side { margin-left:-238px; }
+#shell-root.side-autohide #asd-side {
+  position:absolute; left:0; top:0; bottom:0; margin-left:0; z-index:60;
+  transform:translateX(-100%); box-shadow:none;
+}
+#shell-root.side-autohide.side-reveal #asd-side { transform:translateX(0); box-shadow:8px 0 0 rgba(17,17,17,.06), 10px 0 30px rgba(17,17,17,.18); }
+/* reveal handle: a thin ink strip at the left edge — click to toggle (pinned),
+   hover to reveal (auto-hide). Hidden while the sidebar is pinned open. */
+#asd-reveal { display:none; position:absolute; left:0; top:0; bottom:0; width:7px; z-index:55; cursor:pointer; background:var(--pin); }
+#shell-root.side-collapsed #asd-reveal, #shell-root.side-autohide #asd-reveal { display:block; }
+#asd-reveal:hover { background:var(--stamp-gold); }
+@media (prefers-reduced-motion: reduce) { #asd-side { transition:none; } }
+
+/* ── DATA home / Corpus (ToolCard grid, DS) ── */
+.dh { display:flex; flex-direction:column; background:var(--paper); }
+.dh-bar { display:flex; align-items:baseline; gap:12px; padding:20px 24px 12px; border-bottom:2px solid var(--pin); flex-wrap:wrap; }
+.dh-title { font-family:var(--head, 'Eurostile', sans-serif); font-size:22px; letter-spacing:2px; text-transform:uppercase; color:var(--pin); transform:scaleX(.86); transform-origin:left; }
+.dh-sub { font-size:12px; color:var(--muted); }
+.dh-scroll { flex:1; min-height:0; overflow:auto; padding:16px 24px 30px; }
+/* one vertical rhythm for every band heading (TYPES / VIEWS / RECENT / START) */
+.dh-sec-h { font-family:var(--head, 'Eurostile', sans-serif); font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--faint); margin:26px 0 10px; }
+.dh-scroll > .dh-sec-h:first-child { margin-top:2px; }   /* only the very first heading hugs the top */
+.dh-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
+.dh-card {
+  position:relative; display:flex; flex-direction:column; justify-content:flex-end; gap:4px; padding:22px 14px 14px; min-height:74px;
+  border:2px solid var(--pin); background:var(--paper); color:var(--pin); cursor:pointer;
+  transition:background var(--fast) var(--ease), color var(--fast) var(--ease), transform var(--fast) var(--ease);
+}
+.dh-card:hover { background:var(--pin); color:#fff; transform:translateY(-2px); }
+.dh-card:focus-visible { outline:2px solid var(--stamp-gold); outline-offset:2px; }
+/* house squeeze (scaleX .82) + right pad so LOCATIONS clears the ＋ ghost */
+.dh-card-l { font-family:var(--head, 'Eurostile', sans-serif); font-size:15px; letter-spacing:1px; text-transform:uppercase; padding-right:26px; transform:scaleX(.82); transform-origin:left; white-space:nowrap; }
+/* TYPES = the datafort's progress board: big counters, taller & wider cards. */
+#dh-types { grid-template-columns:repeat(auto-fill,minmax(172px,1fr)); }
+#dh-types .dh-card { min-height:88px; }
+.dh-card-n { position:absolute; top:10px; right:14px; font-family:var(--mono); font-size:22px; color:var(--muted); font-variant-numeric:tabular-nums; }
+.dh-card:hover .dh-card-n { color:#fff; }
+/* VIEWS = quieter, shorter cards laid out as a ROW (label left, tag right). */
+.dh-grid-v { grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); }
+.dh-grid-v .dh-card { min-height:44px; padding:12px 14px; flex-direction:row; align-items:center; justify-content:flex-start; gap:10px; }
+.dh-grid-v .dh-card .dh-card-l { flex:1; min-width:0; padding-right:0; }
+.dh-grid-v .dh-card .dh-card-n { position:static; flex:0 0 auto; }
+.dh-card-view .dh-card-n, .dh-card-db .dh-card-n { font-size:9.5px; letter-spacing:1.5px; text-transform:uppercase; color:var(--faint); }
+.dh-card:hover .dh-card-view .dh-card-n, .dh-card-view:hover .dh-card-n, .dh-card-db:hover .dh-card-n { color:#bbb; }
+/* create affordance: ghost at rest (discoverable), full on card hover */
+.dh-card-new { position:absolute; bottom:10px; right:12px; width:22px; height:22px; border:1px solid var(--pin); background:var(--paper); color:var(--pin); cursor:pointer; font-family:var(--head,'Eurostile',sans-serif); line-height:1; opacity:.25; transition:opacity var(--fast), background var(--fast), color var(--fast); }
+.dh-card:hover .dh-card-new { opacity:1; }
+.dh-card-new:hover { background:var(--stamp-green); color:#fff; border-color:var(--stamp-green); }
+.dh-card-add { border-style:dashed; color:var(--muted); }
+.dh-card-add:hover { background:var(--pin); color:#fff; }
+.dh-card-add .dh-card-l { color:inherit; }
+
+/* ── corpus third band: starter actions (empty) / RECENT (populated) ── */
+.dh-start { display:flex; gap:10px; flex-wrap:wrap; }
+.dh-start-a {
+  border:2px dashed var(--pin); background:var(--paper); color:var(--pin); cursor:pointer;
+  font-family:var(--mono); font-size:13px; padding:12px 18px; text-align:left;
+  transition:background var(--fast) var(--ease), color var(--fast) var(--ease), border-style var(--fast);
+}
+.dh-start-a:hover { background:var(--pin); color:#fff; border-style:solid; }
+.dh-recent { display:flex; flex-direction:column; border:2px solid var(--pin); max-width:560px; }
+.dh-rec {
+  display:flex; align-items:baseline; gap:12px; width:100%; text-align:left;
+  background:var(--paper); border:none; border-bottom:1px solid var(--rule); color:var(--pin);
+  font-family:var(--mono); font-size:13.5px; padding:9px 14px; cursor:pointer;
+  transition:background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.dh-rec:last-child { border-bottom:none; }
+.dh-rec:hover { background:var(--pin); color:#fff; }
+.dh-rec-n { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dh-rec-t { font-family:var(--head,'Eurostile',sans-serif); font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--faint); flex:0 0 auto; }
+.dh-rec:hover .dh-rec-t { color:#bbb; }
+
+/* ── unified ACTIONABLE empty state (views, cast home) ── */
+.vw-empty-new, .ca-home-new {
+  display:block; width:100%; box-sizing:border-box; text-align:left; cursor:pointer;
+  border:1px dashed #bbb; background:var(--paper); color:var(--muted);
+  font-family:var(--mono); font-size:13px; padding:16px 18px;
+  transition:border-color var(--fast) var(--ease), color var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+.vw-empty-new b, .ca-home-new b { color:var(--pin); font-weight:700; }
+.vw-empty-new:hover, .ca-home-new:hover { border-color:var(--pin); background:var(--paper-2); color:var(--pin); }
+.ca-home-acts { display:flex; flex-direction:column; gap:10px; padding:10px 18px; max-width:420px; }
+
+/* ── keyboard shortcuts cheat-sheet ── */
+.ks { display:flex; flex-direction:column; }
+.ks-row { display:flex; align-items:baseline; gap:14px; padding:7px 0; border-bottom:1px solid var(--rule); }
+.ks-row:last-child { border-bottom:none; }
+.ks-k { flex:0 0 130px; font-family:var(--mono); font-size:12px; background:var(--pin); color:#fff; padding:2px 8px; text-align:center; }
+.ks-l { font-family:var(--mono); font-size:13px; color:var(--pin); }
+
+/* ── Cast pane: collapsable cast rail + main area ── */
+.ca-pane { display:flex; position:relative; background:var(--paper); }
+.ca-rail { flex:0 0 212px; border-right:2px solid var(--pin); overflow:auto; background:var(--paper); }
+.ca-pane.ca-rail-collapsed .ca-rail { display:none; }
+.ca-main { flex:1; min-width:0; overflow:auto; position:relative; }
+.ca-rail-toggle { position:absolute; top:10px; right:12px; z-index:6; width:26px; height:26px; border:2px solid var(--pin); background:var(--paper); color:var(--pin); cursor:pointer; font-family:var(--mono); font-size:14px; line-height:1; transition:background var(--fast) var(--ease), color var(--fast) var(--ease); }
+.ca-rail-toggle:hover { background:var(--pin); color:#fff; }
+.ca-detail { position:relative; }
+.ca-row.ca-active { background:var(--pin); color:#fff; }
+.ca-row.ca-active .ca-nat, .ca-row.ca-active .dt-n { color:#bbb; }
+
+/* ── launcher (blank tab) ── */
+.asd-launch { display:flex; align-items:center; justify-content:center; background:var(--paper); }
+.asd-launch-in { text-align:center; max-width:560px; padding:24px; }
+.asd-launch-h { font-family:var(--head, 'Eurostile', sans-serif); font-size:13px; letter-spacing:3px; text-transform:uppercase; color:var(--muted); margin-bottom:18px; }
+.asd-launch-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.asd-launch-card { display:flex; flex-direction:column; align-items:center; gap:8px; padding:20px 10px; border:2px solid var(--pin); background:var(--paper); color:var(--pin); cursor:pointer; transition:background var(--fast) var(--ease), color var(--fast) var(--ease), transform var(--fast) var(--ease); }
+.asd-launch-card:hover { background:var(--pin); color:#fff; transform:translateY(-2px); }
+.asd-launch-l { font-family:var(--head,'Eurostile',sans-serif); font-size:13px; letter-spacing:1px; text-transform:uppercase; }
+.asd-launch-s { font-size:11px; color:var(--faint); }
+.asd-launch-card:hover .asd-launch-s { color:#bbb; }
+.asd-launch-card.is-disabled { opacity:.5; }
+.asd-launch-hint { margin-top:20px; font-size:12px; color:var(--faint); }
+.asd-launch-hint kbd { font-family:var(--mono); background:var(--pin); color:#fff; padding:1px 6px; font-size:11px; }
+
+/* ── WEB placeholder ── */
+.asd-web { display:flex; align-items:center; justify-content:center; background:var(--paper); }
+.asd-web-in { text-align:center; color:var(--muted); }
+.asd-web-in h2 { font-family:var(--head, 'Eurostile', sans-serif); letter-spacing:6px; font-size:18px; margin:0 0 8px; color:var(--pin); }
+.asd-web-in p { margin:0 0 4px; font-size:13px; }
+.asd-web-sub { font-size:11px; color:var(--faint); }
+
+/* ── journal drawer → DS (white paper, ink border, black head) ── */
+.log-drawer { background:var(--paper); border-left:2px solid var(--pin); box-shadow:-16px 0 40px rgba(0,0,0,.28); }
+
+/* ════════ HOMOGENISE: flatten the "rulebook grain" so the whole app is flat
+   paper per the DS (grain is a typewriter-theme-only texture). ════════ */
+#section-side::before, .dt-bar::before, .cb-rules-strip::before, .pop-foot::before,
+.log-drawer-head::before, .if-card-res::before, .ct-src::before, .cb-forces::before,
+#nav-corner::before, .dt-head::before, .cb-h::before, .if-box-head::before,
+.rc-sub::before, .rc-tag::before, #side-cap::before,
+.cbt-rail::before, .cbt-list::before { content:none !important; }
+.cb-rules-strip, .if-card-res, .ct-src, .cb-forces, .cb-mookrow, .cb-rules {
+  background-color:var(--paper-2) !important; background-image:none !important;
+}
+.cbt-list { background-color:var(--paper-2); }
+
+/* ════════ UNIFY the tool title bars — Party's black bar is the model. Just
+   adjust the existing title div's colour + height (== the sidebar header), so
+   the top of the app reads as one continuous ink band. No new bar is added. ════════ */
+#app-shell.asd .asd-camp { height:var(--topbar-h); }
+.pl-bar { min-height:var(--topbar-h); height:var(--topbar-h); align-items:center; padding:0 16px; box-sizing:border-box; }
+/* "+ Sheet" follows the ink-band create convention (white block, like ＋ New) */
+.pl-bar .sess-mode-add { background:#fff; color:var(--pin); border:1px solid #fff; }
+.pl-bar .sess-mode-add:hover { background:#ccc; color:var(--pin); }
+.dt-bar {
+  background-color:var(--pin) !important; background-image:none !important; color:#fff;
+  height:var(--topbar-h); min-height:var(--topbar-h); align-items:center; gap:10px;
+  padding:0 14px; box-sizing:border-box; flex-wrap:nowrap; overflow-x:auto; overflow-y:hidden; border-bottom:none;
+}
+.dt-bar::-webkit-scrollbar { height:0; }
+/* Ink-band recolors are SCOPED to .dt-bar — the same .dt-* controls also live
+   on paper (item fiche, cast composer, combat GENERATE) where the paper style
+   from app.css must keep applying. An unscoped version of this block washed
+   those buttons out to #ddd-on-white. */
+.dt-bar .dt-title { color:#fff; }
+.dt-bar .dt-search { background:#1d1d1d; border:1px solid #444; color:#fff; }
+.dt-bar .dt-search::placeholder { color:#a0a0a0; }
+.dt-bar .dt-modes { border-color:#555; }
+.dt-bar .dt-mode { color:#bbb; }
+.dt-bar .dt-mode.on { background:#fff; color:var(--pin); }
+.dt-bar .dt-btn { border-color:#555; color:#ddd; background:transparent; }
+.dt-bar .dt-btn:hover { background:#fff; color:var(--pin); }
+.dt-bar .dt-btn-new { background:#fff !important; color:var(--pin) !important; border-color:#fff; }
+.dt-bar .dt-btn-new:hover { background:#ccc !important; }
+.dt-bar .dt-fchip { border-color:#555; color:#ddd; background:transparent; }
+.dt-bar .dt-fchip i { color:#aaa; }
+.dt-bar .dt-fchip b { color:#999; }
+.dt-bar .dt-hint-inline { color:#999; }
+.dt-bar .dt-x { color:#aaa; }
+.dt-bar .dt-x:hover { color:var(--stamp-red); }
+.dt-bar .dt-dbsel { background:#1d1d1d; border:1px solid #444; color:#fff; }
+
+/* DATA corpus title bar (re-added, black + aligned) */
+.dh-bar { background:var(--pin); color:#fff; height:var(--topbar-h); min-height:var(--topbar-h); display:flex; align-items:center; padding:0 16px; box-sizing:border-box; border-bottom:none; }
+.dh-title { color:#fff; font-family:var(--head,'Eurostile',sans-serif); font-size:14px; letter-spacing:2px; text-transform:uppercase; transform:none; }
+.dh-sub { display:none; }
+
+/* Cast pane → column: a black CAST top bar (with the rail toggle) + the body */
+.ca-pane { flex-direction:column; }
+.ca-topbar { flex:0 0 auto; display:flex; align-items:center; gap:10px; height:var(--topbar-h); background:var(--pin); color:#fff; padding:0 12px; box-sizing:border-box; }
+.ca-topbar-t { font-family:var(--head,'Eurostile',sans-serif); font-size:14px; letter-spacing:3px; text-transform:uppercase; color:#fff; }
+.ca-body { flex:1; min-height:0; display:flex; }
+.ca-rail-toggle { position:static; top:auto; right:auto; width:28px; height:28px; border:1px solid #555; background:transparent; color:#fff; }
+.ca-rail-toggle:hover { background:#fff; color:var(--pin); }
+
+/* ════════ CAST content — flush frames, no gutters, tightened to the charter.
+   Every clock / cast / rule now opens INLINE in .ca-main (the rail is always
+   visible), so the whole content tree lives under .ca-pane and can be scoped
+   here without touching the DATA item fiche (which shares .dtf/.dt-*).
+   Goal: pure paper, hard 2px ink frames, square, zero shadow; bands are
+   divided by 2px ink RULES, not by whitespace gutters. ════════ */
+.ca-pane .ca-main, .ca-pane .dt-fiche, .ca-pane .dt-fiche-body { background:var(--paper); color:var(--pin); }
+/* .tab-content carries a 22×26 pad. It sits on BOTH the CAST pane itself AND the
+   inline editor wrapper (renderEditor sets .ca-detail → "tab-content dt-fiche"),
+   so neutralise it in the CAST scope — the pane and the fiche go edge-to-edge. */
+.tab-content.ca-pane { padding:0; overflow:hidden; }
+.ca-pane .tab-content { padding:0; }
+/* kill the inner gutter: the 18px frame padding + the 760px max-width dead space */
+.ca-pane .dtf { padding:0; max-width:none; }
+.ca-pane .dtf-head { margin:0; padding:11px 14px; border-bottom:2px solid var(--pin); }
+.ca-pane .dtf-name { font-size:16px; border-bottom:2px solid var(--pin); color:var(--pin); }
+.ca-pane .dtf .ck-row { padding:16px 14px; }
+
+/* composer: flush left column; blocks are 2px-ink frames on paper */
+.ca-pane .ca-comp { gap:0; }
+.ca-pane .ca-left { padding:0; }
+.ca-pane .ca-toprow { margin:0; padding:11px 14px; border-bottom:2px solid var(--pin); }
+.ca-pane #ca-blocks { padding:12px 14px; }
+.ca-pane .ca-tpls, .ca-pane .ca-entity { margin:0 0 12px; }
+.ca-pane .ca-b, .ca-pane .ca-entity { border:2px solid var(--pin); background:var(--paper); box-shadow:none; }
+.ca-pane .ca-b { margin-bottom:10px; }
+.ca-pane .ca-b-head { border-bottom:2px solid var(--pin); color:var(--pin); }
+.ca-pane .ca-b textarea, .ca-pane .ca-b-img input:not([type]), .ca-pane .ca-b-img input[type="text"] { background:var(--paper); color:var(--pin); }
+.ca-pane .ca-b-img img { border:2px solid var(--pin); }
+.ca-pane .ca-right { width:42%; border-left:2px solid var(--pin); }
+.ca-pane .ca-right .dt-head { color:var(--pin); }
+.ca-pane .ca-preview { margin:0; border:none; }             /* FilmWindow well: flush, stays black (charter-exempt) */
+
+/* rule editor (.ru-*) — was unstyled: give it the same flush, ink-banded rhythm */
+.ca-pane .ru-flags { display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:10px 14px; border-bottom:2px solid var(--pin); }
+.ca-pane .ru-flags .dt-btn { margin-left:auto; }
+.ca-pane .ru-when { display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; padding:12px 14px; }
+.ca-pane .ru-when .dtf-field { margin:0; }
+.ca-pane .ru-then { padding:4px 14px 12px; border-top:2px solid var(--pin); }
+.ca-pane .ru-fx { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 0; border-bottom:1px solid var(--rule); }
+.ca-pane .ru-fx:last-of-type { border-bottom:none; }
+.ca-pane .ru-when select, .ca-pane .ru-when input, .ca-pane .ru-then select, .ca-pane .ru-then input,
+.ca-pane .ca-entity input, .ca-pane .dtf .ck-ctl select, .ca-pane .dtf .ck-ctl input {
+  background:var(--paper); border:1px solid var(--pin); color:var(--pin); }
+
+/* rail: the active row is a full ink bar (charter inversion), not a tint */
+.ca-pane .ca-row.ca-active { background:var(--pin); color:#fff; }
+.ca-pane .dt-head { color:var(--muted); }
+
+/* Combat pane → column: a black COMBAT top bar + the columns */
+.cb-page { display:flex; flex-direction:column; }
+.cb-topbar { flex:0 0 auto; display:flex; align-items:center; height:var(--topbar-h); background:var(--pin); color:#fff; padding:0 16px; box-sizing:border-box; font-family:var(--head,'Eurostile',sans-serif); font-size:14px; letter-spacing:3px; text-transform:uppercase; }
+.cb-page > .cb-cols, .cb-page > .cb-live { flex:1; min-height:0; }
+
+/* Entity fiche top bar (links band + SAVE) — black + aligned to the header */
+.dt-fichebar { background:var(--pin); min-height:var(--topbar-h); border-bottom:none; align-items:stretch; }
+.dt-fichebar .lk-band { background:transparent !important; background-image:none !important; border-bottom:none; min-height:100%; align-items:center; }
+.dt-fichebar .lk-band-title { color:#8a8a8a; }
+.dt-fichebar .lk-chip { border-color:#555; color:#eee; background:transparent; }
+.dt-fichebar .lk-chip .lk-rel { color:#aaa; }
+.dt-fichebar .lk-add, .dt-fichebar .lk-addprop { border-color:#555; color:#bbb; }
+.dt-fichebar .lk-prop { color:#aaa; }
+.dt-fichebar .lk-prop-in { background:#1d1d1d; border-color:#444; color:#fff; }
+.dt-fichebar .dt-save { background:var(--pin); color:#fff; border-left:1px solid #444; }
+.dt-fichebar .dt-save:hover { background:#fff; color:var(--pin); }
+.dt-fichebar .dt-save.inked { background:#fff; color:var(--pin); }
+
+/* ════════════════════════════════════════════════════════════════════════
+   PRE-SESSION SCREEN 1 — ROLE CHOOSER
+   One framed card: an INK brand block up top (the chrome logo only reads on
+   ink — never on paper), a kicker rule, then two invert-on-hover role choices.
+   ════════════════════════════════════════════════════════════════════════ */
+#role-chooser { background:var(--paper); display:flex; align-items:center; justify-content:center; padding:24px; box-sizing:border-box; }
+#role-chooser::before { content:none; background:none; }
+.rc-card { width:min(640px,100%); max-width:640px; height:auto; padding:0; display:flex; flex-direction:column; text-align:center; border:2px solid var(--pin); box-shadow:none; }
+/* brand block — always ink, so the white chrome wordmark stays visible */
+.rc-brand { background:var(--pin); padding:34px 22px 24px; }
+.rc-brand::before { content:none !important; }
+.rc-logo { display:block; margin:0 auto; width:auto; max-width:78%; height:auto; max-height:120px; background:none; padding:0; }
+.rc-logo::before { content:none !important; }
+.rc-sub { background:none; color:#fff; font-family:var(--head,'Eurostile',sans-serif); letter-spacing:11px; font-size:19px; margin:8px 0 0; padding:0; }
+.rc-sub::before { content:none !important; }
+.rc-tag { display:block; background:none; color:#8a8a8a; font-size:12px; letter-spacing:1px; margin:9px 0 0; padding:0; border:none; }
+.rc-kicker { font-family:var(--head,'Eurostile',sans-serif); font-size:10px; letter-spacing:3px; text-transform:uppercase; color:var(--muted); padding:15px 0; margin:0; border-bottom:2px solid var(--pin); background:var(--paper); }
+.rc-roles { display:flex; gap:0; max-width:none; margin:0; width:100%; }
+.rc-role { flex:1; width:auto; border:none; border-right:2px solid var(--pin); padding:26px 22px 22px; background:var(--paper); color:var(--pin); display:flex; flex-direction:column; gap:9px; text-align:left; cursor:pointer; transition:background var(--fast) var(--ease); }
+.rc-role:last-child { border-right:none; }
+.rc-role:hover { background:var(--pin); border-color:var(--pin); transform:none; }
+.rc-role h2 { font-family:var(--head,'Eurostile',sans-serif); font-size:20px; letter-spacing:2px; text-transform:uppercase; color:var(--pin); margin:0; }
+.rc-role p { font-size:13px; color:var(--muted); line-height:1.55; margin:0; flex:1; }
+.rc-ico { display:none; }
+.rc-go { font-family:var(--head,'Eurostile',sans-serif); letter-spacing:2px; font-size:12px; text-transform:uppercase; color:#8a6508; margin-top:4px; }   /* darker gold: readable on paper at this size */
+.rc-role:hover h2 { color:#fff; }
+.rc-role:hover p { color:#c9c9c9; }
+.rc-role:hover .rc-go { color:#fff; }
+.rc-foot { padding:16px; margin:0; border-top:2px solid var(--pin); background:var(--paper); }
+.rc-foot a { color:var(--muted); font-size:12px; text-decoration:none; }
+.rc-foot a:hover { color:var(--pin); }
+
+/* ════════════════════════════════════════════════════════════════════════
+   PRE-SESSION SCREEN 2 — CAMPAIGNS ROSTER (restructured to a DS list; the
+   "01/02" index, the boxed empty-cell grid, and the "//" kicker are gone).
+   ════════════════════════════════════════════════════════════════════════ */
+/* the old black top identity bar is retired — its actions live in the roster
+   head (below) and the in-session sidebar ⋯ menu. Removing it also kills the
+   white-logo-on-white glitch that showed on this screen. */
+#app-nav { display:none; }
+#view-campaigns { padding:0; }
+.roster { max-width:840px; margin:0 auto; padding:32px 28px 60px; }
+/* brand strip — ink block (the chrome wordmark only reads on ink) + globals */
+.roster-brand { display:flex; align-items:center; gap:14px; background:var(--pin); padding:13px 18px; margin-bottom:26px; }
+.roster-logo { height:26px; width:auto; }
+.roster-wordmark { font-family:var(--head,'Eurostile',sans-serif); font-size:15px; letter-spacing:5px; color:#fff; }
+.roster-brand-acts { margin-left:auto; display:flex; gap:8px; }
+.roster-act { font-family:var(--head,'Eurostile',sans-serif); font-size:11px; letter-spacing:1.5px; text-transform:uppercase; background:transparent; color:#ddd; border:1px solid #444; padding:6px 12px; cursor:pointer; transition:background var(--fast) var(--ease), color var(--fast) var(--ease), border-color var(--fast) var(--ease); }
+.roster-act:hover { background:#fff; color:var(--pin); border-color:#fff; }
+.roster-head { display:flex; align-items:baseline; gap:12px; border-bottom:2px solid var(--pin); padding-bottom:12px; margin-bottom:18px; }
+.roster-title { font-family:var(--head,'Eurostile',sans-serif); font-size:26px; letter-spacing:2px; text-transform:uppercase; color:var(--pin); margin:0; transform:scaleX(.86); transform-origin:left; }
+.roster-count { font-family:var(--mono); font-size:13px; color:var(--muted); }
+.roster-new { margin-left:auto; font-family:var(--head,'Eurostile',sans-serif); font-size:11px; letter-spacing:1.5px; text-transform:uppercase; background:var(--pin); color:#fff; border:2px solid var(--pin); padding:8px 14px; cursor:pointer; transition:background var(--fast) var(--ease), color var(--fast) var(--ease); }
+.roster-new:hover { background:var(--paper); color:var(--pin); }
+/* glued list — one framed box, hairline dividers between rows (sourcebook) */
+.roster-list { display:flex; flex-direction:column; border:2px solid var(--pin); }
+.roster-row { display:flex; align-items:center; gap:16px; border:none; border-bottom:1px solid var(--rule); background:var(--paper); color:var(--pin); padding:15px 18px; cursor:pointer; transition:background var(--fast) var(--ease), color var(--fast) var(--ease); }
+.roster-row:last-child { border-bottom:none; }
+.roster-row:hover { background:var(--pin); color:#fff; }
+.roster-row:focus-visible { outline:2px solid var(--stamp-gold); outline-offset:-2px; }
+.roster-name { flex:1; min-width:0; font-family:var(--head,'Eurostile',sans-serif); font-size:18px; letter-spacing:1px; text-transform:uppercase; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.roster-meta { font-family:var(--mono); font-size:12px; color:var(--muted); flex:0 0 auto; }
+.roster-row:hover .roster-meta { color:#bbb; }
+.roster-open { font-family:var(--head,'Eurostile',sans-serif); font-size:11px; letter-spacing:2px; text-transform:uppercase; color:var(--stamp-gold); flex:0 0 auto; opacity:0; transition:opacity var(--fast) var(--ease); }
+.roster-row:hover .roster-open { color:#fff; opacity:1; }
+.roster-del { font-family:var(--mono); font-size:11px; color:var(--stamp-red); background:none; border:none; cursor:pointer; padding:2px 4px; flex:0 0 auto; opacity:0; transition:opacity var(--fast) var(--ease); }
+.roster-row:hover .roster-del { opacity:1; }
+.roster-del:hover { text-decoration:underline; }
+.roster-row:hover .roster-del { color:#f0a79f; }
+.roster-row:hover .roster-del { color:#f0a79f; }
+.roster-empty { border:2px dashed var(--rule); color:var(--muted); padding:22px; font-family:var(--mono); font-size:13px; }
+
+/* ── reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .asd-results, .asd-tab-in, .pane-in { animation:none !important; }
+  .asd-tile, .asd-tab, .dh-card, .asd-launch-card { transition:none !important; }
+}
+
+/* ── keyboard focus (visible, ink) ── */
+#app-shell.asd .asd-tile:focus-visible, #app-shell.asd .asd-tab:focus-visible,
+#app-shell.asd .asd-camp:focus-visible, #app-shell.asd .asd-newtab:focus-visible,
+#app-shell.asd .asd-nav:focus-visible,
+#app-shell.asd .asd-search:focus-visible { outline:2px solid var(--stamp-gold); outline-offset:1px; }
+
+/* the floating quick-database button is redundant (search + Corpus → Database) */
+body.asd-live .qdb-btn, body.asd-live .qdb-pop { display:none; }
+
+/* the cast control monitor only shows once something is actually ON AIR — no
+   idle "OFF AIR" box squatting the corner over the content. It's already DS
+   (ink panel, red cast rule); reappears the moment the GM casts. */
+body.asd-live .rt-monitor:not(.on) { display:none; }

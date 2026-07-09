@@ -29,15 +29,24 @@
 
   function loadIntoApp(rec) {
     applyingRemote = true;
-    var json = (rec && rec.json && Object.keys(rec.json).length) ? rec.json : window.makeBlankCS();
-    json._id = sheetId;
-    window.CS = json;
-    window.SHEETS = [json];
-    window.csActiveIdx = 0;
-    if (typeof window.applyCS === 'function') window.applyCS();
-    lastAppliedAt = (rec && rec.updatedAt) || Date.now();
-    try { lastPublishedJson = JSON.stringify(window.CS); } catch (e) { lastPublishedJson = null; }
-    applyingRemote = false;
+    try {
+      // Merge whatever the remote has onto a full blank template, so a partial sheet (e.g. a GM
+      // Party seed of just {name,handle}) always arrives structurally complete — otherwise applyCS
+      // throws on the missing skills map and live publishing stalls.
+      var base = window.makeBlankCS();
+      var json = (rec && rec.json && Object.keys(rec.json).length) ? Object.assign(base, rec.json) : base;
+      json._id = sheetId;
+      window.CS = json;
+      window.SHEETS = [json];
+      window.csActiveIdx = 0;
+      if (typeof window.applyCS === 'function') window.applyCS();
+      lastAppliedAt = (rec && rec.updatedAt) || Date.now();
+      try { lastPublishedJson = JSON.stringify(window.CS); } catch (e) { lastPublishedJson = null; }
+    } finally {
+      // CRITICAL: never leave this stuck true — if applyCS() throws, publishLocal() would
+      // early-return forever and the sheet would silently stop saving.
+      applyingRemote = false;
+    }
   }
 
   function publishLocal() {
@@ -136,6 +145,17 @@
     // Combat: when the GM starts one, every player transitions to the combat
     // overlay (resorbable — collapse back to the sheet, reopen via the button).
     if (camp.onCombatChange) camp.onCombatChange(syncCombatState);
+    // Expose the campaign-wide media marketplace (Control Room offers) to the Press Card.
+    if (camp.getOverview) {
+      var pushMarket = function () {
+        try { window.__mediaMarket = (camp.getOverview() || {}).regie || null; } catch (e) {}
+        var sec = document.getElementById('press-section');
+        var focused = sec && document.activeElement && sec.contains(document.activeElement);
+        if (window.renderPress && !focused) { try { window.renderPress(); } catch (e) {} }
+      };
+      pushMarket();
+      if (camp.onOverview) camp.onOverview(pushMarket);
+    }
   }
 
   /* ── Combat overlay (player) ── */

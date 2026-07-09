@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rache Bartmoss' Datafort — Shop</title>
+<link rel="icon" href="img/favicon.ico">
+<link rel="stylesheet" href="css/main.css">
+<style>
+  .shop-wrap { display: flex; gap: 0; height: calc(100vh - 42px); }
+  .shop-pal { width: 320px; flex: 0 0 auto; border-right: 2px solid #111; display: flex; flex-direction: column; }
+  .shop-pal-head { background: #111; color: #fff; font-family: var(--head); font-size: 11px; letter-spacing: 2px; padding: 7px 12px; }
+  .shop-pal-bar { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid #ddd; }
+  .shop-pal-bar select, .shop-pal-bar input { flex: 1; border: 1.5px solid #111; padding: 4px 8px; font-family: var(--mono); font-size: 12px; background: #fff; }
+  .shop-pal-list { flex: 1; overflow: auto; }
+  .pal-row { display: flex; align-items: baseline; gap: 8px; padding: 6px 12px; border-bottom: 1px solid #eee; cursor: grab; font-size: 13px; }
+  .pal-row:hover { background: #f4f4f4; }
+  .pal-row small { margin-left: auto; color: #888; }
+  .pal-row .pal-add { border: 1px solid #111; background: #fff; cursor: pointer; font-size: 11px; width: 20px; }
+  .pal-row .pal-add:hover { background: #111; color: #fff; }
+  .shop-main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: auto; padding: 16px 20px; }
+  .shop-id { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px 20px; margin-bottom: 14px; }
+  .shelf { border: 2px dashed #bbb; min-height: 220px; padding: 10px; }
+  .shelf.over { border-color: #111; background: #fafafa; }
+  .shelf-empty { color: #767676; font-family: var(--mono); font-size: 13px; padding: 30px; text-align: center; }
+  table.shelf-t { border-collapse: collapse; width: 100%; }
+  .shelf-t th { background: #111; color: #fff; font-family: var(--head); font-size: 10px; letter-spacing: 1px;
+    text-transform: uppercase; text-align: left; padding: 5px 8px; }
+  .shelf-t td { padding: 6px 8px; border-bottom: 1px solid #eee; font-size: 13px; }
+  .shelf-t input.cell { width: 74px; border: none; border-bottom: 1.5px solid #111; font-family: var(--mono); font-size: 13px; background: transparent; }
+  .shelf-t .rm { border: none; background: none; color: #c0392b; cursor: pointer; }
+  .shop-stats { display: flex; gap: 18px; margin-top: 10px; font-family: var(--mono); font-size: 12px; color: #666; }
+  .shop-stats b { color: #111; }
+</style>
+<link rel="stylesheet" href="css/editor-embed.css">
+</head>
+<body>
+<div id="topnav" style="justify-content:space-between;">
+  <h1 class="title" style="margin:0;padding:0;font-size:17px;letter-spacing:4px;">SHOP</h1>
+  <div style="display:flex;gap:6px;align-items:center;">
+    <button id="shop-back-btn" class="btn btn-sm" onclick="window.location.href='index.html'">← Back</button>
+  </div>
+</div>
+
+<div class="shop-wrap">
+  <aside class="shop-pal">
+    <div class="shop-pal-head">CATALOG — DRAG TO THE SHELF →</div>
+    <div class="shop-pal-bar">
+      <select id="pal-cat"></select>
+      <input id="pal-q" placeholder="search…" autocomplete="off">
+    </div>
+    <div class="shop-pal-list" id="pal-list"></div>
+  </aside>
+
+  <main class="shop-main">
+    <div class="shop-id">
+      <div class="field"><label>Name</label><input id="sh-name" placeholder="Kabuki black clinic…"></div>
+      <div class="field"><label>Kind</label><input id="sh-kind" placeholder="storefront, online, clinic…"></div>
+      <div class="field"><label>URL (online)</label><input id="sh-url" placeholder="optional"></div>
+      <div class="field"><label>Delivery (h)</label><input id="sh-delivery" type="number" min="0" placeholder="12"></div>
+    </div>
+    <div class="cs-section" style="flex:1;display:flex;flex-direction:column;">
+      <div class="cs-section-head"><h2>Shelf</h2></div>
+      <div class="cs-section-body" style="flex:1;">
+        <div class="shelf" id="shelf"></div>
+        <div class="shop-stats"><span>Items: <b id="st-n">0</b></span><span>Total value: <b id="st-total">0 eb</b></span><span>Empty qty = unlimited stock</span></div>
+      </div>
+    </div>
+    <div class="cs-section">
+      <div class="cs-section-head"><h2>Pitch / Notes</h2></div>
+      <div class="cs-section-body">
+        <textarea id="sh-notes" style="width:100%;min-height:70px;border:none;border-bottom:1.5px solid #111;font-family:var(--mono);font-size:14px;background:#fff;" placeholder="Sales pitch, terms, vibe…"></textarea>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="js/shop-editor.js"></script>
+<script src="js/campaign-doc.js"></script>
+<script>if (window.self !== window.top) { var b = document.getElementById('shop-back-btn'); if (b) b.style.display = 'none'; }</script>
+</body>
+</html>

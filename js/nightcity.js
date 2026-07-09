@@ -54,7 +54,7 @@
   var NC_MODE = 'ref';                                  // 'ref' | 'player' | 'gm'
   var PLAYER = { entries: [], home: null, gmLayers: [], districtExtras: {}, maps: [], mapOrder: ['nc'] }; // single player notebook
   var GM = { list: [], active: 0, maps: [], order: ['nc'] };  // notebooks (tabs) + custom maps
-  var _surface = 'nc';                                   // active map surface: 'nc' | <customMapId>
+  var _surface = 'world';                                // active map surface: 'world' | 'nc' | <customMapId>
   var _shopLocs = {};                                    // lowercased location names that host a shop (from the app shell)
   // Open the shop linked to this location (the app shell handles the actual navigation).
   window.ncOpenShop = function (enc) { try { window.parent.postMessage({ type: 'nc-open-shop', name: decodeURIComponent(enc) }, '*'); ncModalClose(); } catch (e) {} };
@@ -63,7 +63,9 @@
   function _migrateMap(m) {
     m = m || {};
     return { id: m.id || _uid(), name: m.name || 'Map', kind: m.kind === 'list' ? 'list' : 'map',
-      image: m.image || null, w: m.w || 0, h: m.h || 0, entries: Array.isArray(m.entries) ? m.entries.map(_migrateCustomPlace) : [] };
+      image: m.image || null, w: m.w || 0, h: m.h || 0, entries: Array.isArray(m.entries) ? m.entries.map(_migrateCustomPlace) : [],
+      // Nested maps: a linked map hangs off a parent surface ('world'|'nc'|<mapId>) + the source location.
+      parentMapId: m.parentMapId || null, parentLocId: m.parentLocId || null, srcName: m.srcName || '' };
   }
   var ncCurrentDistrict = null;
   var NC_GRID_ORDER = ['A1','A2','A3','A4','A5','A6','B1','B2','B3','B4','B5','B6','C1','C2','C3','C4','C5','C6'];
@@ -77,23 +79,33 @@
   var _GM_API = !!_CAMPAIGN && _NCROLE === 'gm';
   function _campDocUrl() { return '/__api/campaigns/' + encodeURIComponent(_CAMPAIGN) + '/nightcity/_campaign.json'; }
   function _publicPlaces() { var nb = GM.list[GM.active]; return nb ? (nb.entries || []).filter(function (e) { return e.public; }) : []; }
-  function _publicMaps() {   // public maps in the GM-chosen order
+  function _publicMaps() {   // public + linked (lore) maps in the GM-chosen order
     _ncEnsureOrder();
     var byId = {}; GM.maps.forEach(function (m) { byId[m.id] = m; });
+    var ids = GM.order.filter(function (id) { return id !== 'nc' && byId[id]; });
+    GM.maps.forEach(function (m) { if (ids.indexOf(m.id) < 0) ids.push(m.id); });
     var out = [];
-    GM.order.forEach(function (id) {
-      if (id === 'nc') return;
+    ids.forEach(function (id) {
       var m = byId[id]; if (!m) return;
       var pub = (m.entries || []).filter(function (e) { return e.public; });
-      if (pub.length) out.push({ id: m.id, name: m.name, kind: m.kind, image: m.image, w: m.w, h: m.h, gmEntries: pub });
+      // Linked (nested) maps are canon lore → auto-shared even without public pins.
+      if (!pub.length && !m.parentMapId) return;
+      out.push({ id: m.id, name: m.name, kind: m.kind, image: m.image, w: m.w, h: m.h, gmEntries: pub,
+        parentMapId: m.parentMapId || null, parentLocId: m.parentLocId || null, srcName: m.srcName || '' });
     });
     return out;
   }
+  function _publicWorldCities() {   // GM city lore auto-shared (desc + linked map), never GM notes
+    var cd = (GM.world && GM.world.cityData) || {}, out = {};
+    Object.keys(cd).forEach(function (name) { var r = cd[name]; if (r && (r.desc || r.linkedMapId)) out[name] = { desc: r.desc || '', linkedMapId: r.linkedMapId || null }; });
+    return out;
+  }
+  function _publicWorldPlaces() { return ((GM.world && GM.world.places) || []).filter(function (e) { return e.public; }); }
   function _postPublic() {
     if (window.parent === window) return;
     var maps = _publicMaps(), pubIds = maps.map(function (m) { return m.id; });
     var order = (GM.order || ['nc']).filter(function (id) { return id === 'nc' || pubIds.indexOf(id) >= 0; });
-    try { window.parent.postMessage({ type: 'nc-gm-public', campaign: _CAMPAIGN, places: _publicPlaces(), maps: maps, order: order }, '*'); } catch (e) {}
+    try { window.parent.postMessage({ type: 'nc-gm-public', campaign: _CAMPAIGN, places: _publicPlaces(), maps: maps, order: order, worldPlaces: _publicWorldPlaces(), worldCities: _publicWorldCities() }, '*'); } catch (e) {}
   }
 
   /* ─── Persistence (debounced, quota-safe) ─── */
@@ -192,6 +204,7 @@
     if (!Array.isArray(p.hackedMaps)) p.hackedMaps = [];
     if (p.visited == null) p.visited = false;
     if (p.public == null) p.public = false;
+    if (p.linkedMapId === undefined) p.linkedMapId = null;
     if (p.createdAt == null) p.createdAt = Date.now();
     return p;
   }
@@ -254,33 +267,13 @@
   }
 
   /* ═══ CONTEXT BAR (under #nav) ═══ */
+  // The standalone GM PLANNER / PLAYER LOG top bar is gone — its controls (plans list, new plan,
+  // import/export) now live in the maps-bar hamburger dropdown (ncPlannerMenu). This just hides the
+  // legacy bar and, if the dropdown is open, rebuilds it so existing call-sites keep refreshing it.
   function ncRenderCtxBar() {
-    var bar = document.getElementById('nc-ctxbar'); if (!bar) return;
-    if (NC_MODE === 'player') {
-      bar.style.display = 'flex';
-      bar.innerHTML =
-        '<span class="nc-ctx-title">PLAYER LOG</span>' +
-        '<button class="nc-btn" onclick="ncExportPlayer()">⬇ Export log</button>' +
-        '<label class="nc-btn nc-file">⬆ Import log<input type="file" accept=".json" onchange="ncImportPlayer(event)"></label>' +
-        '<label class="nc-btn nc-file nc-btn-cy">＋ Import GM plan<input type="file" accept=".json" onchange="ncImportGmPlan(event)"></label>' +
-        '<span class="nc-ctx-hint">' + PLAYER.entries.length + ' notes · ' + PLAYER.gmLayers.length + ' GM layer(s)</span>';
-    } else if (NC_MODE === 'gm') {
-      bar.style.display = 'flex';
-      var tabs = GM.list.map(function (nb, i) {
-        return '<div class="nc-gm-tab' + (i === GM.active ? ' active' : '') + '" onclick="ncGmSwitch(' + i + ')" ondblclick="ncGmRename(' + i + ')" title="Double-click to rename">' +
-          '<span class="nc-gm-tab-label">' + _esc(nb.name) + '</span>' +
-          (GM.list.length > 1 ? '<span class="nc-gm-tab-close" onclick="event.stopPropagation();ncGmClose(' + i + ')">✕</span>' : '') +
-          '</div>';
-      }).join('');
-      bar.innerHTML =
-        '<span class="nc-ctx-title">GM PLANNER</span>' +
-        '<div class="nc-gm-tabs">' + tabs + '<div class="nc-gm-tab-add" onclick="ncGmNew()" title="New notebook">＋</div></div>' +
-        '<button class="nc-btn" onclick="ncExportGm()">⬇ Export notebook</button>' +
-        '<label class="nc-btn nc-file">⬆ Import notebook<input type="file" accept=".json" onchange="ncImportGmNotebook(event)"></label>';
-    } else {
-      bar.style.display = 'none';
-      bar.innerHTML = '';
-    }
+    var bar = document.getElementById('nc-ctxbar');
+    if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
+    if (document.getElementById('nc-planner-menu')) ncPlannerMenuBuild();
   }
 
   /* ═══ SIDE PANEL (under #district-list) ═══ */
@@ -515,18 +508,28 @@
     var main;
     if (editing) {
       // ── EDIT: the form ──
+      // Link/open a nested map (GM, any saved location on a custom map) → deeper maps enchâssées.
+      var linkRow = '';
+      if (NC_MODE === 'gm' && _modalMapId && _modalEntryId) {
+        var lmE = _linkedMapOf(e.linkedMapId);
+        linkRow = lmE
+          ? '<div class="wm-form-maprow">Linked map: <b>' + _esc(lmE.srcName || lmE.name) + '</b> <button class="nc-btn nc-btn-sm" onclick="ncModalOpenLinked()">Open</button> <button class="nc-btn nc-btn-sm nc-btn-danger" onclick="ncModalUnlinkMap()">Unlink</button></div>'
+          : '<div class="wm-form-maprow"><button class="nc-btn nc-btn-sm" onclick="ncModalLinkMap()">＋ Link a map</button></div>';
+      }
       var editActions = '<div class="nc-modal-actions">' +
         (_modalEntryId ? '<button class="nc-btn nc-btn-danger" onclick="ncDeleteEntry()">Delete</button>' : '') +
         '<span style="flex:1"></span>' +
         '<button class="nc-btn" onclick="ncModalClose()">Cancel</button>' +
         '<button class="nc-btn nc-btn-cy" onclick="ncSaveEntry()">Save</button></div>';
-      main = '<div class="nc-loc-main">' + shopBtn + fields + editActions + '</div>';
+      main = '<div class="nc-loc-main">' + shopBtn + fields + linkRow + editActions + '</div>';
     } else {
       // ── VIEW: a real read-only layout (no inputs) ──
       var notesHtml = e.notes
         ? '<div class="nc-loc-notes">' + _esc(e.notes) + '</div>'
         : '<div class="nc-loc-notes nc-loc-empty">No details recorded.</div>';
+      var lmV = _linkedMapOf(e.linkedMapId);
       var viewActions = '<div class="nc-modal-actions"><span style="flex:1"></span>' +
+        (lmV ? '<button class="nc-btn" onclick="ncModalOpenLinked()">Open ' + _esc(lmV.srcName || lmV.name) + ' ▸</button>' : '') +
         '<button class="nc-btn" onclick="ncModalClose()">Close</button>' +
         (!ro ? '<button class="nc-btn nc-btn-cy" onclick="ncModalEdit()">✎ Edit</button>'
              : (_modalLayerIdx != null ? '<button class="nc-btn nc-btn-cy" onclick="ncCopyToLog(' + _modalLayerIdx + ',\'' + e.id + '\');ncModalClose();">copy to my log</button>' : '')) +
@@ -538,6 +541,26 @@
     var title = (e.name || (_modalEntryId ? 'Location' : 'New location'));
     _ncModalOpen(editing ? (_modalEntryId ? '✎ ' + title : 'New location') : title, body, true);
   }
+  window.ncModalOpenLinked = function () {
+    if (!_modalDraft) return; var lm = _linkedMapOf(_modalDraft.linkedMapId);
+    if (lm) { ncModalClose(); ncSelectMap(lm.id); }
+  };
+  window.ncModalLinkMap = function () {
+    if (!_modalMapId || !_modalDraft) return;
+    _captureModal(); var e = _modalDraft;
+    _createLinkedMap(_modalMapId, e.id, e.name || 'Location', function (mapId) {
+      e.linkedMapId = mapId;
+      var m = _findMap(_modalMapId); if (m) { var ent = (m.entries || []).filter(function (x) { return x.id === e.id; })[0]; if (ent) ent.linkedMapId = mapId; }
+      _schedSave(); _postPublic(); ncModalClose(); ncSelectMap(mapId);
+    });
+  };
+  window.ncModalUnlinkMap = function () {
+    if (!_modalDraft) return; var e = _modalDraft;
+    if (e.linkedMapId) GM.maps = GM.maps.filter(function (m) { return m.id !== e.linkedMapId; });
+    e.linkedMapId = null;
+    var m = _findMap(_modalMapId); if (m) { var ent = (m.entries || []).filter(function (x) { return x.id === e.id; })[0]; if (ent) ent.linkedMapId = null; }
+    _schedSave(); _postPublic(); ncRenderMapsBar(); _renderModal();
+  };
   window.ncModalTypeChange = function () {
     var sel = document.getElementById('nc-m-type');
     document.getElementById('nc-m-customwrap').style.display = (sel.value === '__custom') ? '' : 'none';
@@ -885,33 +908,126 @@
   }
   function _perspectiveMaps() {
     var src = _mapSource() || [], byId = {}; src.forEach(function (m) { byId[m.id] = m; });
-    var order = (_mapOrder() || []).slice(); if (order.indexOf('nc') < 0) order.unshift('nc');
+    var order = (_mapOrder() || []).slice();
     src.forEach(function (m) { if (order.indexOf(m.id) < 0) order.push(m.id); });
+    var appMode = (NC_MODE === 'gm' || NC_MODE === 'player');
     var out = [];
-    order.forEach(function (id) { if (id === 'nc') out.push({ id: 'nc', name: 'Night City', kind: 'nc' }); else if (byId[id]) out.push({ id: id, name: byId[id].name, kind: byId[id].kind }); });
+    if (appMode) {
+      // In the app, World is the root surface; Night City is subordinated to it —
+      // it only appears once opened from the world map ("See map" → pinned).
+      out.push({ id: 'world', name: 'World', kind: 'world' });
+      if (_worldState().ncPinned) out.push({ id: 'nc', name: 'Night City', kind: 'nc' });
+    } else {
+      out.push({ id: 'nc', name: 'Night City', kind: 'nc' });   // public reference: NC is the root, unchanged
+    }
+    order.forEach(function (id) { if (id !== 'nc' && byId[id]) out.push({ id: id, name: byId[id].name, kind: byId[id].kind }); });
     return out;
   }
+  var _mnCollapsed = {};
+  window.ncMnToggle = function (id) { _mnCollapsed[id] = !_mnCollapsed[id]; ncRenderMapsBar(); };
+  window.ncToggleHighlightCustom = function (on) {
+    _worldState().highlightCustom = !!on; _schedSave();
+    var vw = document.getElementById('view-world'); if (vw) vw.classList.toggle('wm-highlight-custom', !!on);
+  };
+  // Left sidebar map tree (replaces the old top maps-bar). Roots: NA (world) + Night City; nested
+  // linked maps hang under their parent map, labelled by the source location.
   function ncRenderMapsBar() {
-    var bar = document.getElementById('nc-maps-bar'); if (!bar) return;
+    var nav = document.getElementById('nc-mapnav'); if (!nav) return;
     var gm = NC_MODE === 'gm', player = NC_MODE === 'player';
-    if (!gm && !player) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
-    var maps = _perspectiveMaps();
-    if (!gm && maps.length <= 1) { bar.style.display = 'none'; bar.innerHTML = ''; return; }   // player: only show if there are custom maps
-    var tabs = maps.map(function (m) {
-      var on = m.id === _surface;
-      var ico = m.kind === 'list' ? '☰' : (m.id === 'nc' ? '◰' : '▦');
-      var mv = (gm && m.id !== 'nc') ? '<span class="nc-mtab-mv" onclick="event.stopPropagation();ncMoveMap(\'' + m.id + '\',-1)">◂</span><span class="nc-mtab-mv" onclick="event.stopPropagation();ncMoveMap(\'' + m.id + '\',1)">▸</span>' : '';
-      return '<div class="nc-mtab' + (on ? ' active' : '') + '" onclick="ncSelectMap(\'' + m.id + '\')">' + ico + ' ' + _esc(m.name) + mv + '</div>';
-    }).join('');
-    var add = gm ? '<button class="nc-mtab-add" onclick="ncAddMap(\'map\')">＋ Map</button><button class="nc-mtab-add" onclick="ncAddMap(\'list\')">＋ List</button>' : '';
-    bar.style.display = 'flex'; bar.innerHTML = tabs + add;
+    nav.className = 'on';   // the map tree is the navigation everywhere (app + public site)
+    var src = _mapSource() || [];
+    function childMaps(pid) { return src.filter(function (m) { return (m.parentMapId || null) === pid; }); }
+    // Children of a tree node: its linked maps, plus Night City is a virtual child of NA.
+    function treeChildren(id) {
+      var kids = childMaps(id).map(function (m) { return { id: m.id, label: m.srcName || m.name, ico: (m.kind === 'list' ? '☰' : '▦'), movable: true }; });
+      if (id === 'world') kids = [{ id: 'nc', label: 'Night City', ico: '◰', movable: false }].concat(kids);
+      return kids;
+    }
+    var html = '';
+    function node(id, label, ico, depth, movable) {
+      var active = (id === _surface), kids = treeChildren(id), collapsed = !!_mnCollapsed[id];
+      var tw = kids.length ? '<span class="mn-tw" onclick="event.stopPropagation();ncMnToggle(\'' + id + '\')">' + (collapsed ? '▸' : '▾') + '</span>' : '<span class="mn-tw"></span>';
+      var mv = (movable && gm) ? '<span class="mn-mv" onclick="event.stopPropagation();ncMoveMap(\'' + id + '\',-1)">▴</span><span class="mn-mv" onclick="event.stopPropagation();ncMoveMap(\'' + id + '\',1)">▾</span>' : '';
+      html += '<div class="mn-row' + (active ? ' active' : '') + (depth ? ' loc' : '') + '" style="padding-left:' + (4 + depth * 14) + 'px" onclick="ncSelectMap(\'' + id + '\')">' +
+        tw + '<span class="mn-ico">' + ico + '</span><span class="mn-lbl">' + _esc(label) + '</span>' + mv + '</div>';
+      if (!collapsed) kids.forEach(function (k) { node(k.id, k.label, k.ico, depth + 1, k.movable); });
+    }
+    node('world', 'NA', '◍', 0, false);
+    childMaps(null).forEach(function (m) { node(m.id, m.name, m.kind === 'list' ? '☰' : '▦', 0, true); });
+    var ham = '<button class="mn-ham" title="Mode & notebook" onclick="ncPlannerMenu(event)">☰</button>';
+    var actions = gm ? '<div class="mn-actions"><button class="mn-act" onclick="ncAddMap(\'map\')">＋ Map</button><button class="mn-act" onclick="ncAddMap(\'list\')">＋ List</button></div>' : '';
+    var hl = (_surface === 'world') ? '<label class="mn-toggle"><input type="checkbox"' + (_worldState().highlightCustom ? ' checked' : '') + ' onchange="ncToggleHighlightCustom(this.checked)"> Highlight custom</label>' : '';
+    nav.innerHTML = '<div class="mn-head">' + ham + '<span class="mn-head-title">MAPS</span></div>' +
+      '<div class="mn-tree">' + html + '</div>' + actions + hl;
+    if (document.getElementById('nc-planner-menu')) ncPlannerMenuBuild();
   }
+  // ── Planner dropdown (replaces the old GM PLANNER / PLAYER LOG top bar) ────
+  function ncPlannerMenuBuild() {
+    var m = document.getElementById('nc-planner-menu'); if (!m) return;
+    // Mode switcher (Reference / Player Log / GM Planner) — hidden when the app embed locks the role.
+    var locked = (_NCROLE === 'gm' || _NCROLE === 'player'), modeSwitch = '';
+    if (!locked) {
+      modeSwitch = '<div class="npm-h">MODE</div>' +
+        [['ref', 'Reference'], ['player', 'Player Log'], ['gm', 'GM Planner']].map(function (md) {
+          return '<button class="npm-mode' + (NC_MODE === md[0] ? ' active' : '') + '" onclick="ncSetMode(\'' + md[0] + '\')">' + md[1] + '</button>';
+        }).join('') + (NC_MODE !== 'ref' ? '<div class="npm-sep"></div>' : '');
+    }
+    var content = '';
+    if (NC_MODE === 'gm') {
+      var plans = GM.list.map(function (nb, i) {
+        return '<div class="npm-plan' + (i === GM.active ? ' active' : '') + '" onclick="ncGmSwitch(' + i + ')" ondblclick="ncGmRename(' + i + ')" title="Double-click to rename">' +
+          '<span class="npm-plan-label">' + _esc(nb.name) + '</span>' +
+          (GM.list.length > 1 ? '<span class="npm-x" onclick="event.stopPropagation();ncGmClose(' + i + ')" title="Close">✕</span>' : '') +
+          '</div>';
+      }).join('');
+      content = '<div class="npm-h">PLANS</div>' + plans +
+        '<button class="npm-item npm-new" onclick="ncGmNew()">＋ New plan</button>' +
+        '<div class="npm-sep"></div>' +
+        '<button class="npm-item" onclick="ncExportGm()">⬇ Export notebook</button>' +
+        '<label class="npm-item npm-file">⬆ Import notebook<input type="file" accept=".json" onchange="ncImportGmNotebook(event)"></label>';
+    } else if (NC_MODE === 'player') {
+      content = '<div class="npm-h">PLAYER LOG</div>' +
+        '<div class="npm-info">' + PLAYER.entries.length + ' notes · ' + PLAYER.gmLayers.length + ' GM layer(s)</div>' +
+        '<div class="npm-sep"></div>' +
+        '<button class="npm-item" onclick="ncExportPlayer()">⬇ Export log</button>' +
+        '<label class="npm-item npm-file">⬆ Import log<input type="file" accept=".json" onchange="ncImportPlayer(event)"></label>' +
+        '<label class="npm-item npm-file" onchange="">＋ Import GM plan<input type="file" accept=".json" onchange="ncImportGmPlan(event)"></label>';
+    }
+    m.innerHTML = modeSwitch + content;
+  }
+  window.ncPlannerMenu = function (e) {
+    e.stopPropagation();
+    if (document.getElementById('nc-planner-menu')) { ncPlannerMenuClose(); return; }
+    var m = document.createElement('div'); m.id = 'nc-planner-menu'; m.className = 'nc-planner-menu';
+    document.body.appendChild(m); ncPlannerMenuBuild();
+    var r = e.currentTarget.getBoundingClientRect();
+    m.style.top = (r.bottom + 4) + 'px'; m.style.left = Math.max(8, r.right - m.offsetWidth) + 'px';
+    setTimeout(function () { document.addEventListener('mousedown', ncPlannerMenuOutside); }, 0);
+  };
+  function ncPlannerMenuOutside(ev) {
+    var m = document.getElementById('nc-planner-menu'); if (!m) return;
+    if (m.contains(ev.target)) return;
+    if (ev.target.closest && ev.target.closest('.nc-mtab-ham')) return;
+    ncPlannerMenuClose();
+  }
+  window.ncPlannerMenuClose = function () {
+    var m = document.getElementById('nc-planner-menu'); if (m) m.parentNode.removeChild(m);
+    document.removeEventListener('mousedown', ncPlannerMenuOutside);
+  };
   window.ncSelectMap = function (id) {
     _surface = id;
-    var ov = document.getElementById('overview'), dv = document.getElementById('district-view'), vc = document.getElementById('view-custom');
-    // The Night City district sidebar belongs to NC only — hide it on custom maps.
+    var ov = document.getElementById('overview'), dv = document.getElementById('district-view'),
+        vc = document.getElementById('view-custom'), vw = document.getElementById('view-world');
+    // The Night City district sidebar belongs to NC only — hide it elsewhere.
     var sb = document.getElementById('sidebar'); if (sb) sb.style.display = (id === 'nc') ? '' : 'none';
-    if (id === 'nc') {
+    if (vw) vw.style.display = 'none';
+    if (id === 'world') {
+      if (vc) vc.style.display = 'none';
+      if (dv) dv.style.display = 'none';
+      if (ov) ov.style.display = 'none';
+      if (vw) vw.style.display = 'block';
+      ncRenderWorld();
+    } else if (id === 'nc') {
       if (vc) vc.style.display = 'none';
       if (dv) dv.style.display = 'none';
       if (ov) ov.style.display = '';
@@ -945,6 +1061,33 @@
     };
     inp.click();
   };
+  // Create an image map nested under a location (GM only). onDone(mapId) fires after upload.
+  function _createLinkedMap(parentMapId, locId, srcName, onDone) {
+    var inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+    inp.onchange = function () {
+      var f = inp.files[0]; if (!f) return;
+      var r = new FileReader();
+      r.onload = function (e) {
+        var img = new Image();
+        img.onload = function () {
+          var m = { id: _uid(), name: srcName || 'Map', kind: 'map', image: e.target.result, w: img.naturalWidth, h: img.naturalHeight, entries: [], parentMapId: parentMapId, parentLocId: locId, srcName: srcName || '' };
+          GM.maps.push(m); _ncEnsureOrder(); _schedSave(); _postPublic();
+          if (onDone) onDone(m.id);
+        };
+        img.src = e.target.result;
+      };
+      r.readAsDataURL(f);
+    };
+    inp.click();
+  }
+  // ── Built-in NA city overlay data (GM lore + notes), keyed by the city name ──
+  function _worldCityRec(name, create) {
+    var st = _worldState(); if (!st.cityData) st.cityData = {};
+    if (!st.cityData[name] && create) st.cityData[name] = { desc: '', gmNotes: '', notes: '', linkedMapId: null };
+    return st.cityData[name] || null;
+  }
+  // Resolve a location's linked child map (from a world place, a city record, or a custom-map entry).
+  function _linkedMapOf(linkedMapId) { return linkedMapId ? _findMap(linkedMapId) : null; }
   window.ncMoveMap = function (id, dir) {
     _ncEnsureOrder();
     var i = GM.order.indexOf(id), j = i + dir;
@@ -970,6 +1113,543 @@
     var add = (NC_MODE !== 'ref') ? '<button class="nc-btn nc-btn-sm" onclick="ncCustomPlaceModal(\'' + mapId + '\',null)">＋ Add location</button>' : '';
     return rows + '<div style="margin-top:8px">' + add + '</div>';
   }
+  /* ═══════════════════ World map surface (hybrid: raster base + live icon vector) ═══════════════════
+     North-America map (USA_Layered.svg). Cartography + place-names are baked to crisp images
+     (Inkscape LOD tile pyramid in img/maps/tiles/, Terminal Grotesque); the city + transport icons stay live
+     vector (usa-icons.svg) on top for hover-grow, click→info, and per-group toggles. Leaflet
+     drives pan/zoom. Night City's icon opens the NC map as a pinned tab. */
+  var _worldMap = null, _worldFitBounds = null, _worldLegendSvg = null;
+  var _worldIconsSvg = null, _worldLayers = null, _worldIconsEl = null;
+  var _worldMarkerGroups = null, _worldCityByName = null;
+  function _worldState() {
+    var st = (NC_MODE === 'gm') ? GM : PLAYER;
+    if (!st.world) st.world = { hidden: {}, ncPinned: false, places: [] };
+    if (!st.world.hidden) st.world.hidden = {};
+    if (!Array.isArray(st.world.places)) st.world.places = [];
+    return st.world;
+  }
+  // GM public world locations pushed to a player during a live session (read-only, not persisted).
+  var _worldGmPlaces = [];
+  var _worldGmCityData = {};   // synced GM city lore (desc + linkedMapId) keyed by city name
+  var _WM_LOC = null;   // { types:[{id,label,vb,body}], marker:{vb,body} } — custom-location icon art
+  function ncRenderWorld() {
+    var vw = document.getElementById('view-world'); if (!vw) return;
+    if (_worldIconsSvg == null || _WM_LOC == null) {
+      vw.innerHTML = '<div class="wm-msg">Loading map…</div>';
+      Promise.all([
+        fetch('img/maps/usa-icons.svg').then(function (r) { return r.text(); }),
+        fetch('img/maps/loc-icons.json').then(function (r) { return r.json(); }).catch(function () { return { types: [], marker: null }; })
+      ]).then(function (res) {
+        _worldIconsSvg = res[0]; _WM_LOC = res[1];
+        if (_surface === 'world') _worldPaint(vw);
+      }).catch(function () { vw.innerHTML = '<div class="wm-msg">Could not load the map.</div>'; });
+      return;
+    }
+    _worldPaint(vw);
+  }
+  function _worldLocType(id) { return (_WM_LOC && _WM_LOC.types || []).filter(function (t) { return t.id === id; })[0] || null; }
+  // All world locations visible in the current mode: the user's own + (player) synced GM publics.
+  function _worldAllPlaces() {
+    var own = _worldState().places || [];
+    if (NC_MODE === 'player' && _worldGmPlaces.length) {
+      var ro = _worldGmPlaces.map(function (p) { var c = Object.assign({}, p); c._ro = true; return c; });
+      return own.concat(ro);
+    }
+    return own;
+  }
+  function makeWorldPlace(kind, vx, vy) {
+    return { id: _uid(), kind: kind, vx: vx, vy: vy, name: '', cityType: (kind === 'city' ? 'new' : ''),
+      type: '', population: '', notes: '', security: '', corp: '', photos: [], hackedMaps: [], public: false, linkedMapId: null, createdAt: Date.now() };
+  }
+  /* Hybrid map: cartography + place-names baked to crisp images (Terminal Grotesque), while the
+     city / transport icons stay LIVE vector on top (hover-grow, click → info; per-group toggles).
+     The SVG's native viewBox already equals the framed North-America crop. */
+  var _WM_VB = { x: 0, y: 0, w: 1569.5205, h: 1476.9324 }, _WM_NS = 'http://www.w3.org/2000/svg';
+  var _WM_TREE = [
+    { id: 'carto', label: 'Cartography', kind: 'png' },
+    { id: 'text', label: 'Place names', kind: 'png' },
+    { id: 'layer1', label: 'City icons', kind: 'svg' },
+    { id: 'g9', label: 'Transportation', kind: 'svg', children: [
+      { id: 'g10', label: 'Ports', kind: 'svg', children: [
+        { id: 'g13', label: 'Deepwater', kind: 'svg' },
+        { id: 'g12', label: 'Neopanamax', kind: 'svg' }] },
+      { id: 'g11', label: 'Airports', kind: 'svg' },
+      { id: 'g14', label: 'Spaceports', kind: 'svg' }] }
+  ];
+  function _worldPaint(vw) {
+    if (_worldMap) { try { _worldMap.remove(); } catch (e) {} _worldMap = null; }
+    vw.innerHTML =
+      '<div class="wm-map" id="wm-map"></div>' +
+      '<div class="wm-overctrls">' +
+        '<button class="wm-cbtn" title="Reset view" onclick="ncWorldReset()">⊙</button>' +
+        '<button class="wm-cbtn" title="Layers" onclick="ncWorldToggleLayers()">▦</button>' +
+        '<button class="wm-cbtn" title="Legend" onclick="ncWorldToggleLegend()">⊞</button>' +
+      '</div>' +
+      '<div class="wm-layers" id="wm-layers" style="display:none"></div>' +
+      '<div class="wm-legend" id="wm-legend" style="display:none"></div>' +
+      '<div class="wm-hint" id="wm-hint">drag = pan · scroll = zoom · hover & click the city icons</div>';
+    _worldBuildMap(vw);
+  }
+  // LOD tile pyramid (built by scripts/build-map-tiles.mjs). These constants MUST match it.
+  var _WM_TILE = { W: 8192, H: 7709, Z: 5 };
+  var _WM_BLANK = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+  // Continuous smooth wheel-zoom handler (adapted from Leaflet.SmoothWheelZoom, MIT). Eases the zoom
+  // toward a goal each animation frame via map._move, keeping the cursor point fixed. Registered once.
+  var _smoothZoomInstalled = false;
+  function _worldEnsureSmoothZoom() {
+    if (_smoothZoomInstalled || !window.L || L.Map.SmoothWheelZoom) { _smoothZoomInstalled = true; return; }
+    _smoothZoomInstalled = true;
+    L.Map.mergeOptions({ smoothWheelZoom: true, smoothSensitivity: 1 });
+    L.Map.SmoothWheelZoom = L.Handler.extend({
+      addHooks: function () { L.DomEvent.on(this._map._container, 'wheel', this._onWheelScroll, this); },
+      removeHooks: function () { L.DomEvent.off(this._map._container, 'wheel', this._onWheelScroll, this); },
+      _onWheelScroll: function (e) { if (!this._isWheeling) this._onWheelStart(e); this._onWheeling(e); },
+      _onWheelStart: function (e) {
+        var map = this._map;
+        this._isWheeling = true;
+        this._wheelMousePosition = map.mouseEventToContainerPoint(e);
+        this._centerPoint = map.getSize()._divideBy(2);
+        this._startLatLng = map.containerPointToLatLng(this._centerPoint);
+        this._wheelStartLatLng = map.containerPointToLatLng(this._wheelMousePosition);
+        this._startZoom = map.getZoom();
+        this._moved = false; this._zooming = true;
+        map._stop(); if (map._panAnim) map._panAnim.stop();
+        this._goalZoom = map.getZoom();
+        this._prevCenter = map.getCenter(); this._prevZoom = map.getZoom();
+        this._zoomAnimationId = requestAnimationFrame(this._updateWheelZoom.bind(this));
+      },
+      _onWheeling: function (e) {
+        var map = this._map;
+        this._goalZoom = this._goalZoom - e.deltaY * 0.003 * map.options.smoothSensitivity;
+        if (this._goalZoom < map.getMinZoom() || this._goalZoom > map.getMaxZoom()) this._goalZoom = map._limitZoom(this._goalZoom);
+        this._wheelMousePosition = map.mouseEventToContainerPoint(e);
+        clearTimeout(this._timeoutId);
+        this._timeoutId = setTimeout(this._onWheelEnd.bind(this), 200);
+        L.DomEvent.preventDefault(e); L.DomEvent.stopPropagation(e);
+      },
+      _onWheelEnd: function () { this._isWheeling = false; cancelAnimationFrame(this._zoomAnimationId); this._map._moveEnd(true); },
+      _updateWheelZoom: function () {
+        var map = this._map;
+        if (!map.getCenter().equals(this._prevCenter) || map.getZoom() != this._prevZoom) return;
+        this._zoom = map.getZoom() + (this._goalZoom - map.getZoom()) * 0.3;
+        this._zoom = Math.floor(this._zoom * 100) / 100;
+        var delta = this._wheelMousePosition.subtract(this._centerPoint);
+        if (delta.x === 0 && delta.y === 0) { this._zoomAnimationId = requestAnimationFrame(this._updateWheelZoom.bind(this)); return; }
+        var center = map.unproject(map.project(this._wheelStartLatLng, this._zoom).subtract(delta), this._zoom);
+        map._move(center, this._zoom);
+        this._prevCenter = map.getCenter(); this._prevZoom = map.getZoom();
+        this._zoomAnimationId = requestAnimationFrame(this._updateWheelZoom.bind(this));
+      }
+    });
+    L.Map.addInitHook('addHandler', 'smoothWheelZoom', L.Map.SmoothWheelZoom);
+  }
+  function _worldBuildMap(vw) {
+    var ws = _worldState(), T = _WM_TILE;
+    _worldEnsureSmoothZoom();
+    // Continuous (per-frame) wheel zoom instead of Leaflet's stepped zoom → smooth, no palier.
+    var map = L.map('wm-map', { crs: L.CRS.Simple, zoomSnap: 0, minZoom: 0, maxZoom: T.Z + 2, attributionControl: false, maxBoundsViscosity: 0.9, scrollWheelZoom: false, smoothWheelZoom: true, smoothSensitivity: 1.3 });
+    _worldMap = map;
+    var bounds = L.latLngBounds(map.unproject([0, T.H], T.Z), map.unproject([T.W, 0], T.Z));
+    function tl(name, zi) { return L.tileLayer('img/maps/tiles/' + name + '/{z}/{x}/{y}.png', { tileSize: 256, minZoom: 0, maxNativeZoom: T.Z, maxZoom: T.Z + 2, bounds: bounds, noWrap: true, errorTileUrl: _WM_BLANK, keepBuffer: 2, zIndex: zi }); }
+    // z-order: cartography (opaque white) at the BOTTOM, place-names above it.
+    _worldLayers = { carto: tl('carto', 1), text: tl('text', 2) };
+    if (!ws.hidden.carto) _worldLayers.carto.addTo(map);
+    if (!ws.hidden.text) _worldLayers.text.addTo(map);
+    map.setMaxBounds(bounds.pad(0.05));
+    _worldFitBounds = bounds; map.fitBounds(bounds, { animate: false });
+    map.setMinZoom(map.getZoom() - 0.5);
+    // Icons are individual Leaflet markers (one DOM node per city) — positioned by latlng so they
+    // align exactly with the tiles, and small enough that the compositor never runs out of tile memory.
+    _worldBuildMarkers(map, ws);
+    _worldRenderTree(vw, ws);
+    setTimeout(function () { if (_worldMap === map) map.invalidateSize(); }, 60);
+  }
+  // ── Marker-based icon layer ───────────────────────────────────────────────
+  // Measure every icon's bbox ONCE in an offscreen (hidden, never painted) copy of the SVG rendered
+  // 1:1 with its viewBox, mapping screen rects → viewBox units via getBoundingClientRect (robust, no
+  // getCTM ambiguity). Each icon becomes a constant-screen-size L.marker positioned by its geographic
+  // centre — Leaflet owns positioning so alignment is exact at every zoom, and there's no per-frame
+  // CSS transform to drift/jitter. Discarding the measuring SVG means no full-map element survives
+  // (no compositor tile-memory overflow). Hover grows a single inner div around its own centre.
+  function _worldBuildMarkers(map, ws) {
+    _worldMarkerGroups = {}; _worldCityByName = {};
+    if (!_worldIconsSvg) return;
+    var T = _WM_TILE, PPU = T.W / _WM_VB.w, NS = _WM_NS;
+    var box = document.createElement('div');
+    box.style.cssText = 'position:absolute;left:-99999px;top:0;visibility:hidden;pointer-events:none';
+    box.innerHTML = _worldIconsSvg;
+    var svg = box.querySelector('svg'); if (!svg) return;
+    // Render 1:1 with the viewBox so screen px == viewBox units (measured via getBoundingClientRect).
+    svg.setAttribute('width', _WM_VB.w); svg.setAttribute('height', _WM_VB.h);
+    document.body.appendChild(box);
+    var sref = svg.getBoundingClientRect();
+    var sx = _WM_VB.w / (sref.width || _WM_VB.w), sy = _WM_VB.h / (sref.height || _WM_VB.h);
+    function vbBox(el) {
+      var r = el.getBoundingClientRect(); if (!r.width || !r.height) return null;
+      return { x: _WM_VB.x + (r.left - sref.left) * sx, y: _WM_VB.y + (r.top - sref.top) * sy, w: r.width * sx, h: r.height * sy };
+    }
+    function ll(cx, cy) { return map.unproject([cx * PPU, cy * PPU], T.Z); }
+    function mtx(m) { return 'matrix(' + m.a + ',' + m.b + ',' + m.c + ',' + m.d + ',' + m.e + ',' + m.f + ')'; }
+    function makeMarker(el, label, interactive) {
+      var bb = vbBox(el); if (!bb) return null;
+      // Icon rendered at its NATIVE map size (px at deepest zoom Z); the .wm-cm-z wrapper is scaled
+      // per-zoom by a CSS var so the icon grows/shrinks exactly with the cartography. Anchored at the
+      // icon's geographic centre → aligned at every zoom.
+      var Wp = bb.w * PPU, Hp = bb.h * PPU;
+      // el.outerHTML keeps el's OWN transform but drops its ANCESTORS' (e.g. Spaceports g14 carries a
+      // translate). Bake the parent's full matrix so the icon lands where bb (root space) expects it.
+      var pm = (el.parentNode && el.parentNode.getCTM) ? el.parentNode.getCTM() : null;
+      var open = pm ? '<g transform="' + mtx(pm) + '">' : '', close = pm ? '</g>' : '';
+      var inner = '<div class="wm-cm-z"><div class="wm-cm-h"' + (label ? ' data-name="' + _esc(label) + '"' : '') + '>' +
+        '<svg xmlns="' + NS + '" viewBox="' + bb.x + ' ' + bb.y + ' ' + bb.w + ' ' + bb.h + '" width="' + Wp + '" height="' + Hp + '" style="display:block;overflow:visible">' +
+        open + el.outerHTML + close + '</svg></div></div>';
+      var icon = L.divIcon({ html: inner, className: 'wm-cm', iconSize: [Wp, Hp], iconAnchor: [Wp / 2, Hp / 2] });
+      return L.marker(ll(bb.x + bb.w / 2, bb.y + bb.h / 2), { icon: icon, interactive: !!interactive, keyboard: false, riseOnHover: !!interactive });
+    }
+    function growEl(mk, on) { var el = mk.getElement && mk.getElement(); if (!el) return; var h = el.querySelector('.wm-cm-h') || el; if (h) h.classList.toggle('grow', on); }
+    // City icons (layer1) — interactive, hover-grow + click → info window.
+    var layer1 = svg.querySelector('#layer1'), cityGrp = L.layerGroup();
+    if (layer1) {
+      Array.prototype.forEach.call(layer1.querySelectorAll('g'), function (g) {
+        var label = g.getAttribute('data-name') || g.getAttribute('inkscape:label'); if (!label) return;
+        var mk = makeMarker(g, label, true); if (!mk) return;
+        cityGrp.addLayer(mk);
+        (_worldCityByName[label] = _worldCityByName[label] || []).push(mk);
+        var together = /Metroplex|Plex/i.test(label);   // same-name plexes grow together; agri/cities grow alone
+        mk.on('mouseover', function () { if (together) (_worldCityByName[label] || []).forEach(function (m) { growEl(m, true); }); else growEl(mk, true); });
+        mk.on('mouseout', function () { if (together) (_worldCityByName[label] || []).forEach(function (m) { growEl(m, false); }); else growEl(mk, false); });
+        mk.on('click', function (e) { _worldCityClick(map, e, label); });
+      });
+    }
+    _worldMarkerGroups.layer1 = cityGrp;
+    // Transport icons (layer3) — non-interactive, toggleable by leaf category.
+    [['g13'], ['g12'], ['g11'], ['g14']].forEach(function (pair) {
+      var grp = L.layerGroup(), node = svg.querySelector('#' + pair[0]);
+      if (node) Array.prototype.forEach.call(node.children, function (ic) { var mk = makeMarker(ic, null, false); if (mk) grp.addLayer(mk); });
+      _worldMarkerGroups[pair[0]] = grp;
+    });
+    document.body.removeChild(box);   // drop the measuring SVG — nothing full-map-sized persists
+    // Add the groups that aren't hidden (parent toggles roll down to leaves in _worldApplyMarkerVis).
+    _worldApplyMarkerVis(map, ws);
+    // Scale every icon with the zoom via ONE CSS var on the marker pane (icons sized to native px at
+    // zoom Z, so var = 2^(zoom-Z) makes them track the cartography). Cheap: one style write per zoom.
+    function setScale() { var p = map.getPanes && map.getPanes().markerPane; if (p) p.style.setProperty('--wm-iscale', Math.pow(2, map.getZoom() - T.Z)); }
+    map.on('zoom', setScale); map.on('zoomend', setScale); setScale();
+    // Custom logged locations (cities + numbered points) sit in their own group, always visible.
+    _worldRenderLocMarkers();
+    // Highlight-custom mode: dim the built-in map icons so logged locations stand out.
+    var vw0 = document.getElementById('view-world'); if (vw0) vw0.classList.toggle('wm-highlight-custom', !!ws.highlightCustom);
+    // Click empty map → log a new location (GM and player both can).
+    map.on('click', _worldMapClick);
+  }
+  // ── Custom logged locations (cities of a chosen type + numbered "other" points) ───────────────
+  var _worldLocGroup = null;
+  function _worldPPU() { return _WM_TILE.W / _WM_VB.w; }
+  function _worldLL(vx, vy) { return _worldMap.unproject([vx * _worldPPU(), vy * _worldPPU()], _WM_TILE.Z); }
+  function _worldLocIconHtml(place, number) {
+    var vb, body;
+    if (place.kind === 'city') {
+      var t = _worldLocType(place.cityType) || _worldLocType('new') || (_WM_LOC && _WM_LOC.types[0]);
+      if (!t) return null; vb = t.vb; body = t.body;
+    } else {
+      if (!_WM_LOC || !_WM_LOC.marker) return null;
+      vb = _WM_LOC.marker.vb;
+      var vbn = vb.split(/\s+/).map(Number), cx = vbn[0] + vbn[2] / 2, cy = vbn[1] + vbn[3] / 2;
+      body = _WM_LOC.marker.body +
+        '<text x="' + cx + '" y="' + cy + '" text-anchor="middle" dominant-baseline="central" ' +
+        'style="font:700 ' + (vbn[3] * 0.5) + 'px var(--mono,monospace);fill:#000">' + (number || 1) + '</text>';
+    }
+    var vbn2 = vb.split(/\s+/).map(Number), Wp = vbn2[2] * _worldPPU(), Hp = vbn2[3] * _worldPPU();
+    return { vb: vb, body: body, Wp: Wp, Hp: Hp };
+  }
+  function _worldRenderLocMarkers() {
+    if (!_worldMap || !_WM_LOC) return;
+    if (_worldLocGroup) { try { _worldLocGroup.remove(); } catch (e) {} }
+    _worldLocGroup = L.layerGroup();
+    var places = _worldAllPlaces(), NS = _WM_NS, n = 0;
+    places.forEach(function (p) {
+      var num = (p.kind === 'city') ? 0 : (++n);
+      var art = _worldLocIconHtml(p, num); if (!art) return;
+      var inner = '<div class="wm-cm-z"><div class="wm-cm-h" data-name="' + _esc(p.name || (p.kind === 'city' ? 'City' : 'Location')) + '">' +
+        '<svg xmlns="' + NS + '" viewBox="' + art.vb + '" width="' + art.Wp + '" height="' + art.Hp + '" style="display:block;overflow:visible">' + art.body + '</svg>' +
+        '</div></div>';
+      var icon = L.divIcon({ html: inner, className: 'wm-cm wm-cm-loc', iconSize: [art.Wp, art.Hp], iconAnchor: [art.Wp / 2, art.Hp / 2] });
+      var mk = L.marker(_worldLL(p.vx, p.vy), { icon: icon, interactive: true, keyboard: false, riseOnHover: true });
+      mk.on('mouseover', function () { var el = mk.getElement && mk.getElement(); var h = el && el.querySelector('.wm-cm-h'); if (h) h.classList.add('grow'); });
+      mk.on('mouseout', function () { var el = mk.getElement && mk.getElement(); var h = el && el.querySelector('.wm-cm-h'); if (h) h.classList.remove('grow'); });
+      mk.on('click', function (e) { if (e.originalEvent) L.DomEvent.stop(e.originalEvent); _worldPlaceView(p, e); });
+      _worldLocGroup.addLayer(mk);
+    });
+    _worldLocGroup.addTo(_worldMap);
+  }
+  function _worldMapClick(e) {
+    if (!e || !e.latlng || !_WM_LOC) return;
+    var pt = _worldMap.project(e.latlng, _WM_TILE.Z), ppu = _worldPPU();
+    _worldTypePopup(pt.x / ppu, pt.y / ppu);
+  }
+  // Popup 1 — pick a location type: any city type (icon grid) or a numbered "Other" point.
+  var _worldPending = null;
+  function _worldTypePopup(vx, vy) {
+    if (!_WM_LOC) return;
+    _worldPending = { vx: vx, vy: vy };
+    var cells = (_WM_LOC.types || []).map(function (t) {
+      return '<button class="wm-typecell" onclick="ncWorldPickType(\'city\',\'' + t.id + '\')">' +
+        '<span class="wm-typeic"><svg viewBox="' + t.vb + '">' + t.body + '</svg></span>' +
+        '<span class="wm-typelbl">' + _esc(t.label) + '</span></button>';
+    }).join('');
+    var other = _WM_LOC.marker ? '<button class="wm-typecell wm-typecell-other" onclick="ncWorldPickType(\'other\',\'\')">' +
+      '<span class="wm-typeic"><svg viewBox="' + _WM_LOC.marker.vb + '">' + _WM_LOC.marker.body + '</svg></span>' +
+      '<span class="wm-typelbl">Other location</span></button>' : '';
+    _ncModalOpen('New location — pick a type', '<div class="wm-typegrid">' + cells + other + '</div>');
+  }
+  window.ncWorldPickType = function (kind, cityType) {
+    if (!_worldPending) return;
+    var p = makeWorldPlace(kind, _worldPending.vx, _worldPending.vy);
+    if (kind === 'city') p.cityType = cityType;
+    _worldPending = null;
+    _worldPlaceModal(p, true);
+  };
+  // Popup 2 — details form (city fields vs. generic place fields), same design as the other maps.
+  var _worldDraft = null, _worldDraftNew = false;
+  function _worldPlaceModal(place, isNew) {
+    _worldDraft = place; _worldDraftNew = isNew;
+    var e = place, city = e.kind === 'city', ct = city ? _worldLocType(e.cityType) : null;
+    var head = '<div class="wm-form-type">' +
+      (city && ct ? '<span class="wm-typeic wm-typeic-sm"><svg viewBox="' + ct.vb + '">' + ct.body + '</svg></span>' : '') +
+      '<span class="wm-form-typelbl">' + _esc(city ? ((ct && ct.label) || 'City') : 'Other location') + '</span></div>';
+    var body = '<div class="wm-form">' + head +
+      '<label class="nc-modal-lbl">Name<input id="wm-f-name" value="' + _esc(e.name) + '" placeholder="Location name"></label>';
+    if (city) {
+      body += '<label class="nc-modal-lbl">Population<input id="wm-f-pop" value="' + _esc(e.population) + '" placeholder="e.g. 2.3M"></label>' +
+        '<label class="nc-modal-lbl">Dominant corp / power<input id="wm-f-corp" value="' + _esc(e.corp) + '" placeholder="opt."></label>';
+    } else {
+      body += '<label class="nc-modal-lbl">Type<input id="wm-f-type" value="' + _esc(e.type) + '" placeholder="e.g. Safehouse, Ruin, Base"></label>' +
+        '<label class="nc-modal-lbl">Security<input id="wm-f-sec" value="' + _esc(e.security) + '" placeholder="opt."></label>';
+    }
+    body += '<label class="nc-modal-lbl">Description<textarea id="wm-f-notes" rows="4" placeholder="Notes…">' + _esc(e.notes) + '</textarea></label>';
+    if (NC_MODE === 'gm') body += '<label class="nc-modal-check"><input type="checkbox" id="wm-f-public"' + (e.public ? ' checked' : '') + '> Public — visible to players in session</label>';
+    if (NC_MODE === 'gm' && !isNew) {
+      var lm = _linkedMapOf(e.linkedMapId);
+      body += lm
+        ? '<div class="wm-form-maprow">Linked map: <b>' + _esc(lm.srcName || lm.name) + '</b> <button class="nc-btn nc-btn-sm" onclick="ncWorldOpenMap(\'' + lm.id + '\')">Open</button> <button class="nc-btn nc-btn-sm nc-btn-danger" onclick="ncWorldPlaceUnlink()">Unlink</button></div>'
+        : '<button class="nc-btn" onclick="ncWorldPlaceLinkMap()">＋ Link a map</button>';
+    }
+    body += '<div class="wm-form-actions">' +
+      (isNew ? '' : '<button class="nc-btn nc-btn-danger" onclick="ncWorldDeletePlace()">Delete</button>') +
+      '<span class="wm-form-spacer"></span>' +
+      '<button class="nc-btn" onclick="ncModalClose()">Cancel</button>' +
+      '<button class="nc-btn nc-btn-cy" onclick="ncWorldSavePlace()">Save</button></div></div>';
+    _ncModalOpen(isNew ? 'New location' : 'Edit location', body);
+  }
+  window.ncWorldSavePlace = function () {
+    var e = _worldDraft; if (!e) return;
+    var v = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
+    e.name = v('wm-f-name'); e.notes = v('wm-f-notes');
+    if (e.kind === 'city') { e.population = v('wm-f-pop'); e.corp = v('wm-f-corp'); }
+    else { e.type = v('wm-f-type'); e.security = v('wm-f-sec'); }
+    var pubEl = document.getElementById('wm-f-public'); if (pubEl) e.public = pubEl.checked;
+    if (_worldDraftNew) _worldState().places.push(e);
+    _schedSave(); _postPublic();
+    ncModalClose(); _worldRenderLocMarkers();
+  };
+  window.ncWorldDeletePlace = function () {
+    var e = _worldDraft; if (!e) return;
+    if (!confirm('Delete this location?')) return;
+    var st = _worldState(); st.places = (st.places || []).filter(function (x) { return x.id !== e.id; });
+    _schedSave(); _postPublic();
+    ncModalClose(); _worldRenderLocMarkers();
+  };
+  // Click a logged location → redesigned info window. Own locations get Edit; linked maps get Open.
+  function _worldPlaceView(place, e) {
+    var city = place.kind === 'city', ct = city ? _worldLocType(place.cityType) : null;
+    var typeLbl = city ? (((ct && ct.label) || 'City') + ' city') : (place.type || 'Location');
+    var own = !place._ro && (_worldState().places || []).some(function (x) { return x.id === place.id; });
+    var lm = _linkedMapOf(place.linkedMapId);
+    var rows = [];
+    if (city && place.population) rows.push('<div class="wm-cpop-row"><b>Population</b> ' + _esc(place.population) + '</div>');
+    if (city && place.corp) rows.push('<div class="wm-cpop-row"><b>Power</b> ' + _esc(place.corp) + '</div>');
+    if (!city && place.security) rows.push('<div class="wm-cpop-row"><b>Security</b> ' + _esc(place.security) + '</div>');
+    var actions = '';
+    if (lm) actions += '<button class="wm-cpop-btn" onclick="ncWorldOpenMap(\'' + lm.id + '\')">Open ' + _esc(lm.srcName || lm.name) + ' ▸</button>';
+    if (own) actions += '<button class="wm-cpop-btn wm-cpop-btn2" onclick="ncWorldEditFromPopup(\'' + place.id + '\')">Edit ✎</button>';
+    var html = _worldInfoHtml({ name: place.name || (city ? 'Unnamed city' : 'Location'), type: typeLbl,
+      color: city ? '#2b6cb0' : '#555', desc: place.notes, emptyDesc: 'No description yet.', rows: rows, actions: actions });
+    var ll = (e && e.latlng) ? e.latlng : _worldLL(place.vx, place.vy);
+    L.popup({ className: 'wm-cpop-wrap', offset: [0, -8], minWidth: 220, maxWidth: 290 }).setLatLng(ll).setContent(html).openOn(_worldMap);
+  }
+  window.ncWorldEditFromPopup = function (id) {
+    var p = (_worldState().places || []).filter(function (x) { return x.id === id; })[0]; if (!p) return;
+    try { _worldMap.closePopup(); } catch (e) {}
+    _worldPlaceModal(p, false);
+  };
+  window.ncWorldPlaceLinkMap = function () {
+    var e = _worldDraft; if (!e) return;
+    _createLinkedMap('world', e.id, e.name || 'Location', function (mapId) {
+      e.linkedMapId = mapId; _schedSave(); _postPublic(); ncModalClose(); _worldRenderLocMarkers(); ncSelectMap(mapId);
+    });
+  };
+  window.ncWorldPlaceUnlink = function () {
+    var e = _worldDraft; if (!e) return;
+    if (e.linkedMapId) GM.maps = GM.maps.filter(function (m) { return m.id !== e.linkedMapId; });
+    e.linkedMapId = null; _schedSave(); _postPublic(); _worldPlaceModal(e, false);
+  };
+  // Resolve the tree's hidden-state (parents g9/g10 cascade to leaves) → add/remove marker groups.
+  function _worldApplyMarkerVis(map, ws) {
+    if (!_worldMarkerGroups) return;
+    var leafHidden = {
+      layer1: !!ws.hidden.layer1,
+      g13: !!(ws.hidden.g9 || ws.hidden.g10 || ws.hidden.g13),
+      g12: !!(ws.hidden.g9 || ws.hidden.g10 || ws.hidden.g12),
+      g11: !!(ws.hidden.g9 || ws.hidden.g11),
+      g14: !!(ws.hidden.g9 || ws.hidden.g14)
+    };
+    Object.keys(_worldMarkerGroups).forEach(function (id) {
+      var grp = _worldMarkerGroups[id]; if (!grp) return;
+      if (leafHidden[id]) { if (map.hasLayer(grp)) grp.remove(); }
+      else if (!map.hasLayer(grp)) grp.addTo(map);
+    });
+  }
+  function _cityInfo(label) {
+    if (/Agri-Communities/i.test(label)) return { title: 'Agri-Community', type: 'Agri-Community', blurb: 'Automated agricultural settlement that feeds the metroplexes.' };
+    if (/Corporate Communities/i.test(label)) return { title: 'Corporate Community', type: 'Corporate Community', blurb: 'Company-owned, company-run enclave.' };
+    if (/Metroplex/i.test(label)) return { title: label, type: 'Metroplex', blurb: '' };
+    if (/Plex/i.test(label)) return { title: label, type: 'Plex', blurb: '' };
+    return { title: label, type: 'City', blurb: '' };
+  }
+  function _cityTypeColor(type) {
+    if (/Metroplex/i.test(type)) return '#c0392b';
+    if (/Plex/i.test(type)) return '#b8860b';
+    if (/Agri/i.test(type)) return '#1a7a2e';
+    if (/Corporate/i.test(type)) return '#2b6cb0';
+    return '#555';
+  }
+  // Merge a built-in city's data: GM sees its own record; a player sees synced GM lore + own notes.
+  function _worldCityMerged(label) {
+    var own = _worldCityRec(label, false) || {};
+    if (NC_MODE === 'player') {
+      var lore = (_worldGmCityData && _worldGmCityData[label]) || {};
+      return { desc: lore.desc || '', linkedMapId: lore.linkedMapId || null, gmNotes: '', notes: own.notes || '' };
+    }
+    return { desc: own.desc || '', linkedMapId: own.linkedMapId || null, gmNotes: own.gmNotes || '', notes: own.notes || '' };
+  }
+  // Shared renderer for the redesigned info window (name on black, type in colour, diegetic body).
+  function _worldInfoHtml(opts) {
+    var color = opts.color || '#555';
+    var lore = opts.desc ? '<div class="wm-cpop-lore">' + _esc(opts.desc) + '</div>'
+      : '<div class="wm-cpop-lore wm-cpop-empty">' + _esc(opts.emptyDesc || 'No intel logged.') + '</div>';
+    var rows = (opts.rows || []).filter(Boolean).join('');
+    var notes = '';
+    if (opts.gmNotes) notes += '<div class="wm-cpop-note wm-cpop-note-gm"><span class="wm-cpop-note-k">GM</span>' + _esc(opts.gmNotes) + '</div>';
+    if (opts.notes) notes += '<div class="wm-cpop-note"><span class="wm-cpop-note-k">Notes</span>' + _esc(opts.notes) + '</div>';
+    return '<div class="wm-cpop wm-cpop2">' +
+      '<div class="wm-cpop-name">' + _esc(opts.name) + '</div>' +
+      '<div class="wm-cpop-sub" style="color:' + color + '">' + _esc(opts.type) + '</div>' +
+      (rows ? '<div class="wm-cpop-stats">' + rows + '</div>' : '') +
+      lore + notes +
+      (opts.actions ? '<div class="wm-cpop-actions">' + opts.actions + '</div>' : '') +
+      '</div>';
+  }
+  function _worldCityClick(map, e, label) {
+    var info = _cityInfo(label), nc = /night city/i.test(label), rec = _worldCityMerged(label);
+    var ll = (e && e.latlng) ? e.latlng : (e && e.target && e.target.getLatLng ? e.target.getLatLng() : map.getCenter());
+    var lm = _linkedMapOf(rec.linkedMapId);
+    var esc = label.replace(/'/g, "\\'");
+    var actions = '';
+    if (nc) actions += '<button class="wm-cpop-btn" onclick="ncOpenNightCity()">Open Night City map ▸</button>';
+    if (lm) actions += '<button class="wm-cpop-btn" onclick="ncWorldOpenMap(\'' + lm.id + '\')">Open ' + _esc(lm.srcName || lm.name) + ' ▸</button>';
+    if (NC_MODE === 'gm') actions += '<button class="wm-cpop-btn wm-cpop-btn2" onclick="ncCityEdit(\'' + esc + '\')">Edit city ✎</button>';
+    else actions += '<button class="wm-cpop-btn wm-cpop-btn2" onclick="ncCityAddNote(\'' + esc + '\')">Add a note +</button>';
+    var html = _worldInfoHtml({ name: info.title, type: info.type, color: _cityTypeColor(info.type),
+      desc: rec.desc || info.blurb, emptyDesc: 'No intel logged.', gmNotes: rec.gmNotes, notes: rec.notes, actions: actions });
+    L.popup({ className: 'wm-cpop-wrap', offset: [0, -8], minWidth: 220, maxWidth: 290 }).setLatLng(ll).setContent(html).openOn(map);
+  }
+  window.ncWorldOpenMap = function (id) { try { _worldMap.closePopup(); } catch (e) {} ncSelectMap(id); };
+  // GM city editor — description, GM notes, and link/replace a nested map.
+  window.ncCityEdit = function (label) {
+    var rec = _worldCityRec(label, true), lm = _linkedMapOf(rec.linkedMapId);
+    try { _worldMap.closePopup(); } catch (e) {}
+    var mapRow = lm
+      ? '<div class="wm-form-maprow">Linked map: <b>' + _esc(lm.srcName || lm.name) + '</b> <button class="nc-btn nc-btn-sm" onclick="ncWorldOpenMap(\'' + lm.id + '\')">Open</button> <button class="nc-btn nc-btn-sm nc-btn-danger" onclick="ncCityUnlink(\'' + label.replace(/'/g, "\\'") + '\')">Unlink</button></div>'
+      : '<button class="nc-btn" onclick="ncCityLinkMap(\'' + label.replace(/'/g, "\\'") + '\')">＋ Link a map</button>';
+    var body = '<div class="wm-form">' +
+      '<label class="nc-modal-lbl">Description<textarea id="wm-c-desc" rows="4" placeholder="Canon lore — shared with players">' + _esc(rec.desc) + '</textarea></label>' +
+      '<label class="nc-modal-lbl">GM notes (private)<textarea id="wm-c-gmn" rows="3" placeholder="GM-only">' + _esc(rec.gmNotes) + '</textarea></label>' +
+      mapRow +
+      '<div class="wm-form-actions"><span class="wm-form-spacer"></span><button class="nc-btn" onclick="ncModalClose()">Cancel</button><button class="nc-btn nc-btn-cy" onclick="ncCitySave(\'' + label.replace(/'/g, "\\'") + '\')">Save</button></div></div>';
+    _ncModalOpen(label, body);
+  };
+  window.ncCitySave = function (label) {
+    var rec = _worldCityRec(label, true);
+    var d = document.getElementById('wm-c-desc'), g = document.getElementById('wm-c-gmn');
+    if (d) rec.desc = d.value.trim(); if (g) rec.gmNotes = g.value.trim();
+    _schedSave(); _postPublic(); ncModalClose();
+  };
+  window.ncCityLinkMap = function (label) {
+    _createLinkedMap('world', 'city:' + label, label, function (mapId) {
+      var rec = _worldCityRec(label, true); rec.linkedMapId = mapId; _schedSave(); _postPublic();
+      ncModalClose(); ncSelectMap(mapId);
+    });
+  };
+  window.ncCityUnlink = function (label) {
+    var rec = _worldCityRec(label, true); if (rec.linkedMapId) { GM.maps = GM.maps.filter(function (m) { return m.id !== rec.linkedMapId; }); }
+    rec.linkedMapId = null; _schedSave(); _postPublic(); ncModalClose(); ncRenderMapsBar();
+  };
+  window.ncCityAddNote = function (label) {
+    var rec = _worldCityRec(label, true);
+    try { _worldMap.closePopup(); } catch (e) {}
+    var body = '<div class="wm-form"><label class="nc-modal-lbl">Your note<textarea id="wm-c-note" rows="5" placeholder="Private note…">' + _esc(rec.notes) + '</textarea></label>' +
+      '<div class="wm-form-actions"><span class="wm-form-spacer"></span><button class="nc-btn" onclick="ncModalClose()">Cancel</button><button class="nc-btn nc-btn-cy" onclick="ncCityNoteSave(\'' + label.replace(/'/g, "\\'") + '\')">Save</button></div></div>';
+    _ncModalOpen('Note — ' + label, body);
+  };
+  window.ncCityNoteSave = function (label) {
+    var rec = _worldCityRec(label, true), n = document.getElementById('wm-c-note');
+    if (n) rec.notes = n.value.trim(); _schedSave(); ncModalClose();
+  };
+  // Nested layer-toggle tree in the Layers panel.
+  function _worldRenderTree(vw, ws) {
+    var panel = vw.querySelector('#wm-layers'); if (!panel) return;
+    function row(node, depth) {
+      var h = '<label class="wm-lrow" style="padding-left:' + (4 + depth * 16) + 'px"><input type="checkbox" data-wl="' + node.id + '"' + (ws.hidden[node.id] ? '' : ' checked') + '><span>' + _esc(node.label) + '</span></label>';
+      if (node.children) node.children.forEach(function (c) { h += row(c, depth + 1); });
+      return h;
+    }
+    panel.innerHTML = '<div class="wm-panel-h">LAYERS</div>' + _WM_TREE.map(function (n) { return row(n, 0); }).join('');
+    panel.querySelectorAll('[data-wl]').forEach(function (cb) {
+      cb.onchange = function () {
+        var id = cb.getAttribute('data-wl'), on = cb.checked;
+        if (on) delete ws.hidden[id]; else ws.hidden[id] = true; _schedSave();
+        if (id === 'carto' || id === 'text') { var ly = _worldLayers && _worldLayers[id]; if (ly) { if (on) ly.addTo(_worldMap); else ly.remove(); } }
+        else if (_worldMap) { _worldApplyMarkerVis(_worldMap, ws); }
+      };
+    });
+  }
+  window.ncWorldReset = function () { if (_worldMap && _worldFitBounds) _worldMap.fitBounds(_worldFitBounds); };
+  window.ncOpenNightCity = function () {
+    var ws = _worldState(); ws.ncPinned = true; _schedSave();
+    if (_worldMap) { try { _worldMap.closePopup(); } catch (e) {} }
+    ncSelectMap('nc');
+  };
+  window.ncCloseNightCity = function () {
+    var ws = _worldState(); ws.ncPinned = false; _schedSave();
+    if (_surface === 'nc') ncSelectMap('world'); else ncRenderMapsBar();
+  };
+  window.ncWorldToggleLayers = function () {
+    var p = document.getElementById('wm-layers'); if (p) p.style.display = (p.style.display === 'none') ? 'block' : 'none';
+    var lg = document.getElementById('wm-legend'); if (lg) lg.style.display = 'none';
+  };
+  window.ncWorldToggleLegend = function () {
+    var lg = document.getElementById('wm-legend'); if (!lg) return;
+    var ly = document.getElementById('wm-layers'); if (ly) ly.style.display = 'none';
+    if (lg.style.display !== 'none') { lg.style.display = 'none'; return; }
+    lg.style.display = 'block';
+    if (_worldLegendSvg) { lg.innerHTML = _worldLegendSvg; _worldFitLegend(lg); return; }
+    lg.innerHTML = '<div class="wm-msg">Loading legend…</div>';
+    fetch('img/maps/legend.svg').then(function (r) { return r.text(); })
+      .then(function (t) { _worldLegendSvg = t; lg.innerHTML = t; _worldFitLegend(lg); })
+      .catch(function () { lg.innerHTML = '<div class="wm-msg">Could not load legend.</div>'; });
+  };
+  function _worldFitLegend(lg) { var s = lg.querySelector('svg'); if (s) { s.removeAttribute('width'); s.removeAttribute('height'); s.style.width = '100%'; s.style.height = 'auto'; s.style.display = 'block'; } }
+
   function ncRenderCustomMap(id) {
     var vc = document.getElementById('view-custom'); if (!vc) return;
     var m = _findMap(id);
@@ -1027,8 +1707,10 @@
     ncApplyModeToDistrictView();
     ncRenderCtxBar();
     ncRenderSidePanel();
-    ncRenderMapsBar();
-    if (typeof window.ncSetView === 'function') window.ncSetView('atlas');   // City view by default
+    if (typeof window.ncSetView === 'function') window.ncSetView('atlas');   // prime NC City view
+    // NA (world) is the root surface everywhere — the app and the public reference site — with
+    // Night City nested under it in the map tree.
+    ncSelectMap('world');
   }
   function init() {
     if (_GM_API) { _loadCampaignGM(_afterLoad); }
@@ -1051,8 +1733,11 @@
       PLAYER.maps = d.maps.map(function (m) { var mm = _migrateMap(m); mm.gmEntries = (m.gmEntries || []).map(_migrateCustomPlace); mm.entries = ownById[m.id] || []; return mm; });
       PLAYER.mapOrder = Array.isArray(d.order) && d.order.length ? d.order : ['nc'].concat(d.maps.map(function (m) { return m.id; }));
     }
+    // Synced public world locations + city lore (GM → players), read-only on the world map.
+    _worldGmPlaces = Array.isArray(d.worldPlaces) ? d.worldPlaces : [];
+    _worldGmCityData = (d.worldCities && typeof d.worldCities === 'object') ? d.worldCities : {};
     if (NC_MODE !== 'player') window.ncSetMode('player');
-    else { ncRenderSidePanel(); ncRenderMapsBar(); ncAfterChange(); if (_surface !== 'nc') ncRenderCustomMap(_surface); }
+    else { ncRenderSidePanel(); ncRenderMapsBar(); ncAfterChange(); if (_surface !== 'nc') ncRenderCustomMap(_surface); if (_surface === 'world') _worldRenderLocMarkers(); }
   });
   // App shell tells the map which locations host a shop → show an "open shop" chip.
   window.addEventListener('message', function (ev) {
@@ -1063,3 +1748,11 @@
     try { if (_surface !== 'nc') ncRenderCustomMap(_surface); } catch (e) {}
   });
 })();
+
+/* Relay ⌘K up to the app shell so the command palette opens even when the map
+   iframe has focus. */
+window.addEventListener('keydown', function (e) {
+  if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K') && window.parent && window.parent !== window) {
+    e.preventDefault(); try { window.parent.postMessage({ type: 'nav-key', key: 'k' }, '*'); } catch (_) {}
+  }
+});

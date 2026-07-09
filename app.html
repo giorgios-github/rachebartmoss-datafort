@@ -8,35 +8,41 @@
 <link rel="stylesheet" href="css/main.css">
 <link rel="stylesheet" href="css/ui.css">
 <link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/ctxmenu.css">
+<link rel="stylesheet" href="css/palette.css">
 <link rel="stylesheet" href="css/combat.css">
 <link rel="stylesheet" href="css/reader.css">
 <link rel="stylesheet" href="css/filmwindow.css">
+<link rel="stylesheet" href="css/app-aside.css"><!-- ASIDE FORK: browser-style session shell -->
+<link rel="stylesheet" href="css/app-web.css"><!-- WEB / Net section -->
+<link rel="stylesheet" href="css/app-desktop.css"><!-- DESKTOP / computer OS section -->
+
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&display=swap">
 </head>
 <body>
 
-<!-- Role chooser (shown until a role is picked) -->
+<!-- Role chooser (shown until a role is picked) — DS print identity -->
 <div id="role-chooser">
   <div class="rc-card">
-    <img class="rc-logo" src="img/RacheBartmoss.png" alt="Rache Bartmoss">
-    <div class="rc-sub">datafort</div>
-    <div class="rc-tag">Cyberpunk 2020 · local-first companion</div>
-    <div class="rc-kicker">// SELECT ROLE</div>
-    <div class="rc-roles">
-      <div class="rc-role" onclick="chooseRole('gm')">
-        <div class="rc-ico">⌘</div>
-        <h2>GAME MASTER</h2>
-        <p>Manage campaigns, host sessions, and edit every player's sheet live on your Wi-Fi.</p>
-        <div class="rc-go">ENTER ▸</div>
-      </div>
-      <div class="rc-role" onclick="chooseRole('player')">
-        <div class="rc-ico">⇄</div>
-        <h2>PLAYER</h2>
-        <p>Build your character and connect to your GM's session to sync your sheet.</p>
-        <div class="rc-go">ENTER ▸</div>
-      </div>
+    <div class="rc-brand">
+      <img class="rc-logo" src="img/RacheBartmoss.png" alt="Rache Bartmoss">
+      <div class="rc-sub">DATAFORT</div>
+      <div class="rc-tag">Cyberpunk 2020 · local-first companion</div>
     </div>
-    <div class="rc-foot"><a href="index.html">Just browsing? Open the toolkit →</a></div>
+    <div class="rc-kicker">Choose how you're jacking in</div>
+    <div class="rc-roles">
+      <button class="rc-role" onclick="chooseRole('gm')">
+        <h2>Game Master</h2>
+        <p>Run campaigns, host the table, and edit every player's sheet live over your Wi-Fi.</p>
+        <span class="rc-go">Enter &rarr;</span>
+      </button>
+      <button class="rc-role" onclick="chooseRole('player')">
+        <h2>Player</h2>
+        <p>Build your character and sync your sheet to your GM's session.</p>
+        <span class="rc-go">Enter &rarr;</span>
+      </button>
+    </div>
+    <div class="rc-foot"><a href="index.html">Just browsing? Open the toolkit &rarr;</a></div>
   </div>
 </div>
 
@@ -61,6 +67,25 @@
 </div>
 
 <script src="js/ui.js"></script>
+<script src="js/app-core.js"></script>
+<script src="js/app-store.js"></script>
+<script src="js/app-links.js"></script>
+<script src="js/app-migrate.js"></script>
+<script src="js/app-views.js"></script>
+<script src="js/app-data.js"></script>
+<script src="js/app-cast.js"></script>
+<script src="js/app-shell.js"></script>
+<script src="js/app-web.js"></script>
+<script src="js/app-desktop.js"></script><!-- DESKTOP: window-manager kernel + app SDK -->
+<script src="js/desktop-os-catalog.js"></script><!-- DESKTOP: shared OS catalog (also loaded by cs.html) -->
+<script src="js/desktop-apps.js"></script><!-- DESKTOP: OS registration + built-in apps (via the public SDK) -->
+<script src="js/desktop-connectors.js"></script><!-- DESKTOP: apps bridging to Data / chat / mail -->
+<script src="js/desktop-apps2.js"></script><!-- DESKTOP: content apps (portal, bd, ledger, deaddrop, feed, ripper, dispatch, trauma, sniffer) -->
+<script src="js/desktop-ai.js"></script><!-- DESKTOP: reusable AI avatar engine + R.A.B.I.D. + FLUX assistant -->
+<script src="js/desktop-shell-fx.js"></script><!-- DESKTOP: draggable icons + desktop menu (no kernel edits) -->
+<script src="js/desktop-media.js"></script><!-- DESKTOP: MEDIA suites — 5 apps via the public SDK (no kernel edits) -->
+<script src="js/ctxmenu.js"></script>
+<script src="js/palette.js"></script>
 <script src="js/sync.bundle.js"></script>
 <script src="js/vendor/pdf.min.js"></script>
 <script src="js/combat-engine.js"></script>

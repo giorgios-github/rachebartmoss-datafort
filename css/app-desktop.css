@@ -1,0 +1,385 @@
+/* app-desktop.css — the DESKTOP section, in the Datafort Design System.
+   ───────────────────────────────────────────────────────────────────────────
+   The in-world computer OS, re-clothed in the HOUSE STYLE: black ink on white
+   paper, hard 2px ink borders, square corners, no colour identity, Eurostile
+   Extended (display) + Terminal Grotesque (mono), Unicode glyphs, inversion on
+   hover, fast mechanical motion. Every OS looks the SAME — they differ only by
+   MECHANICS (the stat-block + enforced behaviour) and by FURNITURE & VOICE
+   (a monitored banner, a footer stamp, an ad strip, a frame treatment) driven
+   per [data-os]. The three DS stamps (red/gold/green) appear ONLY as semantic
+   status marks, never as OS branding.
+
+   EVERYTHING here is scoped to `.dt-root` so the shared `.dt-*` utility classes
+   don't leak onto the already-DS paper screens (item fiche, cast, combat). */
+
+/* ── full-width sidebar launcher (already DS) ── */
+/* lives at the bottom of the sidebar, inside .asd-foot, directly above HIDE —
+   the foot supplies the top rule; a hairline separates it from HIDE below. */
+.asd-wide {
+  display:flex; align-items:center; gap:10px; width:100%; box-sizing:border-box;
+  border:0; border-bottom:1px solid var(--rule);
+  background:var(--paper); color:var(--pin); cursor:pointer; padding:12px 14px;
+  font-family:var(--head,'Eurostile',sans-serif); text-align:left;
+  transition:background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.asd-wide:hover { background:var(--pin); color:#fff; }
+.asd-wide-g { font-family:var(--mono); font-size:16px; line-height:1; opacity:.8; }
+.asd-wide-l { font-size:12px; letter-spacing:1.5px; text-transform:uppercase; }
+.asd-wide-s { margin-left:auto; font-family:var(--mono); font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--faint); }
+.asd-wide:hover .asd-wide-s { color:rgba(255,255,255,.6); }
+
+/* ═══════════════ the OS surface ═══════════════ */
+.dt-root {
+  position:absolute; inset:0; overflow:hidden;
+  /* ink tokens (fall back to literals so the module also renders in isolation) */
+  --dt-fg:var(--pin,#111); --dt-bg:var(--paper,#fff); --dt-muted:var(--muted,#666); --dt-faint:var(--faint,#767676);
+  --dt-accent:var(--acc,#b8860b); --dt-red:#c0392b; --dt-green:#1a7a2e;
+  --dt-line:var(--rule,#ddd); --dt-ink:var(--pin,#111);
+  --dt-win-bg:#fff; --dt-win-radius:0;
+  --dt-title-bg:var(--pin,#111); --dt-title-fg:#fff;
+  --dt-bar-bg:var(--pin,#111); --dt-bar-fg:#fff;
+  --dt-hover:#fafafa; --dt-scroll:#c4c4c4;
+  --dt-wall:repeating-linear-gradient(0deg,#efefef 0 1px,transparent 1px 30px),repeating-linear-gradient(90deg,#efefef 0 1px,transparent 1px 30px),#fafafa;
+  --dt-head:var(--head,'Eurostile Extended','Arial Narrow',sans-serif);
+  --dt-mono:var(--mono,'Terminal Grotesque','Space Mono',ui-monospace,monospace);
+  --dt-fast:var(--fast,120ms); --dt-ease:var(--ease,cubic-bezier(.2,0,.2,1));
+  color:var(--dt-fg); background:var(--dt-bg); font-family:var(--dt-mono);
+  cursor:default; user-select:none; -webkit-user-select:none;
+}
+.dt-root * { box-sizing:border-box; }
+.dt-root ::selection { background:var(--dt-ink); color:#fff; }
+.dt-root .dt-selectable, .dt-root .dt-selectable *, .dt-root .dt-field, .dt-root .dt-reader, .dt-root .dt-textarea,
+.dt-root .dt-win-body input, .dt-root .dt-win-body textarea { user-select:text; -webkit-user-select:text; }
+.dt-root .dt-field, .dt-root .dt-textarea, .dt-root .dt-reader, .dt-root .dt-selectable { cursor:auto; }
+.dt-root img { max-width:100%; }
+.dt-root .dt-scroll-y { overflow-y:auto; overflow-x:hidden; }
+.dt-root ::-webkit-scrollbar { width:10px; height:10px; }
+.dt-root ::-webkit-scrollbar-thumb { background:var(--dt-scroll); border:2px solid transparent; background-clip:content-box; }
+.dt-root ::-webkit-scrollbar-track { background:transparent; }
+
+.dt-wallpaper { position:absolute; inset:0; background:var(--dt-wall); background-size:cover; background-position:center; z-index:0; }
+
+/* ── top bar = ink band (menu · title · clock) ── */
+.dt-topbar {
+  position:absolute; top:0; left:0; right:0; height:30px; z-index:9000;
+  display:flex; align-items:center; gap:2px; padding:0 6px;
+  background:var(--dt-bar-bg); color:var(--dt-bar-fg); border-bottom:2px solid var(--dt-ink);
+  font-family:var(--dt-head); font-size:12px;
+}
+.dt-menu-btn { display:flex; align-items:center; gap:8px; height:24px; padding:0 10px; border:0; cursor:pointer; background:transparent; color:inherit; font-family:var(--dt-head); font-weight:700; letter-spacing:1.5px; text-transform:uppercase; max-width:44%; transition:background var(--dt-fast) var(--dt-ease), color var(--dt-fast) var(--dt-ease); }
+.dt-menu-btn:hover, .dt-menu-btn.on { background:#fff; color:var(--dt-ink); }
+.dt-menu-mark { width:8px; height:8px; flex:0 0 auto; background:#fff; }
+.dt-menu-btn:hover .dt-menu-mark, .dt-menu-btn.on .dt-menu-mark { background:var(--dt-ink); }
+.dt-topbar-title { flex:1; min-width:0; text-align:center; color:rgba(255,255,255,.62); font-family:var(--dt-mono); font-size:11px; letter-spacing:1px; text-transform:uppercase; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.dt-topbar-right { display:flex; align-items:center; gap:12px; flex:0 0 auto; padding-right:4px; }
+.dt-stat { display:flex; align-items:center; gap:5px; font-family:var(--dt-mono); font-size:11px; color:rgba(255,255,255,.62); white-space:nowrap; }
+.dt-stat b { color:#fff; font-weight:400; }
+.dt-clock { font-family:var(--dt-mono); font-size:12px; letter-spacing:1px; min-width:48px; text-align:right; color:#fff; }
+
+/* ── desktop area ── */
+.dt-desktop { position:absolute; top:30px; bottom:44px; left:0; right:0; z-index:1; }
+.dt-icons { position:absolute; top:16px; left:16px; display:flex; flex-direction:column; flex-wrap:wrap; gap:4px 0; max-height:calc(100% - 32px); align-content:flex-start; }
+.dt-icons.dt-icons-free { inset:0; display:block; max-height:none; }
+.dt-icons.dt-icons-free .dt-icon { position:absolute; margin:0; }
+.dt-icon { width:82px; padding:8px 4px 6px; display:flex; flex-direction:column; align-items:center; gap:7px; border:1px solid transparent; cursor:pointer; color:var(--dt-fg); text-align:center; transition:background var(--dt-fast) var(--dt-ease), color var(--dt-fast) var(--dt-ease); }
+.dt-icon:hover { background:#fafafa; }
+.dt-icon.sel { background:var(--dt-ink); color:#fff; }
+.dt-icon.dt-icon-drag { opacity:.9; z-index:50; }
+.dt-icon-g { width:44px; height:44px; display:flex; align-items:center; justify-content:center; font-family:var(--dt-head); font-size:20px; font-weight:700; color:var(--dt-fg); background:#fff; border:2px solid var(--dt-ink); transition:background var(--dt-fast) var(--dt-ease), color var(--dt-fast) var(--dt-ease); }
+.dt-icon:hover .dt-icon-g { background:var(--dt-ink); color:#fff; }
+.dt-icon.sel .dt-icon-g { background:#fff; color:var(--dt-ink); }
+.dt-icon-l { font-family:var(--dt-mono); font-size:11px; line-height:1.15; word-break:break-word; max-width:100%; }
+
+/* ── windows ── */
+.dt-win { position:absolute; min-width:240px; min-height:150px; display:flex; flex-direction:column; background:var(--dt-win-bg); color:var(--dt-fg); border:2px solid var(--dt-ink); border-radius:var(--dt-win-radius); overflow:hidden; }
+.dt-win.dt-win-open { animation:dt-win-in .14s var(--dt-ease) both; }
+@keyframes dt-win-in { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+.dt-win-bar { flex:0 0 auto; height:32px; display:flex; align-items:center; gap:8px; padding:0 4px 0 12px; background:var(--dt-title-bg); color:var(--dt-title-fg); cursor:move; }
+.dt-win-ico { font-family:var(--dt-head); font-weight:700; font-size:12px; color:#fff; flex:0 0 auto; opacity:.7; }
+.dt-win-t { flex:1; min-width:0; font-size:12px; font-weight:700; font-family:var(--dt-head); letter-spacing:1.5px; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dt-win-ctrls { display:flex; align-items:center; gap:2px; flex:0 0 auto; }
+.dt-win-b { width:26px; height:24px; display:flex; align-items:center; justify-content:center; border:0; cursor:pointer; background:transparent; color:#fff; font-family:var(--dt-mono); font-size:13px; line-height:1; transition:background var(--dt-fast) var(--dt-ease), color var(--dt-fast) var(--dt-ease); }
+.dt-win-b:hover { background:#fff; color:var(--dt-ink); }
+.dt-win-b.x:hover { background:var(--dt-red); color:#fff; }
+.dt-win-body { flex:1; min-height:0; overflow:auto; position:relative; font-size:13px; background:#fff; }
+.dt-win-rz { position:absolute; right:0; bottom:0; width:16px; height:16px; cursor:nwse-resize; z-index:5; }
+.dt-win-rz::after { content:''; position:absolute; right:3px; bottom:3px; width:7px; height:7px; border-right:2px solid var(--dt-ink); border-bottom:2px solid var(--dt-ink); opacity:.55; }
+.dt-win.dt-inactive { border-color:#888; }
+.dt-win.dt-inactive .dt-win-bar { background:#5a5a5a; }
+
+/* ── taskbar / dock = ink band ── */
+.dt-taskbar { position:absolute; left:0; right:0; bottom:0; height:44px; z-index:9000; display:flex; align-items:center; gap:8px; padding:0 8px; background:var(--dt-bar-bg); color:var(--dt-bar-fg); border-top:2px solid var(--dt-ink); }
+.dt-start { display:flex; align-items:center; gap:8px; height:30px; padding:0 14px; border:0; cursor:pointer; background:#fff; color:var(--dt-ink); font-family:var(--dt-head); font-weight:700; font-size:12px; letter-spacing:1.5px; text-transform:uppercase; flex:0 0 auto; transition:background var(--dt-fast) var(--dt-ease), color var(--dt-fast) var(--dt-ease); }
+.dt-start:hover { background:var(--dt-accent); color:#111; }
+.dt-tasks { display:flex; align-items:center; gap:6px; flex:1; min-width:0; overflow-x:auto; overflow-y:hidden; }
+.dt-tasks::-webkit-scrollbar { height:0; }
+.dt-task { display:flex; align-items:center; gap:8px; height:30px; padding:0 12px; border:1px solid rgba(255,255,255,.35); cursor:pointer; background:transparent; color:#fff; font-family:var(--dt-mono); font-size:12px; max-width:200px; min-width:0; flex:0 0 auto; transition:background var(--dt-fast) var(--dt-ease), color var(--dt-fast) var(--dt-ease); }
+.dt-task:hover { border-color:#fff; }
+.dt-task.on { background:#fff; color:var(--dt-ink); border-color:#fff; }
+.dt-task-g { font-weight:700; flex:0 0 auto; }
+.dt-task-l { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.dt-task.pin { opacity:.6; }
+.dt-task.pin:hover { opacity:1; }
+.dt-tray { display:flex; align-items:center; gap:12px; flex:0 0 auto; font-family:var(--dt-mono); font-size:10px; letter-spacing:1px; color:rgba(255,255,255,.55); }
+
+/* ── menus ── */
+.dt-menu { position:absolute; z-index:12000; min-width:216px; padding:4px 0; background:#fff; color:var(--dt-ink); border:2px solid var(--dt-ink); box-shadow:0 10px 36px rgba(0,0,0,.28); font-family:var(--dt-mono); font-size:13px; }
+.dt-menu-h { padding:8px 12px 5px; font-family:var(--dt-head); font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--dt-faint); }
+.dt-menu-item { display:flex; align-items:center; gap:10px; padding:7px 12px; cursor:pointer; transition:background var(--dt-fast) var(--dt-ease), color var(--dt-fast) var(--dt-ease); }
+.dt-menu-item:hover { background:var(--dt-ink); color:#fff; }
+.dt-menu-item.disabled { opacity:.4; cursor:default; }
+.dt-menu-item.disabled:hover { background:transparent; color:var(--dt-ink); }
+.dt-menu-g { width:18px; text-align:center; font-family:var(--dt-head); font-weight:700; flex:0 0 auto; }
+.dt-menu-sub { margin-left:auto; font-family:var(--dt-mono); font-size:10px; color:var(--dt-faint); }
+.dt-menu-item:hover .dt-menu-sub { color:rgba(255,255,255,.7); }
+.dt-menu-sep { height:1px; margin:4px 0; background:var(--dt-line); }
+
+/* ── boot splash (ink on paper) ── */
+.dt-boot { position:absolute; inset:0; z-index:20000; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#fff; color:var(--dt-ink); gap:22px; font-family:var(--dt-mono); }
+.dt-boot.fade { animation:dt-boot-out .45s ease forwards; }
+@keyframes dt-boot-out { to { opacity:0; visibility:hidden; } }
+.dt-boot-logo { font-family:var(--dt-head); font-weight:900; font-size:44px; letter-spacing:3px; text-transform:uppercase; color:var(--dt-ink); transform:scaleX(.9); text-align:center; }
+.dt-boot-sub { font-size:11px; letter-spacing:4px; text-transform:uppercase; color:var(--dt-faint); margin-top:-10px; }
+.dt-boot-lines { width:min(520px,74%); min-height:96px; font-size:12px; line-height:1.75; color:var(--dt-muted); }
+.dt-boot-line b { color:var(--dt-ink); font-weight:700; }
+.dt-boot-line .ok { color:var(--dt-green); }
+.dt-boot-bar { width:min(420px,66%); height:6px; border:1px solid var(--dt-ink); overflow:hidden; }
+.dt-boot-bar i { display:block; height:100%; width:0; background:var(--dt-ink); transition:width .4s ease; }
+.dt-boot-cursor::after { content:'▮'; animation:dt-blink 1s steps(1) infinite; }
+@keyframes dt-blink { 50% { opacity:0; } }
+
+/* ── toasts ── */
+.dt-toasts { position:absolute; right:16px; bottom:56px; z-index:15000; display:flex; flex-direction:column; gap:8px; align-items:flex-end; }
+.dt-toast { background:#fff; color:var(--dt-ink); border:2px solid var(--dt-ink); border-left-width:6px; padding:9px 14px; font-family:var(--dt-mono); font-size:12.5px; box-shadow:0 10px 36px rgba(0,0,0,.24); animation:dt-toast-in .18s ease both; max-width:300px; }
+@keyframes dt-toast-in { from { opacity:0; transform:translateX(12px); } }
+
+/* ── "no machine" fallback ── */
+.dt-nomachine { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:5; }
+.dt-nomachine-in { text-align:center; max-width:420px; padding:30px; border:2px solid var(--dt-ink); background:#fff; }
+.dt-nomachine-in h2 { font-family:var(--dt-head); font-size:18px; letter-spacing:2px; text-transform:uppercase; color:var(--dt-ink); margin:0 0 10px; }
+.dt-nomachine-in p { color:var(--dt-muted); line-height:1.6; font-size:13px; margin:0 0 8px; }
+
+/* ═══════════════ FURNITURE (injected by desktop-shell-fx.js) ═══════════════ */
+.dt-fx-banner { position:absolute; top:0; left:0; right:0; z-index:20; display:flex; align-items:center; gap:8px; padding:5px 14px; font-family:var(--dt-mono); font-size:10.5px; letter-spacing:1.5px; text-transform:uppercase; background:#fff; border-bottom:1px solid var(--dt-line); }
+.dt-fx-banner.warn { color:var(--dt-accent); box-shadow:inset 0 -2px 0 var(--dt-accent); }
+.dt-fx-banner.bad  { color:var(--dt-red);    box-shadow:inset 0 -2px 0 var(--dt-red); }
+.dt-fx-banner b { font-weight:700; }
+.dt-desktop.has-banner .dt-icons { top:44px; }
+.dt-fx-footer { position:absolute; right:14px; bottom:8px; z-index:8; font-family:var(--dt-mono); font-size:9.5px; letter-spacing:1px; text-transform:uppercase; color:var(--dt-faint); pointer-events:none; }
+.dt-fx-stamp { position:absolute; top:18px; right:20px; z-index:8; font-family:var(--dt-head); font-weight:700; font-size:12px; letter-spacing:2px; text-transform:uppercase; color:var(--dt-ink); border:2px solid var(--dt-ink); padding:3px 9px; opacity:.82; pointer-events:none; }
+.dt-fx-gopro { margin-left:6px; padding:1px 9px; border:1px solid currentColor; background:transparent; color:inherit; cursor:pointer; font-family:var(--dt-head); font-weight:700; font-size:10px; letter-spacing:1.5px; text-transform:uppercase; transition:background var(--dt-fast) var(--dt-ease), color var(--dt-fast) var(--dt-ease); }
+.dt-fx-gopro:hover { background:var(--dt-accent); color:#fff; border-color:var(--dt-accent); }
+.dt-fx-ads { position:absolute; right:14px; bottom:30px; z-index:8; width:150px; border:2px solid var(--dt-ink); background:#fff; }
+.dt-fx-ads img { display:block; width:100%; height:auto; }
+.dt-fx-ads .cap { font-family:var(--dt-mono); font-size:8px; letter-spacing:1px; text-transform:uppercase; text-align:center; color:var(--dt-faint); padding:2px; }
+
+/* ═══════════════ app utility classes (scoped) ═══════════════ */
+.dt-root .dt-pad { padding:16px; }
+.dt-root .dt-h1 { font-family:var(--dt-head); font-size:15px; font-weight:900; letter-spacing:1.5px; text-transform:uppercase; margin:0 0 6px; }
+.dt-root .dt-h2 { font-family:var(--dt-head); font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--dt-faint); margin:16px 0 8px; }
+.dt-root .dt-p { color:var(--dt-fg); line-height:1.6; font-size:13px; margin:0 0 10px; overflow-wrap:anywhere; }
+.dt-root .dt-muted { color:var(--dt-muted); }
+.dt-root .dt-empty { padding:26px 18px; text-align:center; color:var(--dt-muted); font-size:13px; }
+.dt-root .dt-note { margin-top:14px; padding:10px 12px; border:1px solid var(--dt-ink); border-left-width:4px; font-size:12.5px; line-height:1.55; color:var(--dt-muted); }
+.dt-root .dt-note b { color:var(--dt-fg); }
+.dt-root .dt-banner { padding:8px 14px; font-family:var(--dt-mono); font-size:11px; letter-spacing:1px; text-transform:uppercase; border-bottom:1px solid var(--dt-line); }
+.dt-root .dt-banner.warn { color:var(--dt-accent); box-shadow:inset 3px 0 0 var(--dt-accent); }
+.dt-root .dt-banner.ok { color:var(--dt-green); box-shadow:inset 3px 0 0 var(--dt-green); }
+.dt-root .dt-banner.bad { color:var(--dt-red); box-shadow:inset 3px 0 0 var(--dt-red); }
+.dt-root .dt-btn { display:inline-flex; align-items:center; gap:7px; padding:6px 13px; border:2px solid var(--dt-ink); cursor:pointer; background:#fff; color:var(--dt-ink); font-family:var(--dt-mono); font-size:12px; white-space:nowrap; transition:background var(--dt-fast) var(--dt-ease), color var(--dt-fast) var(--dt-ease); }
+.dt-root .dt-btn:hover { background:var(--dt-ink); color:#fff; }
+.dt-root .dt-btn.primary { background:var(--dt-ink); color:#fff; }
+.dt-root .dt-btn.primary:hover { background:#fff; color:var(--dt-ink); }
+.dt-root .dt-btn.ghost { border-color:var(--dt-line); }
+.dt-root .dt-btn.ghost:hover { border-color:var(--dt-ink); }
+.dt-root .dt-btn.sm { padding:3px 9px; font-size:11px; border-width:1px; }
+.dt-root .dt-btn[disabled] { opacity:.4; cursor:default; }
+.dt-root .dt-btn[disabled]:hover { background:#fff; color:var(--dt-ink); }
+.dt-root .dt-iconbtn { width:24px; height:22px; display:flex; align-items:center; justify-content:center; border:0; background:transparent; color:var(--dt-faint); cursor:pointer; font-family:var(--dt-mono); font-size:13px; flex:0 0 auto; }
+.dt-root .dt-iconbtn:hover { background:var(--dt-ink); color:#fff; }
+.dt-root .dt-iconbtn.x:hover { background:var(--dt-red); color:#fff; }
+.dt-root .dt-field { width:100%; padding:6px 2px; background:#fff; color:var(--dt-ink); border:0; border-bottom:1.5px solid var(--dt-ink); font-family:var(--dt-mono); font-size:13px; outline:none; }
+.dt-root .dt-field:focus { border-bottom-color:var(--dt-accent); }
+.dt-root .dt-textarea { flex:1; min-height:90px; resize:none; line-height:1.6; border:1.5px solid var(--dt-line); padding:8px; }
+.dt-root .dt-textarea:focus { border-color:var(--dt-ink); }
+.dt-root .dt-reader { white-space:pre-wrap; line-height:1.7; font-family:var(--dt-mono); }
+.dt-root .dt-label { font-family:var(--dt-head); font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--dt-muted); margin:2px 0 4px; }
+.dt-root .dt-vgap > * { margin-bottom:10px; }
+.dt-root .dt-list { display:flex; flex-direction:column; }
+.dt-root .dt-row { display:flex; align-items:center; gap:12px; padding:9px 14px; border-bottom:1px solid var(--dt-line); cursor:pointer; transition:background var(--dt-fast) var(--dt-ease); }
+.dt-root .dt-row:hover { background:#fafafa; }
+.dt-root .dt-row-g { width:30px; height:30px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; border:2px solid var(--dt-ink); font-family:var(--dt-head); font-weight:700; color:var(--dt-ink); background:#fff; overflow:hidden; }
+.dt-root .dt-row-photo { background-size:cover; background-position:center; color:transparent; }
+.dt-root .dt-row-main { flex:1; min-width:0; }
+.dt-root .dt-row-t { font-family:var(--dt-mono); font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dt-root .dt-row-s { font-size:11px; color:var(--dt-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dt-root .dt-row-acts { display:flex; gap:6px; flex:0 0 auto; }
+.dt-root .dt-count { margin-left:auto; font-family:var(--dt-mono); font-size:11px; color:var(--dt-muted); }
+.dt-root .dt-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px; padding:16px; align-content:start; }
+.dt-root .dt-tag { display:inline-block; padding:0 6px; border:1px solid var(--dt-line); font-family:var(--dt-mono); font-size:10px; color:var(--dt-muted); vertical-align:middle; }
+.dt-root .dt-tag.warn { color:var(--dt-accent); border-color:var(--dt-accent); }
+.dt-root .dt-tag.ok { color:var(--dt-green); border-color:var(--dt-green); }
+.dt-root .dt-tag.bad { color:var(--dt-red); border-color:var(--dt-red); }
+.dt-root .dt-tabbar { display:flex; gap:6px; padding:12px 14px 0; }
+.dt-root .dt-toolbar { display:flex; gap:8px; align-items:center; padding:8px 12px; border-bottom:2px solid var(--dt-ink); flex:0 0 auto; }
+.dt-root .dt-vstack { display:flex; flex-direction:column; height:100%; }
+.dt-root .dt-split { display:flex; height:100%; }
+.dt-root .dt-split-side { flex:0 0 160px; border-right:2px solid var(--dt-ink); padding:6px 0; overflow-y:auto; }
+.dt-root .dt-split-main { flex:1; min-width:0; display:flex; flex-direction:column; }
+.dt-root .dt-split-main > .dt-list.dt-scroll-y, .dt-root .dt-split-main > .dt-pad.dt-scroll-y { flex:1; min-height:0; }
+.dt-root .dt-sideitem { display:flex; align-items:center; gap:8px; padding:8px 14px; cursor:pointer; font-family:var(--dt-mono); font-size:13px; color:var(--dt-fg); transition:background var(--dt-fast) var(--dt-ease), color var(--dt-fast) var(--dt-ease); }
+.dt-root .dt-sideitem:hover { background:#fafafa; }
+.dt-root .dt-sideitem.on { background:var(--dt-ink); color:#fff; }
+.dt-root .dt-sideitem-g { flex:0 0 auto; }
+.dt-root .dt-sideitem-l { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dt-root .dt-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+.dt-root .dt-chip { padding:2px 9px; border:1px solid var(--dt-ink); background:#fff; color:var(--dt-ink); cursor:pointer; font-family:var(--dt-mono); font-size:11px; transition:background var(--dt-fast) var(--dt-ease), color var(--dt-fast) var(--dt-ease); }
+.dt-root .dt-chip:hover { background:var(--dt-ink); color:#fff; }
+.dt-root .dt-inforow { display:flex; gap:12px; padding:8px 0; border-bottom:1px solid var(--dt-line); }
+.dt-root .dt-infok { flex:0 0 44%; color:var(--dt-muted); font-size:12px; font-family:var(--dt-mono); }
+.dt-root .dt-infov { flex:1; min-width:0; font-size:13px; font-family:var(--dt-mono); overflow-wrap:anywhere; }
+.dt-root .dt-detail-img { width:100%; max-height:200px; object-fit:cover; margin-bottom:12px; border:2px solid var(--dt-ink); }
+.dt-root .dt-mail-from { margin-bottom:12px; color:var(--dt-muted); }
+.dt-root .dt-mail-compose { margin:8px 12px; width:calc(100% - 24px); justify-content:center; }
+.dt-root .dt-adbox { text-align:center; margin:10px 0; }
+.dt-root .dt-ad { display:block; margin:0 auto 4px; border:2px solid var(--dt-ink); max-height:120px; }
+.dt-root .dt-adnote { font-family:var(--dt-mono); font-size:9px; letter-spacing:1px; text-transform:uppercase; color:var(--dt-faint); }
+.dt-root .dt-wallgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:10px; }
+.dt-root .dt-wallcell { cursor:pointer; border:2px solid var(--dt-ink); overflow:hidden; }
+.dt-root .dt-wallcell:hover { outline:2px solid var(--dt-accent); outline-offset:-4px; }
+.dt-root .dt-wallsw { height:60px; border-bottom:1px solid var(--dt-line); }
+.dt-root .dt-wall-l { padding:5px 8px; font-family:var(--dt-mono); font-size:11px; color:var(--dt-muted); }
+.dt-root .dt-mediacell { cursor:pointer; border:2px solid var(--dt-ink); overflow:hidden; background:#fff; }
+.dt-root .dt-mediacell:hover { outline:2px solid var(--dt-accent); outline-offset:-4px; }
+.dt-root .dt-mediacell img { width:100%; height:100px; object-fit:cover; display:block; border-bottom:1px solid var(--dt-line); }
+.dt-root .dt-mediacell-l { padding:5px 8px; font-family:var(--dt-mono); font-size:11px; color:var(--dt-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dt-root .dt-mediastage { flex:1; display:flex; align-items:center; justify-content:center; overflow:auto; background:#111; padding:12px; }
+.dt-root .dt-mediastage img { max-width:100%; max-height:100%; object-fit:contain; }
+.dt-root .dt-term-out { padding:12px 14px; font-family:var(--dt-mono); font-size:12.5px; line-height:1.6; height:calc(100% - 42px); overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; }
+.dt-root .dt-term-line { display:flex; gap:8px; align-items:center; padding:7px 14px; border-top:2px solid var(--dt-ink); }
+.dt-root .dt-term-ps { flex:0 0 auto; font-weight:700; }
+.dt-root .dt-term-in { border:0; border-bottom:0; background:transparent; font-family:var(--dt-mono); padding:2px 0; }
+.dt-root .dt-rain { display:block; width:100%; height:100%; background:#fff; }
+.dt-root .dt-nue-price { font-family:var(--dt-head); font-size:34px; font-weight:900; letter-spacing:1px; margin:10px 0 2px; }
+.dt-root .dt-nue-per { font-family:var(--dt-head); font-size:14px; font-weight:400; letter-spacing:0; color:var(--dt-muted); }
+
+/* ── the mechanical stat-block (sourcebook) ── */
+.dt-root .dt-statblock { border:2px solid var(--dt-ink); }
+.dt-root .dt-sb-row { display:flex; align-items:flex-start; gap:12px; padding:9px 12px; border-bottom:1px solid var(--dt-line); }
+.dt-root .dt-sb-row:last-child { border-bottom:0; }
+.dt-root .dt-sb-k { flex:0 0 34%; display:flex; align-items:center; gap:8px; font-family:var(--dt-head); font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--dt-ink); }
+.dt-root .dt-sb-v { flex:1; min-width:0; }
+.dt-root .dt-sb-tag { font-family:var(--dt-head); font-size:11px; letter-spacing:1px; text-transform:uppercase; }
+.dt-root .dt-sb-note { font-family:var(--dt-mono); font-size:11.5px; color:var(--dt-muted); line-height:1.45; margin-top:2px; }
+.dt-root .dt-stamp { display:inline-block; width:9px; height:9px; margin-right:6px; vertical-align:middle; }
+.dt-root .dt-stamp.good { background:var(--dt-green); } .dt-root .dt-stamp.warn { background:var(--dt-accent); } .dt-root .dt-stamp.bad { background:var(--dt-red); }
+
+/* ── the browser window = the embedded Net browser, FULL-BLEED (no gutter, no
+      bar of our own — it brings its own chrome). position:absolute;inset:0 makes
+      it the offset parent so the embed's own absolute chrome is contained within
+      the window body instead of escaping onto the OS top bar. ── */
+.dt-root .dt-br-view { position:absolute; inset:0; overflow:auto; background:#fff; }
+/* WebSection OVERWRITES the host className (adds .tab-content, which carries the
+   Net's 22×26 content padding, + .web-browser / .web-page(-app)). Inside a desktop
+   window we want its browser / sites / chat-apps FULL-BLEED: no gutter, filling
+   the body. Covers the Browser embed AND the standalone Comms → netapp windows. */
+.dt-root .dt-win-body > .web-browser,
+.dt-root .dt-win-body > .web-page,
+.dt-root .dt-win-body > .web-page-app { position:absolute; inset:0; padding:0; margin:0; overflow:auto; }
+/* WebSection.renderBrowser OVERWRITES the host class to `tab-content web-browser`
+   (app-web.js), so the global `.tab-content{padding:22px 26px}` (app.css) gutters
+   the whole embed. Kill ONLY that outer container gutter — the pages inside
+   (.web-home / .web-site) keep their own padding. Scoped to the desktop window. */
+.dt-root .dt-win-body .web-browser { padding:0; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FURNITURE & VOICE per OS — frame treatment only (NO colour, NO font).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* CORPO (Kiroshi) — crisp, dense, a lock glyph before window titles. */
+.dt-root[data-os="kiroshi"] .dt-win-t::before { content:'▣ '; opacity:.6; }
+
+/* STREET (FreeSIDE) — thin frames, terminal-style ~/ window titles, lowercase. */
+.dt-root[data-os="freeside"] .dt-win { border-width:1px; }
+.dt-root[data-os="freeside"] .dt-win-bar { padding-left:10px; }
+.dt-root[data-os="freeside"] .dt-win-t { text-transform:lowercase; letter-spacing:.5px; }
+.dt-root[data-os="freeside"] .dt-win-t::before { content:'~/'; opacity:.6; }
+.dt-root[data-os="freeside"] .dt-topbar, .dt-root[data-os="freeside"] .dt-taskbar { border-width:1px; }
+
+/* RETRO (Chrome 2020) — double-ruled frame + a hard block shadow (sticker). */
+.dt-root[data-os="chrome"] .dt-win { box-shadow:inset 0 0 0 1px #fff, inset 0 0 0 3px var(--dt-ink), 5px 5px 0 rgba(0,0,0,.16); }
+.dt-root[data-os="chrome"] .dt-win-t::after { content:' .EXE'; opacity:.5; font-size:10px; }
+.dt-root[data-os="chrome"] .dt-menu { box-shadow:inset 0 0 0 1px #fff, inset 0 0 0 3px var(--dt-ink), 4px 4px 0 rgba(0,0,0,.16); }
+
+/* CONSUMER (NÜ) — a taller filled header band, chunkier frame. */
+.dt-root[data-os="nue"] .dt-win-bar { height:38px; }
+.dt-root[data-os="nue"] .dt-win-t { letter-spacing:.5px; }
+
+/* ═══════════════ AI avatar (desktop-ai.js) ═══════════════ */
+.dt-root .dt-ai { display:flex; flex-direction:column; height:100%; }
+.dt-root .dt-ai-head { flex:0 0 auto; display:flex; align-items:center; gap:14px; padding:12px 14px; border-bottom:2px solid var(--dt-ink); }
+.dt-root .dt-ai-face { margin:0; font-family:var(--dt-mono); font-size:15px; line-height:1.15; letter-spacing:2px; border:2px solid var(--dt-ink); padding:8px 6px; white-space:pre; }
+.dt-root .dt-ai-name { font-family:var(--dt-head); font-weight:900; font-size:15px; letter-spacing:1.5px; text-transform:uppercase; }
+.dt-root .dt-ai-sub { font-family:var(--dt-mono); font-size:11px; color:var(--dt-muted); }
+.dt-root .dt-ai-log { flex:1; min-height:0; overflow:auto; padding:12px 14px; display:flex; flex-direction:column; gap:8px; }
+.dt-root .dt-ai-msg { font-family:var(--dt-mono); font-size:13px; line-height:1.5; max-width:88%; padding:7px 11px; border:1px solid var(--dt-line); }
+.dt-root .dt-ai-msg.ai { align-self:flex-start; border-color:var(--dt-ink); }
+.dt-root .dt-ai-msg.me { align-self:flex-end; background:var(--dt-ink); color:#fff; }
+.dt-root .dt-ai-who { display:block; font-family:var(--dt-head); font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--dt-muted); margin-bottom:2px; }
+.dt-root .dt-ai-msg.me .dt-ai-who { color:rgba(255,255,255,.6); }
+.dt-root .dt-ai-opts { flex:0 0 auto; display:flex; flex-direction:column; gap:6px; padding:10px 14px; border-top:1px solid var(--dt-line); }
+.dt-root .dt-ai-opt { text-align:left; padding:8px 12px; border:1px solid var(--dt-ink); background:#fff; color:var(--dt-ink); cursor:pointer; font-family:var(--dt-mono); font-size:12.5px; transition:background var(--dt-fast) var(--dt-ease), color var(--dt-fast) var(--dt-ease); }
+.dt-root .dt-ai-opt:hover { background:var(--dt-ink); color:#fff; }
+.dt-root .dt-ai-end { font-family:var(--dt-mono); font-size:12px; color:var(--dt-muted); text-align:center; padding:8px; }
+.dt-root .dt-ai-gm { flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:8px 14px; border-top:2px solid var(--dt-ink); background:var(--dt-hover); }
+.dt-root .dt-ai-gm-l { font-family:var(--dt-head); font-size:10px; letter-spacing:1.5px; color:var(--dt-muted); }
+.dt-root .dt-ai-gm .dt-field { flex:1; }
+.dt-root .dt-ai-gm select.dt-field { flex:0 0 auto; }
+
+/* ═══════════════ content apps (desktop-apps2.js) ═══════════════ */
+.dt-root .dt-portal-login { text-align:left; }
+.dt-root .dt-portal-ann { font-family:var(--dt-mono); font-size:12.5px; line-height:1.5; padding:6px 0; border-bottom:1px solid var(--dt-line); }
+.dt-root .dt-portal-tile { display:block; width:100%; text-align:left; padding:14px 12px; border:2px solid var(--dt-ink); background:#fff; color:var(--dt-ink); cursor:pointer; font-family:var(--dt-head); font-size:12px; letter-spacing:.5px; text-transform:uppercase; transition:background var(--dt-fast) var(--dt-ease), color var(--dt-fast) var(--dt-ease); }
+.dt-root .dt-portal-tile:hover { background:var(--dt-ink); color:#fff; }
+.dt-root .dt-bd-stage { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; background:#111; overflow:hidden; }
+.dt-root .dt-bd-stage img { max-width:100%; max-height:100%; object-fit:contain; filter:contrast(1.05); }
+.dt-root .dt-bd-tracks { flex:0 0 auto; display:flex; gap:6px; padding:8px 12px; border-top:1px solid var(--dt-line); flex-wrap:wrap; }
+.dt-root .dt-bd-track { padding:3px 10px; border:1px solid var(--dt-line); background:#fff; color:var(--dt-muted); cursor:pointer; font-family:var(--dt-mono); font-size:11px; text-transform:uppercase; letter-spacing:1px; }
+.dt-root .dt-bd-track.on { border-color:var(--dt-ink); color:var(--dt-ink); background:var(--dt-hover); }
+.dt-root .dt-bd-scrub { flex:0 0 auto; height:8px; margin:8px 12px; border:1px solid var(--dt-ink); cursor:pointer; }
+.dt-root .dt-bd-scrub i { display:block; height:100%; width:30%; background:var(--dt-ink); }
+.dt-root .dt-bd-ctl { flex:0 0 auto; display:flex; align-items:center; gap:12px; padding:0 12px 12px; }
+.dt-root .dt-ledger-total { display:flex; align-items:baseline; justify-content:space-between; padding:8px 0 14px; border-bottom:2px solid var(--dt-ink); margin-bottom:8px; }
+.dt-root .dt-ledger-lbl { font-family:var(--dt-head); font-size:11px; letter-spacing:2px; text-transform:uppercase; color:var(--dt-muted); }
+.dt-root .dt-ledger-big { font-family:var(--dt-head); font-size:28px; font-weight:900; }
+.dt-root .dt-ledger-bal { font-family:var(--dt-mono); font-size:14px; font-weight:700; flex:0 0 auto; }
+.dt-root .dt-ledger-tx { display:flex; justify-content:space-between; font-family:var(--dt-mono); font-size:11px; color:var(--dt-muted); padding:2px 0 2px 42px; }
+.dt-root .dt-ledger-tx .in { color:var(--dt-green); } .dt-root .dt-ledger-tx .out { color:var(--dt-red); }
+.dt-root .dt-feed-art { padding:12px 16px; border-bottom:1px solid var(--dt-line); }
+.dt-root .dt-feed-h { font-family:var(--dt-head); font-size:15px; font-weight:900; letter-spacing:.3px; text-transform:uppercase; line-height:1.15; }
+.dt-root .dt-feed-s { font-family:var(--dt-mono); font-size:12px; color:var(--dt-muted); margin-top:4px; }
+.dt-root .dt-feed-ad { display:flex; align-items:center; gap:10px; padding:10px 16px; border-bottom:1px solid var(--dt-line); background:var(--dt-hover); }
+.dt-root .dt-feed-ad img { max-height:60px; border:2px solid var(--dt-ink); }
+.dt-root .dt-feed-ad span { font-family:var(--dt-mono); font-size:9px; letter-spacing:1px; text-transform:uppercase; color:var(--dt-muted); }
+.dt-root .dt-trauma-panic { width:100%; justify-content:center; margin-bottom:10px; }
+.dt-root .dt-sniff-out { flex:1; min-height:0; overflow:auto; padding:10px 12px; font-family:var(--dt-mono); font-size:11.5px; line-height:1.5; }
+.dt-root .dt-sniff-line { white-space:pre; overflow:hidden; text-overflow:ellipsis; }
+.dt-root .dt-sniff-line.muted { color:var(--dt-muted); } .dt-root .dt-sniff-line.hi { color:var(--dt-ink); font-weight:700; } .dt-root .dt-sniff-line.tap { color:var(--dt-accent); }
+
+/* ═══════════════ extra furniture (KRAK'D tells · GM watcher · FLUX fault) ═══════════════ */
+.dt-fx-verified { position:absolute; top:20px; right:22px; z-index:8; font-family:var(--dt-mono); font-size:11px; color:var(--dt-green); border:1px solid var(--dt-green); padding:2px 8px; cursor:help; }
+.dt-fx-blip { position:absolute; left:16px; bottom:10px; z-index:8; font-family:var(--dt-mono); font-size:10px; color:var(--dt-muted); pointer-events:none; animation:dt-blip 7s ease-in-out infinite; }
+@keyframes dt-blip { 0%,86%,100% { opacity:0; } 90%,96% { opacity:.85; } }
+.dt-fx-watcher { position:absolute; left:0; right:0; bottom:0; z-index:12; padding:5px 14px; font-family:var(--dt-mono); font-size:10.5px; letter-spacing:1px; text-transform:uppercase; color:var(--dt-red); background:#fff; box-shadow:inset 0 2px 0 var(--dt-red); }
+.dt-fx-fault { position:absolute; left:14px; bottom:8px; z-index:12; padding:3px 10px; border:1px solid var(--dt-red); background:#fff; color:var(--dt-red); cursor:pointer; font-family:var(--dt-mono); font-size:11px; letter-spacing:1px; text-transform:uppercase; }
+.dt-fx-fault:hover { background:var(--dt-red); color:#fff; }
+.dt-fx-crash { position:absolute; inset:0; z-index:30000; display:flex; align-items:center; justify-content:center; background:#111; color:#fff; font-family:var(--dt-mono); text-align:center; animation:dt-crash-in .12s steps(2) both; }
+.dt-fx-crash.gone { opacity:0; transition:opacity .4s; }
+.dt-fx-crash-in { font-size:16px; letter-spacing:2px; line-height:2; }
+.dt-fx-crash-in span { font-size:12px; color:#bbb; letter-spacing:1px; }
+@keyframes dt-crash-in { from { opacity:.2; transform:translateX(3px); } to { opacity:1; transform:none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .dt-root .dt-win.dt-win-open, .dt-toast, .dt-boot.fade { animation:none !important; }
+  .dt-boot-cursor::after, .dt-fx-blip, .dt-fx-crash { animation:none; }
+}

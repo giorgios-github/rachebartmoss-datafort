@@ -19,6 +19,7 @@
 
   function esc(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   function el(id) { return document.getElementById(id); }
+  function reduceMotion() { try { return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
 
   /* ── API ── */
   function api(method, path, body) {
@@ -37,9 +38,9 @@
       el('app-shell').hidden = false;
       renderCampaigns();
     } else {
-      // Player pre-connect = the full site (offline: all tools + sourcebook
-      // reader), with a CONNECT button (injected by main.js on ?player=1) that
-      // joins a session (→ app.html?campaign&sheet session shell).
+      // Player pre-connect = the full site (offline: all tools + sourcebook reader), with a
+      // CONNECT button (injected by main.js on ?player=1) whose popup lists the GM's hosted
+      // characters to click. Unchanged entry point.
       location.href = 'index.html?player=1';
     }
   };
@@ -61,7 +62,7 @@
 
   /* Player connect — enter a campaign code + sheet id, or paste a GM link. */
   function renderPlayerConnect() {
-    setMode('manage'); showView('view-pconnect');
+    setMode('manage'); var _sh = el('app-shell'); if (_sh) _sh.classList.remove('in-session'); showView('view-pconnect');
     el('app-crumbs').innerHTML = '<span class="crumb-cur">Connect</span>';
     el('view-pconnect').innerHTML =
       '<div class="app-kicker">// JOIN A SESSION</div><h2 class="app-h">Connect to your GM</h2>' +
@@ -173,29 +174,42 @@
     endSessionConn();
     removeMonitor(); removeQdb();
     var camp0 = el('app-camp'); if (camp0) camp0.innerHTML = '';
+    var _sh = el('app-shell'); if (_sh) _sh.classList.remove('in-session');
     setMode('manage');
     showView('view-campaigns');
     el('app-crumbs').innerHTML = '<span class="crumb-cur">Campaigns</span>';
     api('GET', 'campaigns').then(function (d) {
       var cs = (d && d.campaigns) || [];
-      var pad = function (n) { return (n < 10 ? '0' : '') + n; };
-      var cards = cs.map(function (c, i) {
-        return '<div class="cmp-card" data-id="' + esc(c.id) + '">' +
-          '<div class="cmp-idx">' + pad(i + 1) + ' / ' + pad(cs.length) + '</div>' +
-          '<div class="cmp-top"><h3>' + esc(c.name) + '</h3>' +
-            '<div class="cmp-meta">' + c.sheets + ' sheet' + (c.sheets === 1 ? '' : 's') + '</div></div>' +
-          '<div class="cmp-foot"><span class="cmp-open-hint">OPEN ▸</span>' +
-            '<span class="cmp-del" data-del="' + esc(c.id) + '">delete</span></div></div>';
+      var rows = cs.map(function (c) {
+        return '<div class="roster-row" data-id="' + esc(c.id) + '" role="button" tabindex="0">' +
+          '<span class="roster-name">' + esc(c.name) + '</span>' +
+          '<span class="roster-meta">' + c.sheets + ' sheet' + (c.sheets === 1 ? '' : 's') + '</span>' +
+          '<span class="roster-open">Open</span>' +
+          '<button class="roster-del" data-del="' + esc(c.id) + '" aria-label="Delete campaign">delete</button></div>';
       }).join('');
       el('view-campaigns').innerHTML =
-        '<div class="app-kicker">// CAMPAIGNS</div>' +
-        '<h2 class="app-h">Operations roster</h2>' +
-        (cs.length ? '' : '<div class="app-empty">No campaigns yet. Spin one up to start managing sheets, NPCs and sessions.</div>') +
-        '<div class="cmp-grid">' +
-        cards + '<div class="cmp-card cmp-new" id="cmp-new"><span class="cmp-new-plus">+</span> NEW CAMPAIGN</div></div>';
+        '<div class="roster">' +
+          '<header class="roster-brand">' +
+            '<img class="roster-logo" src="img/RacheBartmoss.png" alt="Rache Bartmoss">' +
+            '<span class="roster-wordmark">DATAFORT</span>' +
+            '<div class="roster-brand-acts">' +
+              '<button class="roster-act" id="cmp-books">Books</button>' +
+              '<button class="roster-act" id="cmp-role">Switch role</button>' +
+            '</div>' +
+          '</header>' +
+          '<div class="roster-head"><h2 class="roster-title">Campaigns</h2>' +
+            (cs.length ? '<span class="roster-count">' + cs.length + '</span>' : '') +
+            '<button class="roster-new" id="cmp-new">＋ New campaign</button></div>' +
+          (cs.length
+            ? '<div class="roster-list">' + rows + '</div>'
+            : '<div class="roster-empty">No campaigns yet. Spin one up to start managing sheets, NPCs and sessions.</div>') +
+        '</div>';
       el('cmp-new').onclick = newCampaignModal;
-      el('view-campaigns').querySelectorAll('.cmp-card[data-id]').forEach(function (card) {
+      var _b = el('cmp-books'); if (_b) _b.onclick = function () { if (window.openReaderApp) window.openReaderApp(); };
+      var _r = el('cmp-role'); if (_r) _r.onclick = function () { if (window.switchRole) window.switchRole(); };
+      el('view-campaigns').querySelectorAll('.roster-row[data-id]').forEach(function (card) {
         card.onclick = function (e) { if (e.target.hasAttribute('data-del')) return; openCampaign(card.getAttribute('data-id')); };
+        card.onkeydown = function (e) { if ((e.key === 'Enter' || e.key === ' ') && !e.target.hasAttribute('data-del')) { e.preventDefault(); openCampaign(card.getAttribute('data-id')); } };
       });
       el('view-campaigns').querySelectorAll('[data-del]').forEach(function (s) {
         s.onclick = function (e) { e.stopPropagation(); var id = s.getAttribute('data-del'); confirm1('Delete campaign "' + id + '" and all its files?', function () { api('DELETE', 'campaigns/' + encodeURIComponent(id)).then(renderCampaigns); }); };
@@ -210,36 +224,46 @@
     state.campaignId = id; state.type = 'sheets'; cdHost = null; cdData = null;
     endSessionConn();
     var vc = el('view-campaign'); if (vc) vc.innerHTML = '';   // drop stale prep DOM
-    api('GET', 'campaigns/' + encodeURIComponent(id)).then(function (d) {
-      cdData = d;
-      // Sheet IDs are the base filename WITHOUT extension (the hub appends .json on
-      // save) — using the .json filename here caused Johny.json.json.json cascades.
-      var order = ((d.docs && d.docs.sheets) || []).map(function (x) { return String(x.name).replace(/(\.json)+$/i, ''); });
-      order = order.filter(function (v, i) { return order.indexOf(v) === i; });   // dedupe cascaded junk
-      openRunTable(id, order);
+    // v2 data layer: bind the campaign context, run the one-shot migration
+    // (no-op once schemaVersion >= 2), then load the registries.
+    var ready = Promise.resolve();
+    if (window.App && window.Migrate) {
+      App.setCampaign(id, 'gm');
+      ready = Migrate.run(id).catch(function (e) { console.error('[Migrate]', e); })
+        .then(function () { return App.getMeta(true); })
+        .then(function (meta) {
+          App.uiLoad(meta);
+          if (window.Store) { Store.idIndexLoad(meta); Store.propsLoad(meta); Store.invalidate(); }
+          if (window.Links) Links.invalidate();
+        })
+        .then(function () { if (window.Store) return refreshShopDocs(); })   // shops resolve synchronously in location/npc/org menus
+        .catch(function (e) { console.error('[App boot]', e); });
+    }
+    ready.then(function () {
+      return api('GET', 'campaigns/' + encodeURIComponent(id)).then(function (d) {
+        cdData = d;
+        // Sheet IDs are the base filename WITHOUT extension (the hub appends .json on
+        // save) — using the .json filename here caused Johny.json.json.json cascades.
+        var order = ((d.docs && d.docs.sheets) || []).map(function (x) { return String(x.name).replace(/(\.json)+$/i, ''); });
+        order = order.filter(function (v, i) { return order.indexOf(v) === i; });   // dedupe cascaded junk
+        openRunTable(id, order);
+      });
     }).catch(function () { openRunTable(id, []); });
   }
   function openRunTable(id, order) {
     sess.id = id; sess.role = 'gm'; sess.hosted = order.slice(); sess.order = order.slice(); sess.cols = {};
-    sess.active = order[0] || null; sess.section = 'party'; sess.live = false; sess.activeSessionId = null;
-    sess.tabs = null; sess.activeTab = null;   // fresh tab set per campaign
+    sess.active = order[0] || null; sess.section = 'party'; sess.live = true; sess.activeSessionId = null;
+    sess.tabs = null; sess.activeTab = null;   // Shell restores per-campaign tabs from meta.ui
     state.campaignId = id;
     var vc = el('view-campaign'); if (vc) vc.innerHTML = '';
-    setMode('manage'); showView('view-session');
+    setMode('active'); showView('view-session');
     el('app-crumbs').innerHTML = '<a id="crumb-home">Campaigns</a> <span class="crumb-sep">/</span> <span class="crumb-cur">' + esc(id) + '</span>';
     var ch = el('crumb-home'); if (ch) ch.onclick = function () { renderCampaigns(); };
     joinSession(id, { name: 'GM', role: 'gm' });
     pushCampaignLocations(id);
     renderSessionShell();
   }
-  // Toggle live casting (replaces the old GO LIVE / End-session flow).
-  function setLive(v) {
-    sess.live = !!v;
-    setMode(v ? 'active' : 'manage');
-    if (sess.camp && sess.camp.setOverview) sess.camp.setOverview({ live: !!v });
-    try { saveSessionMeta(sess.id, { active: !!v }); } catch (e) {}
-    renderSessionShell();
-  }
+  // Always-live: the old GO LIVE toggle is gone — opening a campaign hosts it.
 
   /* ── Campaign = Prep board (sidebar of prep modules) ── */
   var cdData = null, cdSection = 'events', cdEventSel = null;
@@ -354,7 +378,6 @@
     var ev = item(prep().events, cdEventSel);
     if (!ev.id) { box.innerHTML = '<div class="cd-empty">Select or add a reveal.</div>'; return; }
     var npcDocs = (cdData.docs && cdData.docs.npcs) || [];
-    var clocks = prep().clocks;
     var blocks = evBlocks(ev);
     var SZ = ['s', 'm', 'l', 'xl', 'full'], AL = ['left', 'center', 'right'];
     var npcOpts = '<option value="">— NPC portrait —</option>' + npcDocs.map(function (d) { return '<option value="' + esc(d.name) + '">' + esc(idOf(d.name)) + '</option>'; }).join('');
@@ -384,10 +407,8 @@
       '<input class="ses-name ev-title" id="ev-title" value="' + esc(ev.title || '') + '" placeholder="Event title (e.g. INCOMING CALL)">' +
       '<div class="ev-row"><div class="ov-lbl">QUICK LAYOUTS</div><div class="ev-presets">' + tplBtns + '</div></div>' +
       '<div class="ev-row"><div class="ov-lbl">BLOCKS</div><div class="ev-blocks">' + (blocks.length ? blocks.map(blockRow).join('') : '<div class="cd-empty">No blocks yet. Add an image or text, or pick a quick layout.</div>') + '</div>' +
-        '<div class="ev-addrow"><button class="app-btn" id="ev-addimg">+ Image</button><button class="app-btn" id="ev-addtext">+ Text</button></div></div>' +
-      '<div class="ev-row"><div class="ov-lbl">AUTO-TRIGGER</div><div class="ev-trig">when clock ' +
-        '<select id="ev-clk"><option value="">— none —</option>' + clocks.map(function (k) { return '<option value="' + k.id + '"' + (ev.trigger && ev.trigger.clockId === k.id ? ' selected' : '') + '>' + esc(k.label || 'clock') + '</option>'; }).join('') + '</select>' +
-        ' drops below <input type="number" id="ev-below" min="0" style="width:56px" value="' + (ev.trigger ? (ev.trigger.below != null ? ev.trigger.below : 1) : 1) + '"></div></div>';
+        '<div class="ev-addrow"><button class="app-btn" id="ev-addimg">+ Image</button><button class="app-btn" id="ev-addtext">+ Text</button></div></div>';
+      // AUTO-TRIGGER config removed — triggers are authored as CAST rule docs (RULES rail).
     el('ev-title').onchange = function () { ev.title = el('ev-title').value; savePrep(cdRerender); };
     box.querySelectorAll('[data-tpl]').forEach(function (b) { b.onclick = function () { var t = EV_TEMPLATES.filter(function (x) { return x.k === b.getAttribute('data-tpl'); })[0]; if (t) { ev.blocks = t.make(); savePrep(cdRerender); } }; });
     el('ev-addimg').onclick = function () { blocks.push(_blImg('', 'm')); savePrep(cdRerender); };
@@ -409,8 +430,6 @@
       var nm = sel.value, b = bi(sel, 'data-bnpc'); if (!nm) return;
       fetch('/__api/campaigns/' + encodeURIComponent(state.campaignId) + '/npcs/' + encodeURIComponent(nm)).then(function (r) { return r.json(); }).then(function (j) { b.src = (j && j.photo) || b.src || ''; if (!b.cam) b.cam = 'ID ● ' + idOf(nm); savePrep(cdRerender); }).catch(function () {});
     }; });
-    function saveTrig() { var cid = el('ev-clk').value; ev.trigger = cid ? { clockId: cid, below: parseInt(el('ev-below').value, 10) || 0 } : null; savePrep(); }
-    el('ev-clk').onchange = saveTrig; el('ev-below').onchange = saveTrig;
     if (window.FilmWindow && window.FilmWindow.preview) window.FilmWindow.preview(el('ev-preview'), eventReveal(ev));
   }
   function eventReveal(ev) { return { kind: 'event', title: ev.title || '', tabs: ev.tabs || null, blocks: evBlocks(ev), ts: Date.now() }; }
@@ -550,6 +569,16 @@
     setMode('active'); showView('view-session');
     el('app-crumbs').innerHTML = '<span class="crumb-cur">' + esc(id) + '</span>';
     joinSession(id, { name: sheetId || 'Player', role: 'player' });
+    // v2 read-only data layer for the player shell (public entities, links, props).
+    // Players never migrate — if the GM hasn't opened the campaign in v2 yet, views are just empty.
+    if (window.App) {
+      App.setCampaign(id, 'player');
+      App.getMeta(true).then(function (meta) {
+        App.uiLoad({});   // players don't restore GM UI memory
+        if (window.Store) { Store.idIndexLoad(meta); Store.propsLoad(meta); Store.invalidate(); }
+        if (window.Links) Links.invalidate();
+      }).then(function () { if (window.Store) return refreshShopDocs(); }).catch(function () {});
+    }
     renderSessionShell();
   }
   function joinSession(id, member) {
@@ -561,11 +590,13 @@
       syncCombatBtn();
       var m = sess.camp.combatMeta() || {};
       if (!m.active && el('cbt-overlay')) closeCombatStage();
-      // Player: combat auto-opens as a tab when the GM launches it.
-      if (sess.role !== 'gm' && sess.tabs) {
+      // Player: combat auto-opens when the GM launches it.
+      if (sess.role !== 'gm') {
         if (m.active) openTool('combat');
-        else { var at = activeTab(); if (at && at.tool === 'combat') openTool('sheet'); }
+        else if (window.Shell && Shell.activeToolId && Shell.activeToolId() === 'combat') openTool('sheet');
       }
+      if (window.Shell && Shell.state && Shell.state().active === 'combat') Shell.renderTabContent();
+      renderCombatPill();
       updateOverviewActions();
     });
     sess.camp.onStatus(function (st) { var e = el('app-status'); if (e) { e.textContent = st === 'connected' ? 'Hub · live' : st; e.className = 'app-status' + (st === 'connected' ? ' on' : ''); } });
@@ -607,86 +638,59 @@
     { id: 'database', label: 'Database', glyph: '▤', sub: 'Reference' },
   ];
   var TOOL_ALIAS = { players: 'party', mysheet: 'sheet', table: 'cast', locations: 'map', encounter: 'combat', generators: 'combat', bestiary: 'npc', studio: 'npc' };
+  var ENTITY_GLYPH = { sheet: '⒜', npc: '☺', org: '⌗', shop: '▣', location: '▦' };
   function toolDefs() { return sess.role === 'gm' ? TOOLS_GM : TOOLS_PLAYER; }
   function toolMeta(id) { var all = TOOLS_GM.concat(TOOLS_PLAYER); for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i]; return { id: id, label: id, glyph: '·' }; }
-  function activeTab() { return (sess.tabs || []).filter(function (t) { return t.id === sess.activeTab; })[0] || null; }
-  function activeToolId() { var t = activeTab(); return t ? t.tool : null; }
+  function activeTab() { return window.Shell ? Shell.activeTab() : null; }
+  function activeToolId() { return window.Shell ? Shell.activeToolId() : null; }
 
   function renderSessionShell() {
-    // Merged top bar: campaign controls live in #app-camp (one bar with brand/status).
-    var camp = el('app-camp');
-    if (camp) {
-      var live = !!sess.live, paused = sess.camp && sess.camp.isPaused && sess.camp.isPaused();
-      camp.innerHTML = (sess.role === 'gm'
-        ? '<span class="ws-mode ' + (live ? 'ws-mode-live' : 'ws-mode-prep') + '">' + (live ? '● LIVE' : 'PREP') + '</span>' +
-          '<button class="app-btn ' + (live ? 'app-btn-danger' : 'app-btn-go') + '" id="sess-live">' + (live ? 'End live' : 'Go live') + '</button>' +
-          '<button class="app-btn" id="sess-share">Share</button>' +
-          (live ? '<button class="app-btn" id="sess-pause">' + (paused ? 'Resume' : 'Pause') + '</button>' : '')
-        : '<button class="app-btn app-btn-danger" id="sess-leave">Leave</button>');
-      if (sess.role === 'gm') {
-        el('sess-live').onclick = function () { setLive(!sess.live); };
-        el('sess-share').onclick = shareLinks;
-        var pb = el('sess-pause'); if (pb) pb.onclick = function () { if (!(sess.camp && sess.camp.setPaused)) return; var p = !sess.camp.isPaused(); sess.camp.setPaused(p); saveSessionMeta(sess.id, { paused: p }); renderSessionShell(); };
-      } else { el('sess-leave').onclick = function () { endSessionConn(); renderPlayerConnect(); }; }
-    }
-    // Init tabs: GM → Party, Player → Sheet.
-    if (!sess.tabs || !sess.tabs.length) { sess.tabs = [{ id: uid('tab'), tool: sess.role === 'gm' ? 'party' : 'sheet' }]; sess.activeTab = sess.tabs[0].id; }
-    el('view-session').innerHTML =
-      '<div id="sess-paused-bar">' + (sess.camp && sess.camp.isPaused && sess.camp.isPaused() ? '<div class="sess-paused">SESSION PAUSED — players see a PAUSED banner.</div>' : '') + '</div>' +
-      '<div class="tab-bar" id="tab-bar"></div>' +
-      '<div class="tab-content" id="tab-content"></div>';
-    renderTabs();
-    updateOverviewActions();
-    renderMonitor();
-  }
-  function renderTabs() {
-    var bar = el('tab-bar'); if (!bar) return;
-    bar.innerHTML = (sess.tabs || []).map(function (t) {
-      var label = t.tool ? toolMeta(t.tool).label : 'New tab';
-      return '<div class="tab' + (t.id === sess.activeTab ? ' active' : '') + '" data-tab="' + t.id + '" draggable="true">' +
-        '<span class="tab-l">' + esc(label) + '</span>' +
-        '<button class="tab-x" data-tabx="' + t.id + '" title="Close">✕</button></div>';
-    }).join('') + '<button class="tab-add" id="tab-add" title="New tab">＋</button>';
-    bar.querySelectorAll('[data-tab]').forEach(function (d) {
-      d.onclick = function (e) { if (e.target.hasAttribute('data-tabx')) return; sess.activeTab = d.getAttribute('data-tab'); renderTabs(); };
-      d.ondragstart = function (e) { e.dataTransfer.setData('text/plain', d.getAttribute('data-tab')); };
-      d.ondragover = function (e) { e.preventDefault(); };
-      d.ondrop = function (e) { e.preventDefault(); var from = e.dataTransfer.getData('text/plain'), to = d.getAttribute('data-tab'); reorderTab(from, to); };
+    // The six-section shell (js/app-shell.js) owns the session workspace.
+    // app.js hands it a bridge into the internal renderers it still hosts.
+    if (!window.Shell) return;
+    Shell.bind({
+      sess: sess,
+      menuNav: !!(window.bartmoss && window.bartmoss.onNavShortcut),
+      toolRender: toolRender,
+      entityRender: entityRender,
+      ensureCdData: ensureCdData,
+      renderCrumbs: renderCrumbs,
+      renderMonitor: renderMonitor,
+      qdbEnsure: qdbEnsure,
+      campName: campName,
+      shareLinks: shareLinks,
+      renderCampaigns: renderCampaigns,
+      // Player leaves → back to the site (offline tools + the CONNECT popup), not the app card.
+      leaveSession: function () { endSessionConn(); location.href = 'index.html?player=1'; },
+      sessions: sessions,
+      fmtTime: fmtTime,
+      startNewSession: function (done) {
+        var s = newSession(); sessions().push(s); sess.activeSessionId = s.id;
+        saveSessions(function () { logSession('— new session —'); if (done) done(); });
+      },
+      castReveal: castReveal,
+      archetypeGenModal: function (ctx) { archetypeGenModal(ctx); },
+      orgGenModal: function (ctx) { orgGenModal(ctx); },
+      clockViz: function (style, v, m, col, size) { return clockViz(style, v, m, col, size); },
+      logSession: function (msg) { try { logSession(msg); } catch (e) {} },
+      idOf: idOf,
+      shopWriteItem: function (json, it) { return shopWriteItem(json, it); },
+      openMyStore: function () { sess.shopMode = 'sell'; sess.shopSel = null; openTool('shop', true); },
     });
-    bar.querySelectorAll('[data-tabx]').forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); closeTab(b.getAttribute('data-tabx')); }; });
-    el('tab-add').onclick = function () { var nt = { id: uid('tab'), tool: null }; sess.tabs.push(nt); sess.activeTab = nt.id; renderTabs(); };
-    renderTabContent();
+    Shell.mount();
+    updateOverviewActions();
   }
-  function reorderTab(fromId, toId) {
-    if (fromId === toId) return;
-    var arr = sess.tabs, fi = arr.map(function (t) { return t.id; }).indexOf(fromId), ti = arr.map(function (t) { return t.id; }).indexOf(toId);
-    if (fi < 0 || ti < 0) return; var m = arr.splice(fi, 1)[0]; arr.splice(ti, 0, m); renderTabs();
-  }
-  function closeTab(id) {
-    var arr = sess.tabs, i = arr.map(function (t) { return t.id; }).indexOf(id); if (i < 0) return;
-    arr.splice(i, 1);
-    if (!arr.length) { arr.push({ id: uid('tab'), tool: sess.role === 'gm' ? 'party' : 'sheet' }); }
-    if (sess.activeTab === id) sess.activeTab = arr[Math.max(0, i - 1)].id;
-    renderTabs();
-  }
-  function renderTabContent() {
-    var host = el('tab-content'); if (!host) return;
-    host.className = 'tab-content';
-    var t = activeTab();
-    if (!t) { host.innerHTML = ''; qdbEnsure(); return; }
-    if (!t.tool) { renderLauncher(host); qdbEnsure(); return; }
-    toolRender(t.tool, host);
-    renderMonitor();
-    qdbEnsure();
-  }
-  function renderLauncher(host) {
-    host.className = 'tab-content tab-launcher';
-    host.innerHTML = '<div class="tab-launch-inner">' + rtHead('＋', 'Open a tool', 'Pick what to load in this tab', '') +
-      '<div class="launch-grid">' + toolDefs().map(function (d) {
-        return '<button class="launch-card" data-launch="' + d.id + '"><span class="launch-l">' + esc(d.label) + '</span><span class="launch-s">' + esc(d.sub) + '</span></button>';
-      }).join('') + '</div></div>';
-    host.querySelectorAll('[data-launch]').forEach(function (b) { b.onclick = function () { var t = activeTab(); if (t) { t.tool = b.getAttribute('data-launch'); renderTabs(); } }; });
-  }
+  /* ── Tab/session machinery now lives in js/app-shell.js (six-section shell).
+     Slim delegators keep every legacy call site + the palette contract working. ── */
+  function renderTabs() { if (window.Shell) Shell.renderTabs(); }
+  function activatePane() { if (window.Shell) Shell.activatePane(); }
+  function renderTabContent() { if (window.Shell) Shell.renderTabContent(); }
+  function paneEl(id) { return window.Shell ? Shell.paneEl(id) : null; }
+  function activeHost() { return window.Shell ? Shell.activeHost() : null; }
+  function navNewTab() { if (window.Shell) Shell.navNewTab(); }
+  function navNthTab(n) { }   // ⌘1..9→tabs retired (⌘1..6 = sections); kept for palette compat
+  function navCloseActive() { if (window.Shell) Shell.navCloseActive(); }
+  function navReopen() { if (window.Shell) Shell.navReopen(); }
   function toolRender(tool, host) {
     host.innerHTML = '';
     if (tool === 'combat' && sess.role !== 'gm') {   // players: live combat view (auto-opened)
@@ -708,22 +712,31 @@
     if (tool === 'log') return renderLog(host);
     host.innerHTML = '<div class="app-empty">Unknown tool.</div>';
   }
-  // Open a tool: focus its tab if open, else fill the active empty tab, else new tab.
-  function openTool(tool) {
-    tool = TOOL_ALIAS[tool] || tool;
-    if (!sess.tabs) sess.tabs = [];
-    var ex = sess.tabs.filter(function (t) { return t.tool === tool; })[0];
-    if (ex) { sess.activeTab = ex.id; }
-    else { var act = activeTab(); if (act && !act.tool) act.tool = tool; else { var nt = { id: uid('tab'), tool: tool }; sess.tabs.push(nt); sess.activeTab = nt.id; } }
-    renderTabs();
+  // Open a tool: routed to its section by the Shell.
+  function openTool(tool, force) {
+    if (window.Shell) Shell.openTool(TOOL_ALIAS[tool] || tool, force);
+  }
+  // Open a specific ENTITY (sheet / npc / org) as its own persistent tab. Entity
+  // panes are isolated iframes, so several can coexist with no fixed-id clashes.
+  function openEntity(kind, ref, label) {
+    if (window.Shell) Shell.openEntity(kind, ref, label || idOf(ref));
+  }
+  function entityRender(t, host) {
+    host.className = 'tab-content sess-sec-files';
+    var url;
+    if (t.kind === 'sheet') url = frameSrc(t.ref);
+    else if (t.kind === 'npc') url = 'npc-sheet.html?cdoc=1&cid=' + encodeURIComponent(sess.id) + '&ctype=npcs&cname=' + encodeURIComponent(t.ref);
+    else if (t.kind === 'org') url = 'organisations.html?cdoc=1&cid=' + encodeURIComponent(sess.id) + '&ctype=orgs&cname=' + encodeURIComponent(t.ref);
+    if (!url) { host.innerHTML = '<div class="app-empty">Unknown entity.</div>'; return; }
+    host.innerHTML = '<iframe class="ent-frame" src="' + esc(url) + '"></iframe>';
   }
   function gotoSection(key) { openTool(key); }   // legacy callers → open a tab
   // Cross-nav: open the Shop tool focused on a shop linked to a given NPC / org / location.
-  function shopsLinkedTo(type, ref) { return (prep().shops || []).filter(function (s) { return s.link && s.link.type === type && s.link.ref === ref; }); }
+  function shopsLinkedTo(type, ref) { return _shopDocs.map(function (r) { return r.json; }).filter(function (s) { return s.link && s.link.type === type && s.link.ref === ref; }); }
   function openShopFor(type, ref) {
     var matches = shopsLinkedTo(type, ref);
     if (matches.length) sess.shopSel = matches[0].id;
-    openTool('shop');
+    openTool('shop', true);   // force re-render so the focused shop reflects the new selection
   }
   /* ── Run Table shared components (handoff DS, vanilla) ── */
   // Proper NPC names (street handle + real name) so generated NPCs aren't "Ganger \"Razor\"".
@@ -737,17 +750,23 @@
     return '<div class="rt-head"><span class="rt-head-title">' + esc(title) + '</span>' +
       (acts ? '<span class="rt-head-act">' + acts + '</span>' : '') + '</div>';
   }
-  // Cast a reveal to the players (gated by LIVE). Reuses the overview→FilmWindow channel.
+  // Cast a reveal to the players — always live: the campaign being open IS the session.
   function castReveal(reveal) {
-    if (!sess.live) { alert('Go live first (top bar) to cast to the players.'); return false; }
     if (sess.camp && sess.camp.setOverview) { reveal.ts = Date.now(); sess.camp.setOverview({ reveal: reveal }); renderMonitor(); }
+    if (typeof logSession === 'function') { try { logSession('⇄ Cast : ' + (reveal.title || 'reveal')); } catch (e) {} }
     return true;
   }
   // GM ON AIR control monitor (bottom-right): a live scaled preview of the cast.
+  var _monKey = null;
   function renderMonitor() {
     var existing = el('rt-monitor');
-    if (sess.role !== 'gm' || activeToolId() === 'cast') { if (existing) existing.parentNode.removeChild(existing); return; }
+    if (sess.role !== 'gm' || activeToolId() === 'cast') { if (existing) existing.parentNode.removeChild(existing); _monKey = null; return; }
     var rev = ovGet().reveal, on = !!rev;
+    // Same broadcast + same fold state → keep the DOM (activatePane calls this
+    // on every tab switch; rebuilding remounted the preview each time).
+    var key = (on ? 'on:' + (rev.ts || rev.title || '') : 'off') + (sess.monMin ? ':min' : '');
+    if (existing && key === _monKey) return;
+    _monKey = key;
     var m = existing || document.createElement('div');
     if (!existing) { m.id = 'rt-monitor'; document.body.appendChild(m); }
     var min = !!sess.monMin;
@@ -761,9 +780,11 @@
     el('rt-mon-x').onclick = function () { if (sess.camp && sess.camp.setOverview) sess.camp.setOverview({ reveal: null }); renderMonitor(); };
     if (!min && on && window.FilmWindow && window.FilmWindow.preview) window.FilmWindow.preview(el('rt-mon-screen'), rev);
   }
-  function removeMonitor() { var m = el('rt-monitor'); if (m) m.parentNode.removeChild(m); }
-  /* Quick database — a floating square button (any tool page) opening a 25vw search popup. */
+  function removeMonitor() { var m = el('rt-monitor'); if (m) m.parentNode.removeChild(m); _monKey = null; }
+  /* Quick database — retired in the aside shell (search + Corpus → Database
+     cover it); keep only the teardown so no hidden DOM piles up per pane. */
   function qdbEnsure() {
+    if (document.body.classList.contains('asd-live')) { removeQdb(); return; }
     var t = activeTab(), show = t && t.tool;
     if (!show) { removeQdb(); return; }
     if (el('qdb-btn')) return;
@@ -902,9 +923,19 @@
             '<span style="color:var(--text2)">' + esc((s.role || '') + ' · REF ' + s.stats.REF + ' · BODY ' + s.stats.BODY + ' · ' + wpn) + '</span></div>';
         }).join('');
         el('sq-out').innerHTML = '<div class="rt-panel"><div class="rt-panel-head">Squad (' + team.length + ')' +
-          '<span class="rt-panel-act"><button class="rt-btn" id="sq-combat">+ Add to combat</button><button class="rt-btn" id="sq-save">Save all</button></span></div>' +
+          '<span class="rt-panel-act"><button class="rt-btn" id="sq-combat">+ Add to combat</button><button class="rt-btn" id="sq-lib">Save as squad</button><button class="rt-btn" id="sq-save">Save NPCs</button></span></div>' +
           '<div class="rt-panel-body">' + rows + '</div></div>';
         el('sq-save').onclick = function () { saveGeneratedNPCs(sess.id, team); el('sq-save').textContent = 'Saved ✓'; };
+        // Persist the squad CONFIG to the library (squads/ docs) — loadable in combat setup.
+        el('sq-lib').onclick = function () {
+          if (!window.Store) return;
+          var dflt = (G.list().filter(function (a) { return a.id === el('sq-arch').value; })[0] || {}).label || 'Squad';
+          window.App.prompt('Save as squad', 'Squad name', dflt, function (name) {
+            if (!name) return;
+            Store.create('squad', { name: name, members: team.map(function (s) { return { kind: 'mook', sheet: s, count: 1 }; }), settings: {}, props: {} })
+              .then(function () { var b = el('sq-lib'); if (b) b.textContent = 'Squad ✓'; });
+          });
+        };
         el('sq-combat').onclick = function () { var n = 0; team.forEach(function (s) { n = addToCombat(s); }); el('sq-combat').textContent = '✓ queued (' + n + ')'; };
       });
     };
@@ -1107,7 +1138,7 @@
   // Open a full HTML tool to create a NEW doc, then persist via the cdoc adapter.
   // Embed a doc editor (cdoc bridge) full-page in the ACTIVE tab; ← Back re-renders the tab.
   function openDocEmbed(type, name, tool) {
-    var host = el('tab-content'); if (!host) return;
+    var host = activeHost(); if (!host) return;
     var backTool = activeToolId();
     var url = tool + '?cdoc=1&cid=' + encodeURIComponent(sess.id) + '&ctype=' + type + '&cname=' + encodeURIComponent(name);
     host.className = 'tab-content';
@@ -1121,7 +1152,7 @@
     };
   }
   function openToolEmbed(url, name) {
-    var host = el('tab-content'); if (!host) return;
+    var host = activeHost(); if (!host) return;
     var backTool = activeToolId();
     host.className = 'tab-content';
     host.innerHTML = '<div class="cd-embed"><div class="cd-embed-bar"><button class="app-btn" id="se-back">← Back</button><span class="cd-embed-name">' + esc(name) + '</span></div><iframe class="cd-embed-frame" src="' + esc(url) + '"></iframe></div>';
@@ -1153,7 +1184,7 @@
           api('POST', 'campaigns/' + encodeURIComponent(sess.id) + '/npcs', { name: name, json: {} }).then(function () { openDocEmbed('npcs', name, 'npc-sheet.html'); });
         });
       };
-      el('be-gen').onclick = function () { if (window.archetypeGenModal) archetypeGenModal({ onSave: function (sheets) { saveGeneratedNPCs(sess.id, sheets, function () { renderBestiary(panel); }); } }); };
+      el('be-gen').onclick = function () { archetypeGenModal({ onSave: function (sheets) { saveGeneratedNPCs(sess.id, sheets, function () { renderBestiary(panel); }); } }); };
       el('be-out').onclick = function () { openToolEmbed('outfit-designer.html', 'Outfit Designer'); };
     }
     api('GET', 'campaigns/' + encodeURIComponent(sess.id)).then(function (d) {
@@ -1185,7 +1216,7 @@
         }).join('');
         el('be-list').innerHTML = (npcRows + contactRows) || '<div class="app-empty">No NPC matches.</div>';
         function mark(b) { el('be-list').querySelectorAll('.file-row,.be-open').forEach(function (x) { x.classList.remove('active'); }); b.classList.add('active'); }
-        el('be-list').querySelectorAll('[data-npc]').forEach(function (b) { b.onclick = function () { mark(b); if (gm) beOpen(b.getAttribute('data-npc')); else beDossier(b.getAttribute('data-npc')); }; });
+        el('be-list').querySelectorAll('[data-npc]').forEach(function (b) { b.onclick = function (e) { if (e.metaKey || e.ctrlKey) { peekNpc(b.getAttribute('data-npc')); return; } mark(b); if (gm) openEntity('npc', b.getAttribute('data-npc'), idOf(b.getAttribute('data-npc'))); else beDossier(b.getAttribute('data-npc')); }; });
         el('be-list').querySelectorAll('[data-contact]').forEach(function (b) { b.onclick = function () { mark(b); beContact(contacts[+b.getAttribute('data-contact')]); }; });
         el('be-list').querySelectorAll('[data-bereveal]').forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); var nm = b.getAttribute('data-bereveal'); fetch('/__api/campaigns/' + encodeURIComponent(sess.id) + '/npcs/' + encodeURIComponent(nm)).then(function (r) { return r.json(); }).then(function (s) { castReveal({ kind: 'event', preset: 'dossier', title: idOf(nm), portrait: (s && s.photo) || '', text: (s && (s.notes || s.role)) || '' }); }); }; });
         el('be-list').querySelectorAll('[data-bepub]').forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); var nm = b.getAttribute('data-bepub'); ensureCdData(function () { var p = prep().npcPublic || (prep().npcPublic = []); var i = p.indexOf(nm); if (i >= 0) p.splice(i, 1); else p.push(nm); savePrep(function () { renderBestiary(panel); }); }); }; });
@@ -1195,10 +1226,32 @@
           r.ondragover = function (e) { e.preventDefault(); };
           r.ondrop = function (e) { e.preventDefault(); reorderNpc(e.dataTransfer.getData('text/plain'), r.getAttribute('data-name'), npcs, panel); };
         });
+        if (window.CtxMenu) el('be-list').querySelectorAll('[data-npc]').forEach(function (b) { CtxMenu.attach(b, function () { return bestiaryNpcMenu(b.getAttribute('data-npc'), panel); }); });
       }
       paint('');
       el('be-search').oninput = function () { paint(el('be-search').value); };
     });
+  }
+  function bestiaryNpcMenu(nm, panel) {
+    if (!nm) return null;
+    function fetchNpc(then) { fetch('/__api/campaigns/' + encodeURIComponent(sess.id) + '/npcs/' + encodeURIComponent(nm)).then(function (r) { return r.json(); }).then(then).catch(function () {}); }
+    if (sess.role === 'gm') {
+      var isPub = (prep().npcPublic || []).indexOf(nm) >= 0;
+      var items = [
+        { label: 'Peek', icon: '⊙', onClick: function () { peekNpc(nm); } },
+        { label: 'Open (edit sheet)', icon: '⒝', onClick: function () { openEntity('npc', nm, idOf(nm)); } },
+        { label: 'Reveal to players', icon: '⊡', onClick: function () { fetchNpc(function (s) { castReveal({ kind: 'event', preset: 'dossier', title: idOf(nm), portrait: (s && s.photo) || '', text: (s && (s.notes || s.role)) || '' }); }); } },
+        { label: 'Add to combat', icon: '◎', onClick: function () { fetchNpc(function (s) { if (s) addToCombat(s); }); } },
+        { label: isPub ? 'Make private' : 'Make public', icon: isPub ? '◉' : '◌', onClick: function () { ensureCdData(function () { var p = prep().npcPublic || (prep().npcPublic = []); var i = p.indexOf(nm); if (i >= 0) p.splice(i, 1); else p.push(nm); savePrep(function () { renderBestiary(panel); }); }); } }
+      ];
+      if (shopsLinkedTo('npc', idOf(nm))[0]) items.push({ label: 'Open linked shop', icon: '▣', onClick: function () { openShopFor('npc', idOf(nm)); } });
+      items.push({ sep: true });
+      items.push({ label: 'Delete NPC', icon: '✕', danger: true, onClick: function () { confirm1('Delete NPC "' + idOf(nm) + '"?', function () { api('DELETE', 'campaigns/' + encodeURIComponent(sess.id) + '/npcs/' + encodeURIComponent(nm)).then(function () { renderBestiary(panel); }); }); } });
+      return items;
+    }
+    var pitems = [{ label: 'Peek', icon: '⊙', onClick: function () { peekNpc(nm); } }, { label: 'View dossier', icon: '⒝', onClick: function () { beDossier(nm); } }];
+    if (shopsLinkedTo('npc', idOf(nm))[0]) pitems.push({ label: 'Open shop', icon: '▣', onClick: function () { openShopFor('npc', idOf(nm)); } });
+    return pitems;
   }
   function beDossier(name) {
     var host = el('be-dossier'); if (!host) return;
@@ -1264,26 +1317,155 @@
   }
   function studioOpenDocFrom(secKey, type, name, tool) { openDocEmbed(type, name, tool); }
 
-  /* ── Combat tab = encounter + combatant/squad generators ── */
+  /* ── COMBAT section — one full-page setup surface (no tabs, no modal).
+     FORCES on the left (party, campaign NPCs, squads, quick mook, generator),
+     READY LIST + RULES on the right, one big START COMBAT. ── */
   function renderCombatTab(host) {
-    var tab = sess.combatTab || 'setup';
     var m = (sess.camp && sess.camp.combatMeta && sess.camp.combatMeta()) || {};
-    host.innerHTML = rtHead('◎', 'Combat', 'Encounter · generate · squads — launch a fight',
-      '<button class="rt-btn ' + (m.active ? 'rt-btn--red' : 'rt-btn--green') + '" id="cb-launch">' + (m.active ? 'Resume combat' : 'Set up combat') + '</button>') +
-      '<div class="rt-tabs">' + [['setup', 'Setup'], ['combatant', 'Combatant'], ['squad', 'Squad']].map(function (t) { return '<button class="rt-tab' + (t[0] === tab ? ' active' : '') + '" data-cbtab="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div><div id="cb-body"></div>';
-    el('cb-launch').onclick = sessCombat;
-    host.querySelectorAll('[data-cbtab]').forEach(function (b) { b.onclick = function () { sess.combatTab = b.getAttribute('data-cbtab'); renderCombatTab(host); }; });
-    var body = el('cb-body');
-    if (tab === 'combatant') renderGenCombatant(body);
-    else if (tab === 'squad') renderGenSquad(body);
-    else {
-      var q = (sess.pendingCombat || []).length;
-      body.innerHTML = '<div class="rt-panel"><div class="rt-panel-head">Status</div><div class="rt-panel-body">' +
-        (m.active ? '<div class="rt-rowline"><span>Combat is <b>live</b></span><span>round ' + (m.round || 1) + '</span></div>' : '<div class="app-empty">No active combat. Set up picks your players + any queued combatants.</div>') +
-        '<div class="rt-rowline"><span>Queued combatants</span><span>' + q + (q ? ' <button class="rt-link" id="cb-clr">clear</button>' : '') + '</span></div>' +
-        '<p style="font-family:var(--mono);font-size:12px;color:var(--text2);margin-top:10px;line-height:1.6">Generate a <b>Combatant</b> or <b>Squad</b> → <b>+ Add to combat</b> queues them; <b>Set up combat</b> drops them into initiative with your players.</p></div></div>';
-      var c = el('cb-clr'); if (c) c.onclick = function () { sess.pendingCombat = []; renderCombatTab(host); };
+    if (m.active) {
+      host.className = 'tab-content cb-page';
+      host.innerHTML = '<div class="cb-topbar">COMBAT</div><div class="cb-live"><div class="cb-live-t">COMBAT IS LIVE</div>' +
+        '<div class="cb-live-s">Round ' + (m.round || 1) + ' · ' + ((m.order || []).length) + ' combatants</div>' +
+        '<button class="cb-start" id="cb-resume">RESUME COMBAT</button>' +
+        '<button class="dt-btn" id="cb-end" style="margin-top:10px">End combat</button></div>';
+      el('cb-resume').onclick = openCombatStage;
+      el('cb-end').onclick = function () { if (sess.camp && sess.camp.setCombatMeta) { sess.camp.setCombatMeta({ active: false }); renderCombatTab(host); } };
+      return;
     }
+    host.className = 'tab-content cb-page';
+    // POOL (main, left) = the encounter being built. SOURCES (right) = the
+    // potential combatants you drag in. RULES = a compact strip above START.
+    host.innerHTML = '<div class="cb-topbar">COMBAT</div><div class="cb-cols">' +
+      '<div class="cb-pool-wrap">' +
+        '<div class="cb-h">THE POOL <span id="cb-ready-n"></span><i class="cb-hint">the encounter — drag combatants in</i></div>' +
+        '<div class="cb-pool" id="cb-pool"></div>' +
+        '<div class="cb-rules-strip">' +
+          '<label>MODE <select id="cbs-mode"><option value="hybrid">Hybrid — players act their turns</option><option value="gm">GM — GM resolves everything</option></select></label>' +
+          '<label>NPC VIS <select id="cbs-vis"><option value="full">Full</option><option value="status">Status only</option><option value="name">Name only</option></select></label>' +
+          '<button class="cb-start" id="cb-start">START COMBAT ▸</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="cb-forces" id="cb-forces"><div class="app-empty">Loading…</div></div>' +
+    '</div>';
+
+    var ready = (sess.pendingCombat || []).slice(); sess.pendingCombat = [];
+    var inPool = {};   // one pool entry per PC sheet
+    var sqP = window.Store ? Store.index('squad').then(function (rows) { return rows.map(function (r) { return r.json; }); }).catch(function () { return []; }) : Promise.resolve([]);
+    // NPCs through the Store: display the record's NAME, not its filename.
+    var npcP = window.Store ? Store.index('npc').then(function (rows) {
+      return rows.map(function (r) { return { name: r.file, label: Store.displayName(r) }; });
+    }).catch(function () { return []; }) : Promise.resolve([]);
+    Promise.all([api('GET', 'campaigns/' + encodeURIComponent(sess.id)), sqP, npcP]).then(function (res2) {
+      var d = res2[0], squadDocs = res2[1], npcDocs = res2[2];
+      var F = el('cb-forces'); if (!F) return;
+      F.innerHTML =
+        '<div class="cb-h">PARTY <i class="cb-hint">drag into the pool</i></div>' +
+        (sess.order.map(function (sid) {
+          return '<div class="cb-row" draggable="true" data-drag-pc="' + esc(sid) + '"><span class="cb-grip">⠿</span><span>' + esc(sheetLabel(sid)) + '</span><i>PC</i></div>';
+        }).join('') || '<div class="cb-dim">No sheets hosted.</div>') +
+        '<div class="cb-h">CAMPAIGN NPCS</div>' +
+        (npcDocs.map(function (doc) {
+          var nm = doc.name;
+          return '<div class="cb-row" draggable="true" data-drag-npc="' + esc(nm) + '" data-label="' + esc(doc.label) + '"><span class="cb-grip">⠿</span><span>' + esc(doc.label) + '</span>' +
+            '<i>×</i><input type="number" class="cb-count" data-count="' + esc(nm) + '" value="1" min="1" max="20"></div>';
+        }).join('') || '<div class="cb-dim">No NPCs yet — DATA holds the bestiary.</div>') +
+        (squadDocs.length ? '<div class="cb-h">SQUADS</div>' + squadDocs.map(function (sq, i) {
+          return '<div class="cb-row" draggable="true" data-drag-sq="' + i + '"><span class="cb-grip">⠿</span><span>' + esc(sq.name || 'Squad') + '</span><i>' + ((sq.members || []).length) + '</i></div>';
+        }).join('') : '') +
+        '<div class="cb-h">GENERATE</div>' +
+        '<div class="cb-genrow"><button class="dt-btn" id="cbs-gen1">＋ COMBATANT</button><button class="dt-btn" id="cbs-gengang">＋ GANG</button></div>';
+
+      function paintReady() {
+        var R = el('cb-pool'), n = el('cb-ready-n'); if (!R) return;
+        if (n) n.textContent = ready.length ? '· ' + ready.length : '';
+        R.innerHTML = ready.map(function (c, i) {
+          return '<div class="cb-chip' + (c.kind === 'pc' ? ' cb-chip-pc' : '') + '">' + esc(c.name || 'NPC') +
+            (c.kind === 'pc' ? '<i>PC</i>' : '') + '<b data-rm="' + i + '" title="Remove">×</b></div>';
+        }).join('') || '<div class="cb-pool-empty">DRAG COMBATANTS HERE<br><span>party · NPCs · squads · mooks · generated</span></div>';
+        R.classList.toggle('filled', !!ready.length);
+        R.querySelectorAll('[data-rm]').forEach(function (b) {
+          b.onclick = function () { var gone = ready.splice(+b.getAttribute('data-rm'), 1)[0]; if (gone && gone.kind === 'pc') delete inPool[gone.sheetId]; paintReady(); };
+        });
+      }
+      paintReady();
+
+      function poolPc(sid) {
+        var E = window.CombatEngine; if (!E || inPool[sid]) return;
+        var rec = sess.camp.getSheet(sid);
+        var c = E.makeCombatant({ id: 'pc-' + sid, kind: 'pc', sheetId: sid, name: sheetLabel(sid), sheet: (rec && rec.json) || {} });
+        var pst = rec && rec.json && rec.json.combat;
+        if (pst) { c.wounds = pst.wounds || 0; if (pst.armorDmg) c.armorDmg = Object.assign(c.armorDmg, pst.armorDmg); if (pst.status) c.status = Object.assign(c.status, pst.status); }
+        inPool[sid] = 1; ready.push(c); paintReady();
+      }
+      function poolNpc(nm, cnt, label) {
+        var E = window.CombatEngine; if (!E) return;
+        fetch('/__api/campaigns/' + encodeURIComponent(sess.id) + '/npcs/' + encodeURIComponent(nm))
+          .then(function (r) { return r.json(); }).catch(function () { return {}; })
+          .then(function (sheet) {
+            var base = label || (sheet && (sheet.name || sheet.handle)) || idOf(nm);
+            for (var i = 0; i < cnt; i++) ready.push(E.makeCombatant({ id: 'npc-' + idOf(nm) + '-' + Date.now().toString(36) + i, kind: 'npc', name: cnt > 1 ? base + ' ' + (i + 1) : base, sheet: sheet }));
+            paintReady();
+          });
+      }
+      function poolSquad(enc) {
+        if (!enc) return;
+        if (enc.settings) { el('cbs-mode').value = enc.settings.mode || 'hybrid'; el('cbs-vis').value = enc.settings.npcVis || 'full'; }
+        window.CombatEngine && loadCombatDBs().then(function (DBs) {
+          (enc.members || []).forEach(function (mm) {
+            if (mm.kind === 'pc-all') { sess.order.forEach(poolPc); }
+            else if (mm.kind === 'npcfile') { poolNpc(mm.name, mm.count || 1); }
+            else if (mm.kind === 'archetype' && window.NPCGen) { for (var i = 0; i < (mm.count || 1); i++) { var s = window.NPCGen.generate(mm.params, DBs); ready.push(window.CombatEngine.makeCombatant({ id: 'enc-' + Date.now().toString(36) + '-' + ready.length, kind: 'npc', name: s.role, sheet: s })); } paintReady(); }
+            else if (mm.kind === 'mook') { for (var jj = 0; jj < (mm.count || 1); jj++) ready.push(window.CombatEngine.makeCombatant({ id: 'enc-' + Date.now().toString(36) + '-' + ready.length, kind: 'npc', name: (mm.sheet && mm.sheet.role) || 'Mook', sheet: mm.sheet || {} })); paintReady(); }
+          });
+        });
+      }
+
+      /* drag wiring: sources → pool */
+      F.querySelectorAll('[data-drag-pc]').forEach(function (r) {
+        r.ondragstart = function (e) { e.dataTransfer.setData('text/plain', JSON.stringify({ pc: r.getAttribute('data-drag-pc') })); };
+        r.ondblclick = function () { poolPc(r.getAttribute('data-drag-pc')); };
+      });
+      F.querySelectorAll('[data-drag-npc]').forEach(function (r) {
+        r.ondragstart = function (e) {
+          var nm = r.getAttribute('data-drag-npc');
+          var cntEl = r.querySelector('.cb-count');
+          e.dataTransfer.setData('text/plain', JSON.stringify({ npc: nm, count: parseInt(cntEl && cntEl.value, 10) || 1, label: r.getAttribute('data-label') || '' }));
+        };
+        r.ondblclick = function () { var cntEl = r.querySelector('.cb-count'); poolNpc(r.getAttribute('data-drag-npc'), parseInt(cntEl && cntEl.value, 10) || 1, r.getAttribute('data-label') || ''); };
+      });
+      F.querySelectorAll('[data-drag-sq]').forEach(function (r) {
+        r.ondragstart = function (e) { e.dataTransfer.setData('text/plain', JSON.stringify({ squad: +r.getAttribute('data-drag-sq') })); };
+        r.ondblclick = function () { poolSquad(squadDocs[+r.getAttribute('data-drag-sq')]); };
+      });
+      var pool = el('cb-pool');
+      pool.ondragover = function (e) { e.preventDefault(); pool.classList.add('over'); };
+      pool.ondragleave = function () { pool.classList.remove('over'); };
+      pool.ondrop = function (e) {
+        e.preventDefault(); pool.classList.remove('over');
+        var d2; try { d2 = JSON.parse(e.dataTransfer.getData('text/plain')); } catch (err) { return; }
+        if (!d2) return;
+        if (d2.pc) poolPc(d2.pc);
+        else if (d2.npc) poolNpc(d2.npc, d2.count || 1, d2.label || '');
+        else if (d2.squad != null) poolSquad(squadDocs[d2.squad]);
+      };
+
+      function genToPool(sheets) { sheets.forEach(function (s, i) { ready.push(window.CombatEngine.makeCombatant({ id: 'gen-' + Date.now().toString(36) + '-' + ready.length + '-' + i, kind: 'npc', name: s.role, sheet: s })); }); paintReady(); }
+      el('cbs-gen1').onclick = function () { archetypeGenModal({ scope: 'one', onCombat: genToPool, onSave: function (sh) { saveGeneratedNPCs(sess.id, sh); genToPool(sh); } }); };
+      el('cbs-gengang').onclick = function () { archetypeGenModal({ scope: 'team', onCombat: genToPool, onSave: function (sh) { saveGeneratedNPCs(sess.id, sh); genToPool(sh); } }); };
+      // START = pool only — the pool IS the encounter.
+      el('cb-start').onclick = function () {
+        var E = window.CombatEngine; if (!E || !ready.length) return;
+        var settings = { mode: el('cbs-mode').value, npcVis: el('cbs-vis').value };
+        var list = ready.slice();
+        sess.camp.clearCombat();
+        list.forEach(function (c) { c.init = E.rollInitiative(c.ref, c.initBonus).total; sess.camp.putCombatant(c.id, c); });
+        list.sort(function (a, b) { return (b.init || 0) - (a.init || 0); });
+        sess.camp.setCombatMeta({ active: true, round: 1, turnIdx: 0, order: list.map(function (c) { return c.id; }), settings: settings, startedAt: Date.now() });
+        sess.camp.logCombat({ msg: '◆ Combat begins — initiative: ' + list.map(function (c) { return c.name + ' ' + c.init; }).join(', ') });
+        logSession('◆ Combat started — ' + list.length + ' combatant' + (list.length === 1 ? '' : 's') + '.');
+        openCombatStage();
+      };
+    });
   }
 
   /* ── ORG tab = saved orgs + generator + custom org ── */
@@ -1320,6 +1502,20 @@
     var ni = cols.indexOf('name'); if (ni > 0) { cols.splice(ni, 1); cols.unshift('name'); }
     return cols;
   }
+  // Sort DB rows by a column (numeric where both values parse as numbers; blanks sort last).
+  function dbSortRows(arr) {
+    var st = sess.dbSort; if (!st || !st.col) return arr;
+    var col = st.col, dir = st.dir === 'desc' ? -1 : 1;
+    return arr.slice().sort(function (a, b) {
+      var av = a[col], bv = b[col];
+      var ae = av == null || av === '', be = bv == null || bv === '';
+      if (ae && be) return 0; if (ae) return 1; if (be) return -1;   // blanks always last
+      var an = parseFloat(av), bn = parseFloat(bv);
+      if (!isNaN(an) && !isNaN(bn) && /^[\s$€eb\d.,\-+]+$/i.test(String(av)) && /^[\s$€eb\d.,\-+]+$/i.test(String(bv))) return (an - bn) * dir;
+      av = String(av).toLowerCase(); bv = String(bv).toLowerCase();
+      return av < bv ? -dir : av > bv ? dir : 0;
+    });
+  }
   function renderDatabase(panel) {
     if (!panel) return;
     var tab = sess.dbTab || 'weapons';
@@ -1350,13 +1546,15 @@
         var base = sess.dbCustomOnly ? [] : (DB_CACHE[tab] || []);
         var mine = custom.filter(function (c) { return c.cat === tab; });
         var cols = dbCols((DB_CACHE[tab] || []).concat(mine));
-        var rows = mine.concat(base).filter(function (r) { return !f || JSON.stringify(r).toLowerCase().indexOf(f) >= 0; }).slice(0, 600);
+        var rows = dbSortRows(mine.concat(base).filter(function (r) { return !f || JSON.stringify(r).toLowerCase().indexOf(f) >= 0; })).slice(0, 600);
         var out = el('db-out'); if (!out) return;
         out.innerHTML = rows.length ? '<div class="rt-panel" style="min-height:calc(100vh - 250px)"><div style="overflow:auto;max-height:calc(100vh - 254px)"><table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px">' +
-          '<thead><tr>' + cols.map(function (c) { return '<th style="text-align:left;padding:7px 10px;background:var(--ink);color:#fff;font-family:var(--head);letter-spacing:1px;text-transform:uppercase;font-size:11px;position:sticky;top:0">' + c + '</th>'; }).join('') + '<th style="background:var(--ink)"></th></tr></thead><tbody>' +
-          rows.map(function (r) { return '<tr style="border-bottom:1px solid #eee' + (r._custom ? ';background:var(--acc-soft)' : '') + '">' + cols.map(function (c) { return '<td style="padding:6px 10px">' + esc(r[c] != null ? r[c] : '') + '</td>'; }).join('') + '<td style="padding:6px 10px;text-align:right">' + (r._custom ? '<span class="rt-badge rt-badge--gold" style="font-size:9px;padding:1px 5px">CUSTOM</span> <button class="rt-link" data-dbdel="' + r.id + '" style="padding:0 4px">✕</button>' : '') + '</td></tr>'; }).join('') +
+          '<thead><tr>' + cols.map(function (c) { var st = sess.dbSort || {}; var ar = st.col === c ? (st.dir === 'desc' ? ' ▼' : ' ▲') : ''; return '<th data-dbsort="' + esc(c) + '" style="text-align:left;padding:7px 10px;background:var(--ink);color:#fff;font-family:var(--head);letter-spacing:1px;text-transform:uppercase;font-size:11px;position:sticky;top:0;cursor:pointer;user-select:none">' + c + ar + '</th>'; }).join('') + '<th style="background:var(--ink)"></th></tr></thead><tbody>' +
+          rows.map(function (r, i) { return '<tr data-rowidx="' + i + '" style="border-bottom:1px solid #eee;cursor:context-menu' + (r._custom ? ';background:var(--acc-soft)' : '') + '">' + cols.map(function (c) { return '<td style="padding:6px 10px">' + esc(r[c] != null ? r[c] : '') + '</td>'; }).join('') + '<td style="padding:6px 10px;text-align:right">' + (r._custom ? '<span class="rt-badge rt-badge--gold" style="font-size:9px;padding:1px 5px">CUSTOM</span> <button class="rt-link" data-dbdel="' + r.id + '" style="padding:0 4px">✕</button>' : '') + '</td></tr>'; }).join('') +
           '</tbody></table></div></div>' : '<div class="app-empty">No records match your query.</div>';
         out.querySelectorAll('[data-dbdel]').forEach(function (b) { b.onclick = function () { var id = b.getAttribute('data-dbdel'); cdData.meta.prep.customDb = custom.filter(function (x) { return x.id !== id; }); savePrep(function () { renderDatabase(panel); }); }; });
+        out.querySelectorAll('[data-dbsort]').forEach(function (th) { th.onclick = function () { var c = th.getAttribute('data-dbsort'); var st = sess.dbSort || {}; sess.dbSort = (st.col === c) ? { col: c, dir: st.dir === 'asc' ? 'desc' : 'asc' } : { col: c, dir: 'asc' }; paintDb(); }; });
+        if (window.CtxMenu) out.querySelectorAll('tr[data-rowidx]').forEach(function (tr) { CtxMenu.attach(tr, function () { return dbRowMenu(rows[+tr.getAttribute('data-rowidx')], tab, panel); }); });
       }
       function paintDocs() {
         var out = el('db-out'); if (out) out.innerHTML = '<div class="app-empty">Loading…</div>';
@@ -1373,6 +1571,45 @@
         });
       }
     });
+  }
+  /* ── Database right-click actions ── */
+  function dbLootCat(cat) { return cat === 'weapons' ? 'weapon' : cat === 'cyberware' ? 'cyberware' : cat === 'vehicles' ? 'vehicle' : 'gear'; }
+  function dbCastText(r) {
+    var keys = Object.keys(r || {}).filter(function (k) { return k !== 'name' && k !== 'id' && k !== 'cat' && k !== '_custom' && k !== 'source' && r[k] != null && r[k] !== '' && typeof r[k] !== 'object'; }).slice(0, 8);
+    return (r.name || '') + (keys.length ? '\n\n' + keys.map(function (k) { return k.toUpperCase() + ': ' + r[k]; }).join('\n') : '');
+  }
+  function dbAddToLoot(cat, r) {
+    ensureCdData(function () { (prep().loot || (prep().loot = [])).push({ id: uid('loot'), name: r.name || 'Item', nodes: [{ id: uid('ln'), type: 'item', cat: dbLootCat(cat), name: r.name, data: r, share: 'shared' }] }); savePrep(function () {}); });
+  }
+  function dbAddToMySheet(cat, r) {
+    if (sess.role !== 'player' || !sess.sheetId) { alert('No character sheet linked.'); return; }
+    var sid = idOf(sess.sheetId), rec = sess.camp && sess.camp.getSheet && sess.camp.getSheet(sid);
+    if (!rec || !rec.json) { alert('Your sheet isn’t loaded yet.'); return; }
+    if (r && r.category === 'COMPUTER' && r.connection) {   // a net-capable computer → the device locker, not the gear list
+      var j = rec.json; j.net = j.net || {}; j.net.owned = j.net.owned || [];
+      var dev = JSON.parse(JSON.stringify(r)); dev.id = uid('dev'); delete dev.category;
+      j.net.owned.push(dev); if (!j.net.computer) { j.net.computer = dev; j.net.activeDeviceId = dev.id; }
+    } else shopWriteItem(rec.json, { cat: cat, name: r.name, data: r });
+    sess.camp.publishSheet(sid, rec.json.handle || rec.json.name || sid, rec.json);
+  }
+  function dbRowMenu(r, cat, panel) {
+    if (!r) return null;
+    var itemCat = ['weapons', 'cyberware', 'gear', 'vehicles', 'decks', 'programs'].indexOf(cat) >= 0;
+    var items = [
+      { label: 'Copy name', icon: '⧉', onClick: function () { try { navigator.clipboard.writeText(r.name || ''); } catch (e) {} } },
+      { label: 'Cast to players', icon: '⊡', onClick: function () { castReveal({ kind: 'event', title: r.name || 'Reference', blocks: [{ type: 'text', mode: 'panel', size: 'l', text: dbCastText(r) }] }); } }
+    ];
+    if (sess.role === 'gm' && itemCat) {
+      var shops = allShopsGM().filter(function (s) { return !s._virtual; });
+      items.push({ sep: true });
+      items.push({ label: 'Add to a shop', icon: '▣', submenu: shops.length ? shops.map(function (s) { return { label: s.name || 'Shop', onClick: function () { shopAddFromPalette(s, cat, r.name); } }; }) : [{ label: 'No shops yet — create one', disabled: true }] });
+      items.push({ label: 'Add to loot', icon: '❖', onClick: function () { dbAddToLoot(cat, r); } });
+    } else if (sess.role === 'player' && itemCat && sess.sheetId) {
+      items.push({ sep: true });
+      items.push({ label: 'Add to my sheet', icon: '＋', onClick: function () { dbAddToMySheet(cat, r); } });
+    }
+    if (r._custom) { items.push({ sep: true }); items.push({ label: 'Delete custom entry', icon: '✕', danger: true, onClick: function () { ensureCdData(function () { prep().customDb = (prep().customDb || []).filter(function (x) { return x.id !== r.id; }); savePrep(function () { renderDatabase(panel); }); }); } }); }
+    return items;
   }
   // Custom DB entry — complete form via the shared UI.modal.
   function dbCustomForm(cat, panel) {
@@ -1397,8 +1634,8 @@
   var SHOP_CATS = [['weapons', 'Weapons', 500], ['gear', 'Gear', 300], ['cyberware', 'Cyberware', 600], ['vehicles', 'Vehicles', 12000], ['decks', 'Cyberdecks', 4000], ['programs', 'Programs', 500]];
   var SHOP_CAT_LABEL = { weapons: 'Weapons', gear: 'Gear', cyberware: 'Cyberware', vehicles: 'Vehicles', decks: 'Cyberdecks', programs: 'Programs' };
   function shopCatToArr(cat) { return cat === 'weapons' ? 'weapons' : cat === 'cyberware' ? 'cyberware' : cat === 'vehicles' ? 'vehicles' : 'gear'; }
-  function shopPrice(r) { return parseInt(String(r && r.cost != null ? r.cost : 0).replace(/[^0-9]/g, ''), 10) || 0; }
-  function saveShops(then) { return saveCampaignMeta(sess.id, { prep: prep() }).then(then || function () {}); }
+  function shopPrice(r) { var v = r == null ? 0 : (r.cost != null ? r.cost : r.bookcost != null ? r.bookcost : r.bookPrice != null ? r.bookPrice : (r.type && r.type.cost != null ? r.type.cost : 0)); return parseInt(String(v).replace(/[^0-9]/g, ''), 10) || 0; }
+  // Shops persist as Store('shop') docs — see saveShopDoc / Store.create / Store.del. (Legacy prep().shops is migrated once in app-migrate.js.)
   // Default "online" basic catalog — derived from the DB by availability + cost ceiling. Unlimited stock.
   function onlineCatalog() {
     var out = [];
@@ -1445,20 +1682,32 @@
   }
   function renderShop(panel) {
     if (!panel) return;
-    panel.classList.add('shop-tab');
-    panel.innerHTML = rtHead('▣', 'Shop', sess.role === 'gm' ? 'Storefronts & catalog — curate, link, publish' : 'Browse, compare & buy — purchases land on your sheet', '') +
-      '<div id="shop-body"><div class="app-empty">Loading…</div></div>';
+    panel.classList.add('shop-tab', 'shop-fullbleed');
+    // No header strip: the storefront fills the whole frame edge to edge.
+    panel.innerHTML = '<div id="shop-body" class="shop-body-full"><div class="app-empty">Loading…</div></div>';
     shopLoadDB(function () {
       // Always fetch fresh so the GM's shops/stock show immediately for players.
-      api('GET', 'campaigns/' + encodeURIComponent(sess.id)).then(function (d) {
-        cdData = d; state.campaignId = sess.id;
+      Promise.all([api('GET', 'campaigns/' + encodeURIComponent(sess.id)), refreshShopDocs()]).then(function (res2) {
+        cdData = res2[0]; state.campaignId = sess.id;
         var body = el('shop-body'); if (!body) return;
         if (sess.role === 'gm') renderShopGM(body); else renderShopPlayer(body);
       }).catch(function () { var b = el('shop-body'); if (b) b.innerHTML = '<div class="app-empty">Could not load campaign.</div>'; });
     });
   }
-  function allShopsGM() { return [defaultOnlineShop()].concat(prep().shops || []); }
-  function shopById(id) { if (id === '__online') return defaultOnlineShop(); return (prep().shops || []).filter(function (s) { return s.id === id; })[0] || null; }
+  // Shops are docs now — cached rows [{ref, json}] refreshed on each shop render.
+  var _shopDocs = [];
+  function refreshShopDocs() {
+    if (!window.Store) return Promise.resolve([]);
+    return Store.index('shop', true).then(function (rows) { _shopDocs = rows; return rows; }).catch(function () { _shopDocs = []; return []; });
+  }
+  function shopDocRow(id) { return _shopDocs.filter(function (r) { return r.json.id === id; })[0] || null; }
+  function saveShopDoc(id, then) {
+    var row = shopDocRow(id);
+    if (!row || !window.Store) { if (then) then(); return; }
+    Store.put(row.ref, row.json).then(then || function () {}, then || function () {});
+  }
+  function allShopsGM() { return [defaultOnlineShop()].concat(_shopDocs.map(function (r) { return r.json; })); }
+  function shopById(id) { if (id === '__online') return defaultOnlineShop(); var r = shopDocRow(id); return r ? r.json : null; }
 
   /* ════════ GM curation: shop rail + drag-and-drop catalog ════════ */
   function renderShopGM(body) {
@@ -1491,8 +1740,8 @@
       actions: [{ label: 'Cancel' }, { label: 'Create', kind: 'primary', onClick: function (box) {
         var name = (box.querySelector('#ns-name').value || '').trim(); if (!name) return false;
         var s = { id: uid('shop'), name: name, kind: box.querySelector('#ns-kind').value, link: { type: '', ref: '', url: '' }, public: box.querySelector('#ns-pub').checked, items: [] };
-        var arr = prep().shops || (prep().shops = []); arr.push(s); sess.shopSel = s.id;
-        saveShops(function () { renderShopGM(body); });
+        if (!window.Store) return false;
+        Store.create('shop', s).then(function (row) { _shopDocs.push(row); sess.shopSel = row.json.id; renderShopGM(body); });
       } }]
     });
   }
@@ -1513,27 +1762,32 @@
         '</div></div>';
       return;
     }
+    var player = shopIsPlayer(s);
     host.innerHTML =
       '<div class="shop-edit-head">' +
         '<div class="shop-edit-title" id="shop-name">' + esc(s.name) + '</div>' +
         '<div class="shop-edit-acts">' +
-          '<button class="shop-link-btn" id="shop-link">' + (s.link && (s.link.ref || s.link.url) ? esc(shopLinkLabel(s)) : '+ link to world') + '</button>' +
-          '<label class="rt-switch"><input type="checkbox" id="shop-pub"' + (s.public ? ' checked' : '') + '><span class="rt-switch-track"></span> Public</label>' +
+          (player ? '' : '<button class="shop-link-btn" id="shop-link">' + (s.link && (s.link.ref || s.link.url) ? esc(shopLinkLabel(s)) : '+ link to world') + '</button>') +
+          '<label class="rt-switch"><input type="checkbox" id="shop-pub"' + (s.public ? ' checked' : '') + '><span class="rt-switch-track"></span> ' + (player ? 'Listed' : 'Public') + '</label>' +
           '<button class="rt-link" id="shop-ren">rename</button><button class="rt-link" id="shop-del">delete</button>' +
         '</div>' +
       '</div>' +
       '<div class="shop-curate">' +
-        '<div class="shop-pal"><div class="shop-pal-head">Database — drag items onto the shelves →</div>' +
+        '<div class="shop-pal"><div class="shop-pal-head">' + (player ? 'Your inventory' : 'Database') + ' — drag onto the shelves →</div>' +
           '<div class="rt-tabs shop-pal-tabs" id="shop-pal-tabs"></div>' +
           '<input class="rt-input" id="shop-pal-search" placeholder="search…" style="margin:8px;width:calc(100% - 16px)">' +
           '<div class="shop-pal-list" id="shop-pal-list"></div>' +
         '</div>' +
         '<div class="shop-shelf" id="shop-shelf"><div class="shop-shelf-head">Shelves · <b id="shop-shelf-n">' + (s.items || []).length + '</b> items</div><div class="shop-shelf-grid" id="shop-shelf-grid"></div></div>' +
       '</div>';
-    el('shop-link').onclick = function () { shopLinkModal(s); };
-    el('shop-pub').onchange = function () { s.public = el('shop-pub').checked; saveShops(function () { renderShopGM(el('shop-body')); }); };
-    el('shop-ren').onclick = function () { prompt1('Rename shop', 'New name', s.name || '', function (v) { if (!v) return; s.name = v; saveShops(function () { renderShopGM(el('shop-body')); }); }); };
-    el('shop-del').onclick = function () { confirm1('Delete this shop?', function () { prep().shops = (prep().shops || []).filter(function (x) { return x.id !== s.id; }); sess.shopSel = null; saveShops(function () { renderShopGM(el('shop-body')); }); }); };
+    var lk = el('shop-link'); if (lk) lk.onclick = function () { shopLinkModal(s); };
+    el('shop-pub').onchange = function () { s.public = el('shop-pub').checked; saveShopDoc(s.id, function () { shopReRender(s); }); };
+    el('shop-ren').onclick = function () { prompt1('Rename shop', 'New name', s.name || '', function (v) { if (!v) return; s.name = v; saveShopDoc(s.id, function () { shopReRender(s); }); }); };
+    el('shop-del').onclick = function () { confirm1('Delete this shop?', function () {
+      var row = shopDocRow(s.id);
+      var done = function () { _shopDocs = _shopDocs.filter(function (r) { return r.json.id !== s.id; }); sess.shopSel = null; shopReRender(s); };
+      if (row && window.Store) Store.del(row.ref).then(done, done); else done();
+    }); };
     paintShopPalette(s);
     paintShopShelf(s);
     // Shelf is a drop target for palette drags.
@@ -1546,11 +1800,14 @@
       shopAddFromPalette(s, raw.cat, raw.name);
     });
   }
-  function shopPalCats() { return SHOP_CATS; }
+  function shopPalCats(s) { return shopIsPlayer(s) ? SHOP_CATS.filter(function (c) { return c[0] === 'weapons' || c[0] === 'gear' || c[0] === 'cyberware' || c[0] === 'vehicles'; }) : SHOP_CATS; }
   function paintShopPalette(s) {
+    var cats = shopPalCats(s);
     var cat = sess.shopPalCat || 'weapons';
+    if (!cats.some(function (c) { return c[0] === cat; })) cat = cats[0][0];
+    sess.shopPalCat = cat;
     var tabs = el('shop-pal-tabs'); if (!tabs) return;
-    tabs.innerHTML = shopPalCats().map(function (p) { return '<button class="rt-tab' + (p[0] === cat ? ' active' : '') + '" data-palcat="' + p[0] + '">' + p[1] + '</button>'; }).join('');
+    tabs.innerHTML = cats.map(function (p) { return '<button class="rt-tab' + (p[0] === cat ? ' active' : '') + '" data-palcat="' + p[0] + '">' + p[1] + '</button>'; }).join('');
     tabs.querySelectorAll('[data-palcat]').forEach(function (b) { b.onclick = function () { sess.shopPalCat = b.getAttribute('data-palcat'); paintShopPalette(s); }; });
     var se = el('shop-pal-search'); if (se) se.oninput = function () { paintPalList(s, cat); };
     paintPalList(s, cat);
@@ -1558,17 +1815,18 @@
   function paintPalList(s, cat) {
     var host = el('shop-pal-list'); if (!host) return;
     var f = (el('shop-pal-search') && el('shop-pal-search').value || '').toLowerCase();
-    var custom = (prep().customDb || []).filter(function (x) { return x.cat === cat; });
-    var rows = custom.concat(DB_CACHE[cat] || []).filter(function (r) { return !f || JSON.stringify(r).toLowerCase().indexOf(f) >= 0; }).slice(0, 250);
+    var player = shopIsPlayer(s);
+    var rows = shopPalPool(s, cat).filter(function (r) { return !f || JSON.stringify(r).toLowerCase().indexOf(f) >= 0; }).slice(0, 250);
     var have = {}; (s.items || []).forEach(function (it) { have[it.cat + ':' + it.name] = 1; });
     host.innerHTML = rows.length ? rows.map(function (r) {
       var added = have[cat + ':' + r.name];
+      var own = player ? (r.qty > 0 ? Math.round(r.qty) : 1) : 0;
       return '<div class="shop-pal-row' + (added ? ' added' : '') + '" draggable="' + (added ? 'false' : 'true') + '" data-pname="' + esc(r.name) + '">' +
-        '<span class="shop-pal-grip">⋮⋮</span><span class="shop-pal-name">' + esc(r.name || '') + (r._custom ? ' <span class="rt-badge rt-badge--gold">custom</span>' : '') + '</span>' +
+        '<span class="shop-pal-grip">⋮⋮</span><span class="shop-pal-name">' + esc(r.name || '') + (r._custom ? ' <span class="rt-badge rt-badge--gold">custom</span>' : '') + (player && own > 1 ? ' <span class="rt-badge">×' + own + '</span>' : '') + '</span>' +
         '<span class="shop-pal-price">' + shopPrice(r) + 'eb</span>' +
         (added ? '<span class="rt-badge rt-badge--green">in</span>' : '<button class="shop-pal-add" data-paladd="' + esc(r.name) + '" title="Add">+</button>') +
       '</div>';
-    }).join('') : '<div class="app-empty">No matches.</div>';
+    }).join('') : '<div class="app-empty">' + (player ? 'Nothing here to sell.' : 'No matches.') + '</div>';
     host.querySelectorAll('.shop-pal-row[draggable="true"]').forEach(function (row) {
       row.addEventListener('dragstart', function (e) { e.dataTransfer.setData('text/plain', JSON.stringify({ cat: cat, name: row.getAttribute('data-pname') })); e.dataTransfer.effectAllowed = 'copy'; });
     });
@@ -1576,15 +1834,69 @@
   }
   function shopAddFromPalette(s, cat, name) {
     if ((s.items || []).some(function (it) { return it.cat === cat && it.name === name; })) return;
-    var pool = (prep().customDb || []).filter(function (x) { return x.cat === cat; }).concat(DB_CACHE[cat] || []);
-    var r = pool.filter(function (x) { return x.name === name; })[0]; if (!r) return;
-    (s.items || (s.items = [])).push({ id: uid('si'), cat: cat, name: r.name, price: shopPrice(r), qty: null, pitch: '', data: JSON.parse(JSON.stringify(r)) });
-    saveShops(function () { paintShopShelf(s); paintPalList(s, cat); var n = el('shop-shelf-n'); if (n) n.textContent = (s.items || []).length; });
+    var r = shopPalPool(s, cat).filter(function (x) { return x.name === name; })[0]; if (!r) return;
+    var player = shopIsPlayer(s), own = player ? shopOwnedQty(cat, name) : null;
+    var data = JSON.parse(JSON.stringify(r)); ['buyId', '_forSale', '_invKey', 'qty'].forEach(function (k) { delete data[k]; });
+    var item = { id: uid('si'), cat: cat, name: r.name, price: shopPrice(r), qty: player ? own : null, pitch: '', data: data };
+    if (player) item._own = own;
+    (s.items || (s.items = [])).push(item);
+    saveShopDoc(s.id, function () { paintShopShelf(s); paintPalList(s, cat); var n = el('shop-shelf-n'); if (n) n.textContent = (s.items || []).length; });
+  }
+  /* ════════ Player storefront — the same curation UI, palette limited to the player's own inventory ════════ */
+  function shopIsPlayer(s) { return !!(s && s.owner); }
+  function shopPalPool(s, cat) {
+    if (shopIsPlayer(s)) return shopOwnedItems(cat);                 // sell only what you own
+    return (prep().customDb || []).filter(function (x) { return x.cat === cat; }).concat(DB_CACHE[cat] || []);
+  }
+  function shopOwnedQty(cat, name) {
+    return shopOwnedItems(cat).filter(function (x) { return x.name === name; })
+      .reduce(function (t, x) { return t + (x.qty > 0 ? Math.round(x.qty) : 1); }, 0);   // gear tracks qty; other cats are one unit per entry
+  }
+  function myShops() { var sid = idOf(sess.sheetId || ''); return _shopDocs.map(function (r) { return r.json; }).filter(function (s) { return s.owner && s.owner === sid; }); }
+  function shopReRender(s) { var b = el('shop-body'); if (!b) return; if (shopIsPlayer(s)) renderPlayerStoreEditor(b); else renderShopGM(b); }
+  function renderPlayerStoreEditor(body) {
+    var shops = myShops();
+    var sel = sess.shopSel && shops.filter(function (s) { return s.id === sess.shopSel; })[0] ? sess.shopSel : (shops[0] && shops[0].id);
+    sess.shopSel = sel || null;
+    var railHtml = shops.map(function (s) {
+      var n = (s.items || []).length;
+      return '<button class="shop-rail-shop' + (s.id === sel ? ' active' : '') + '" data-shopsel="' + esc(s.id) + '">' +
+        '<span class="shop-rail-shop-name">' + esc(s.name || 'Storefront') + '</span>' +
+        '<span class="shop-rail-shop-loc">' + (s.public ? 'public' : 'draft') + ' · ' + n + ' item' + (n === 1 ? '' : 's') + '</span>' +
+      '</button>';
+    }).join('');
+    body.innerHTML = '<div class="shop-wrap">' +
+      '<aside class="shop-rail">' +
+        '<button class="shop-rail-shop shop-rail-nav" id="shop-back"><span class="shop-rail-shop-name">← Back to market</span></button>' +
+        '<div class="shop-rail-h">Your storefronts</div>' +
+        (railHtml || '<div class="shop-rail-empty">No storefront yet.</div>') +
+        '<button class="shop-rail-shop shop-rail-add" id="shop-new"><span class="shop-rail-shop-name">＋ New storefront</span></button>' +
+      '</aside>' +
+      '<main class="shop-main shop-main-edit" id="shop-edit"></main>' +
+    '</div>';
+    body.querySelectorAll('[data-shopsel]').forEach(function (b) { b.onclick = function () { sess.shopSel = b.getAttribute('data-shopsel'); renderPlayerStoreEditor(body); }; });
+    el('shop-back').onclick = function () { sess.shopMode = 'browse'; sess.shopSel = null; renderShopPlayer(body); };
+    el('shop-new').onclick = function () { playerShopNewModal(body); };
+    renderShopEdit(el('shop-edit'), shops.filter(function (s) { return s.id === sel; })[0] || null);
+  }
+  function playerShopNewModal(body) {
+    if (!window.UI || !window.Store) return;
+    if (!sess.sheetId) { alert('No character sheet linked.'); return; }
+    window.UI.modal({
+      title: 'New storefront', body:
+        '<label class="rt-field"><span class="rt-field-l">Name</span><input class="rt-input" id="ns-name" placeholder="e.g. Street doc surplus"></label>' +
+        '<label class="rt-switch" style="margin-top:8px"><input type="checkbox" id="ns-pub" checked><span class="rt-switch-track"></span> Public — listed on your site</label>',
+      actions: [{ label: 'Cancel' }, { label: 'Create', kind: 'primary', onClick: function (box) {
+        var name = (box.querySelector('#ns-name').value || '').trim(); if (!name) return false;
+        var s = { id: uid('shop'), name: name, kind: 'player', owner: idOf(sess.sheetId), link: { type: '', ref: '', url: '' }, public: box.querySelector('#ns-pub').checked, items: [] };
+        Store.create('shop', s).then(function (row) { _shopDocs.push(row); sess.shopSel = row.json.id; renderPlayerStoreEditor(body); });
+      } }]
+    });
   }
   function paintShopShelf(s) {
     var grid = el('shop-shelf-grid'); if (!grid) return;
     var items = s.items || [];
-    if (!items.length) { grid.innerHTML = '<div class="shop-shelf-empty">Drag items here, or hit “+” in the database list.</div>'; return; }
+    if (!items.length) { grid.innerHTML = '<div class="shop-shelf-empty">Drag items here, or hit “+” in the ' + (shopIsPlayer(s) ? 'inventory' : 'database') + ' list.</div>'; return; }
     grid.innerHTML = items.map(function (it) {
       return '<div class="shop-shelf-card">' +
         '<div class="shop-shelf-card-top"><span class="rt-badge">' + esc(SHOP_CAT_LABEL[it.cat] || it.cat) + '</span><button class="shop-shelf-x" data-itemdel="' + esc(it.id) + '" title="Remove">✕</button></div>' +
@@ -1592,19 +1904,24 @@
         '<div class="shop-shelf-stats">' + shopStatChips(it) + '</div>' +
         '<div class="shop-shelf-fields">' +
           '<label class="shop-mini">eb<input class="rt-input shop-num" data-price="' + esc(it.id) + '" value="' + (it.price || 0) + '"></label>' +
-          '<label class="shop-mini">stock<input class="rt-input shop-num" data-qty="' + esc(it.id) + '" value="' + (it.qty == null ? '' : it.qty) + '" placeholder="∞"></label>' +
+          '<label class="shop-mini">stock<input class="rt-input shop-num" data-qty="' + esc(it.id) + '"' + (it._own != null ? ' min="0" max="' + it._own + '"' : '') + ' value="' + (it.qty == null ? '' : it.qty) + '" placeholder="' + (it._own != null ? 'max ' + it._own : '∞') + '"></label>' +
         '</div>' +
         '<input class="rt-input shop-pitch" data-pitch="' + esc(it.id) + '" placeholder="sales pitch (optional)…" value="' + esc(it.pitch || '') + '">' +
       '</div>';
     }).join('');
-    grid.querySelectorAll('[data-price]').forEach(function (i) { i.onchange = function () { var it = items.filter(function (x) { return x.id === i.getAttribute('data-price'); })[0]; if (it) { it.price = parseInt(i.value, 10) || 0; saveShops(); } }; });
-    grid.querySelectorAll('[data-qty]').forEach(function (i) { i.onchange = function () { var it = items.filter(function (x) { return x.id === i.getAttribute('data-qty'); })[0]; if (it) { it.qty = i.value === '' ? null : (parseInt(i.value, 10) || 0); saveShops(); } }; });
-    grid.querySelectorAll('[data-pitch]').forEach(function (i) { i.onchange = function () { var it = items.filter(function (x) { return x.id === i.getAttribute('data-pitch'); })[0]; if (it) { it.pitch = i.value; saveShops(); } }; });
-    grid.querySelectorAll('[data-itemdel]').forEach(function (b) { b.onclick = function () { s.items = items.filter(function (x) { return x.id !== b.getAttribute('data-itemdel'); }); saveShops(function () { paintShopShelf(s); paintShopPalette(s); var n = el('shop-shelf-n'); if (n) n.textContent = (s.items || []).length; }); }; });
+    grid.querySelectorAll('[data-price]').forEach(function (i) { i.onchange = function () { var it = items.filter(function (x) { return x.id === i.getAttribute('data-price'); })[0]; if (it) { it.price = parseInt(i.value, 10) || 0; saveShopDoc(s.id); } }; });
+    grid.querySelectorAll('[data-qty]').forEach(function (i) { i.onchange = function () { var it = items.filter(function (x) { return x.id === i.getAttribute('data-qty'); })[0]; if (!it) return; var v = i.value === '' ? null : (parseInt(i.value, 10) || 0); if (v != null && it._own != null) { v = Math.max(0, Math.min(it._own, v)); i.value = v; } it.qty = v; saveShopDoc(s.id); }; });
+    grid.querySelectorAll('[data-pitch]').forEach(function (i) { i.onchange = function () { var it = items.filter(function (x) { return x.id === i.getAttribute('data-pitch'); })[0]; if (it) { it.pitch = i.value; saveShopDoc(s.id); } }; });
+    grid.querySelectorAll('[data-itemdel]').forEach(function (b) { b.onclick = function () { s.items = items.filter(function (x) { return x.id !== b.getAttribute('data-itemdel'); }); saveShopDoc(s.id, function () { paintShopShelf(s); paintShopPalette(s); var n = el('shop-shelf-n'); if (n) n.textContent = (s.items || []).length; }); }; });
   }
   // A compact stat-chip strip for a shop item (uses its DB data).
   function shopStatChips(it) {
     var d = it.data || {}, out = [];
+    if (d.connection && d.reach != null && d.power != null && d.stealth != null) {
+      out.push('<span class="shop-chip">REACH ' + esc(d.reach) + '</span>', '<span class="shop-chip">POWER ' + esc(d.power) + '</span>', '<span class="shop-chip">' + esc(String(d.connection).toUpperCase()) + '</span>', '<span class="shop-chip">STEALTH ' + esc(d.stealth || 0) + '</span>');
+      if (d.perk) out.push('<span class="shop-chip shop-chip-gold">' + esc(String(d.perk).toUpperCase()) + '</span>');
+      return out.join('');
+    }
     shopStatList(it.cat).forEach(function (st) { var v = d[st[0]]; if (v != null && v !== '') out.push('<span class="shop-chip">' + st[1] + ' ' + esc(v) + '</span>'); });
     if (it.cat === 'weapons' && d.conc) out.push('<span class="shop-chip">CONC ' + esc(d.conc) + '</span>');
     if (d.avail || d.availability) out.push('<span class="shop-chip">AV ' + esc(d.avail || d.availability) + '</span>');
@@ -1624,7 +1941,7 @@
       actions: [{ label: 'Done', kind: 'primary' }]
     });
     var box = document.querySelector('.ui-modal') || document;
-    function setLink(t, ref, url) { s.link = { type: t, ref: ref || '', url: url || '' }; saveShops(function () { renderShopGM(el('shop-body')); }); }
+    function setLink(t, ref, url) { s.link = { type: t, ref: ref || '', url: url || '' }; saveShopDoc(s.id, function () { renderShopGM(el('shop-body')); }); }
     function paint() {
       var f = (box.querySelector('#lk-search').value || '').toLowerCase(), list = box.querySelector('#lk-list'), rows = [];
       var cur = (s.link && s.link.ref) || (s.link && s.link.url) || '';
@@ -1645,8 +1962,9 @@
   }
 
   /* ════════ Player storefront: rail · card grid · detail drawer · cart ════════ */
-  function shopAccessible() { return [defaultOnlineShop()].concat((prep().shops || []).filter(function (s) { return s.public; })); }
+  function shopAccessible() { return [defaultOnlineShop()].concat(_shopDocs.map(function (r) { return r.json; }).filter(function (s) { return (s.props && s.props.public) || s.public; })); }
   function renderShopPlayer(body) {
+    if (sess.shopMode === 'sell') { renderPlayerStoreEditor(body); return; }
     var shops = shopAccessible();
     var sel = sess.shopSel && shops.filter(function (s) { return s.id === sess.shopSel; })[0] ? sess.shopSel : shops[0].id;
     sess.shopSel = sel;
@@ -1662,7 +1980,9 @@
     var catChips = [['all', 'All']].concat(cats.map(function (c) { return [c, SHOP_CAT_LABEL[c] || c]; }))
       .map(function (c) { return '<button class="shop-catchip' + (c[0] === sess.shopCat ? ' active' : '') + '" data-pcat="' + c[0] + '">' + esc(c[1]) + '</button>'; }).join('');
     body.innerHTML = '<div class="shop-wrap">' +
-      '<aside class="shop-rail"><div class="shop-rail-h">Storefronts</div>' + railShops + '</aside>' +
+      '<aside class="shop-rail"><div class="shop-rail-h">Storefronts</div>' + railShops +
+        (sess.sheetId ? '<button class="shop-rail-shop shop-rail-sell" id="shop-sell"><span class="shop-rail-shop-name">✎ Sell your gear</span><span class="shop-rail-shop-loc">list your inventory →</span></button>' : '') +
+      '</aside>' +
       '<main class="shop-main">' +
         '<div class="shop-main-head"><input class="rt-input" id="shop-psearch" placeholder="search this shop…"><div class="shop-catchips">' + catChips + '</div></div>' +
         '<div class="shop-grid" id="shop-grid"></div>' +
@@ -1671,6 +1991,7 @@
     '</div>' +
     '<div class="shop-cartbar" id="shop-cartbar"></div>';
     body.querySelectorAll('[data-pshop]').forEach(function (b) { b.onclick = function () { sess.shopSel = b.getAttribute('data-pshop'); sess.shopCat = 'all'; renderShopPlayer(body); }; });
+    var sellB = el('shop-sell'); if (sellB) sellB.onclick = function () { sess.shopMode = 'sell'; sess.shopSel = null; renderPlayerStoreEditor(body); };
     body.querySelectorAll('[data-pcat]').forEach(function (b) { b.onclick = function () { sess.shopCat = b.getAttribute('data-pcat'); paintGrid(); body.querySelectorAll('[data-pcat]').forEach(function (x) { x.classList.remove('active'); }); b.classList.add('active'); }; });
     var se = el('shop-psearch'); if (se) se.oninput = paintGrid;
     function paintGrid() {
@@ -1781,7 +2102,7 @@
     if (!c.length) { bar.className = 'shop-cartbar'; bar.innerHTML = ''; return; }
     var total = c.reduce(function (t, x) { return t + (x.price || 0); }, 0);
     bar.className = 'shop-cartbar on';
-    bar.innerHTML = '<span class="shop-cart-n">🛒 ' + c.length + ' item' + (c.length > 1 ? 's' : '') + '</span>' +
+    bar.innerHTML = '<span class="shop-cart-n">CART · ' + c.length + ' item' + (c.length > 1 ? 's' : '') + '</span>' +
       '<span class="shop-cart-total">' + total.toLocaleString() + 'eb</span>' +
       '<button class="rt-btn rt-btn--sm" id="shop-cart-clear">Clear</button>' +
       '<button class="rt-btn rt-btn--green rt-btn--sm" id="shop-cart-go">Checkout</button>';
@@ -1829,8 +2150,9 @@
     sess.camp.publishSheet(sid, json.handle || json.name || sid, json);
     // Decrement shared stock for real (non-virtual) shop lines.
     var touched = false;
-    cart.forEach(function (x) { if (x.virtual) return; var s = (prep().shops || []).filter(function (y) { return y.id === x.shopId; })[0]; if (!s) return; var li = (s.items || []).filter(function (y) { return y.id === x.itemId; })[0]; if (li && li.qty != null) { li.qty = Math.max(0, li.qty - 1); touched = true; } });
-    if (touched) saveShops();
+    var touchedIds = {};
+    cart.forEach(function (x) { if (x.virtual) return; var row = shopDocRow(x.shopId); if (!row) return; var li = ((row.json.items) || []).filter(function (y) { return y.id === x.itemId; })[0]; if (li && li.qty != null) { li.qty = Math.max(0, li.qty - 1); touched = true; touchedIds[x.shopId] = 1; } });
+    if (touched) Object.keys(touchedIds).forEach(function (sid) { saveShopDoc(sid); });
     logSession('Bought ' + cart.length + ' item' + (cart.length > 1 ? 's' : '') + ' — ' + total.toLocaleString() + 'eb' + (src ? ' (paid)' : ' (unpaid)'));
     sess.shopCartArr = [];
     renderShopPlayer(el('shop-body'));
@@ -1840,9 +2162,9 @@
     if (it.qty != null && it.qty <= 0) { alert('Out of stock.'); return; }
     if (!applyPurchaseToSheet(sess.sheetId, it)) { alert('Could not write to your sheet — is it loaded?'); return; }
     if (it.qty != null && !shop._virtual) {
-      var s = (prep().shops || []).filter(function (x) { return x.id === shop.id; })[0];
-      if (s) { var li = (s.items || []).filter(function (x) { return x.id === it.id; })[0]; if (li && li.qty != null) li.qty = Math.max(0, li.qty - 1); }
-      saveShops();
+      var row = shopDocRow(shop.id);
+      if (row) { var li = ((row.json.items) || []).filter(function (x) { return x.id === it.id; })[0]; if (li && li.qty != null) li.qty = Math.max(0, li.qty - 1); }
+      saveShopDoc(shop.id);
     }
     logSession('Bought "' + (it.name || 'item') + '" — ' + Math.round(it.price || 0) + 'eb (on sheet · unpaid)');
     if (btn) { btn.textContent = '✓ on your sheet'; btn.disabled = true; }
@@ -1878,10 +2200,19 @@
     var fr = panel.querySelector('iframe'); if (fr) fr.onload = function () { ncSyncToFrame(); ncPostShopLocs(fr); };
   }
   // Tell the map which location names host a shop, so it can show an "open shop" affordance.
-  function shopLocationNames() { return (prep().shops || []).filter(function (s) { return s.link && s.link.type === 'location' && s.link.ref; }).map(function (s) { return s.link.ref; }); }
+  // Post-migration this is a links-registry query: shop —[located at]→ location.
+  function shopLocationNames() {
+    if (!(window.Links && window.Store)) return Promise.resolve([]);
+    return Links.loadAll().then(function (rows) {
+      var locRefs = rows.filter(function (l) { return l.from && l.from.type === 'shop' && l.to && l.to.type === 'location'; }).map(function (l) { return l.to; });
+      return Promise.all(locRefs.map(function (r) { return Store.resolve(r).then(function (hit) { return hit ? (hit.json.name || '') : ''; }).catch(function () { return ''; }); }));
+    }).then(function (names) { return names.filter(Boolean); }).catch(function () { return []; });
+  }
   function ncPostShopLocs(fr) {
     ensureCdData(function () {
-      try { fr.contentWindow.postMessage({ type: 'nc-shop-locs', names: shopLocationNames() }, '*'); } catch (e) {}
+      shopLocationNames().then(function (names) {
+        try { fr.contentWindow.postMessage({ type: 'nc-shop-locs', names: names }, '*'); } catch (e) {}
+      });
     });
   }
   // Log — session journal (meta.sessions[].log), newest first.
@@ -1992,7 +2323,7 @@
       var on = revIds.indexOf(k.id) >= 0;
       return '<div class="run-row"><span class="run-name">' + esc(k.label || 'Clock') + '</span><span class="run-cval" id="runclkv-' + k.id + '">' + (k.value || 0) + '/' + (k.max || 6) + '</span>' +
         '<button class="prep-mini" data-clkm="' + k.id + '">−</button><button class="prep-mini" data-clkp="' + k.id + '">+</button>' +
-        '<button class="prep-mini' + (on ? ' on' : '') + '" id="runclkrev-' + k.id + '" data-clkrev="' + k.id + '">' + (on ? '👁 shown' : 'reveal') + '</button></div>';
+        '<button class="prep-mini' + (on ? ' on' : '') + '" id="runclkrev-' + k.id + '" data-clkrev="' + k.id + '">' + (on ? 'shown' : 'reveal') + '</button></div>';
     }).join('') : '<span class="cd-empty">No clocks.</span>';
     var loot = (p.loot || []).length ? (p.loot || []).map(function (g) {
       return '<div class="run-row"><span class="run-name">' + esc(g.name || 'Loot') + '</span><span class="run-cval">' + lootSummary(g) + '</span>' +
@@ -2023,7 +2354,7 @@
         var cur = ov().clocks || []; var on = cur.some(function (x) { return x.id === k.id; });
         sess._revClocks = on ? cur.filter(function (x) { return x.id !== k.id; }) : cur.concat([{ id: k.id, label: k.label, value: k.value, max: k.max, color: k.color }]);
         pushClocks();   // instant (Yjs); no full re-render
-        b.classList.toggle('on', !on); b.textContent = !on ? '👁 shown' : 'reveal';
+        b.classList.toggle('on', !on); b.textContent = !on ? 'shown' : 'reveal';
       };
     });
     panel.querySelectorAll('[data-clkp],[data-clkm]').forEach(function (b) {
@@ -2037,12 +2368,8 @@
         var cur = (ov().clocks || []).map(function (x) { return x.id === k.id ? { id: k.id, label: k.label, value: k.value, max: k.max, color: k.color } : x; });
         sess._revClocks = cur; pushClocks();
         var span = panel.querySelector('#runclkv-' + k.id); if (span) span.textContent = (k.value || 0) + '/' + (k.max || 6);
-        // Clock-threshold auto-trigger: an event reveals when its clock drops below x.
-        if (!up) (p.events || []).forEach(function (ev) {
-          if (ev.trigger && ev.trigger.clockId === k.id && k.value < ev.trigger.below && before >= ev.trigger.below) {
-            sess.camp.setOverview({ reveal: eventReveal(ev) }); logSession('⏱ Auto-revealed "' + (ev.title || 'Event') + '" (' + (k.label || 'clock') + ' < ' + ev.trigger.below + ')');
-          }
-        });
+        // Clock-threshold auto-trigger moved to the CAST reactive engine (rule docs) —
+        // see js/app-cast.js + docs/cast-triggers-design.md §E. Legacy path removed.
       };
     });
     panel.querySelectorAll('[data-lootgive]').forEach(function (b) {
@@ -2160,45 +2487,37 @@
   function renderPlayers(panel) {
     if (!panel) return;
     panel.classList.add('sess-sec-bleed');
-    var mode = sess.mode || 'grid';
+    // Columns is THE party display (horizontal scroll, vertical per sheet);
+    // "tabs" survives as an accessibility fallback in the hamburger settings.
+    // Grid is gone — the PJ card grid lives in DATA now.
+    var mode = (window.App && App.uiGet('settings.partyMode', 'columns')) || 'columns';
+    var colW = (window.App && App.uiGet('settings.partyCols', 1.5)) || 1.5;
+    var colCls = colW === 1 ? 'w1' : colW === 2 ? 'w2' : colW === 3 ? 'w3' : 'w15';
     if (sess.order.indexOf(sess.active) < 0) sess.active = sess.order[0] || null;
     var pad = function (n) { return (n < 10 ? '0' : '') + n; };
-    var bar = '<div class="pl-bar"><span class="pl-bar-title">PLAYERS</span><span style="flex:1"></span>' +
-      '<div class="sess-modes">' +
-        '<button class="sess-mode' + (mode === 'grid' ? ' active' : '') + '" data-mode="grid">Grid</button>' +
-        '<button class="sess-mode' + (mode === 'tabs' ? ' active' : '') + '" data-mode="tabs">Tabs</button>' +
-        '<button class="sess-mode' + (mode === 'columns' ? ' active' : '') + '" data-mode="columns">Columns</button>' +
-      '</div>' +
+    var bar = '<div class="pl-bar"><span class="pl-bar-title">PARTY</span><span style="flex:1"></span>' +
       '<button class="sess-mode sess-mode-add" id="pl-add" title="Add a blank character sheet">+ Sheet</button>' +
     '</div>';
     var body;
     if (!sess.order.length) body = '<div class="cd-empty">No sheets hosted.</div>';
-    else if (mode === 'grid') {
-      body = '<div class="pl-grid">' + sess.order.map(function (sid) {
-        var photo = sheetPhoto(sid);
-        return '<button class="pl-card" data-open="' + esc(sid) + '">' +
-          '<div class="pl-photo"' + (photo ? ' style="background-image:url(' + esc(photo) + ')"' : '') + '>' + (photo ? '' : '◈') + '</div>' +
-          '<div class="pl-name">' + esc(sheetLabel(sid)) + '</div></button>';
-      }).join('') + '</div>';
-    } else if (mode === 'tabs') {
+    else if (mode === 'tabs') {
       var tabs = sess.order.map(function (sid) { return '<div class="sess-tab' + (sid === sess.active ? ' active' : '') + '" data-sid="' + esc(sid) + '">' + esc(sheetLabel(sid)) + '</div>'; }).join('');
       body = '<div class="sess-tabbar">' + tabs + '</div><div class="sess-tabbody">' + (sess.active ? '<iframe class="sess-col-frame" src="' + frameSrc(sess.active) + '"></iframe>' : '') + '</div>';
     } else {
       var cols = sess.order.map(function (sid, i) {
-        return '<div class="sess-col" data-sid="' + esc(sid) + '" draggable="true">' +
+        return '<div class="sess-col sess-col-' + colCls + '" data-sid="' + esc(sid) + '" draggable="true">' +
           '<div class="sess-col-head"><span class="sess-col-idx">' + pad(i + 1) + '</span><span class="sess-col-name">' + esc(sheetLabel(sid)) + '</span><span class="sess-col-grab">⠿</span></div>' +
           '<iframe class="sess-col-frame" src="' + frameSrc(sid) + '"></iframe></div>';
       }).join('');
       body = '<div class="sess-cols" id="sess-cols">' + cols + '</div>';
     }
     panel.innerHTML = bar + '<div class="sess-stage-wrap">' + body + '</div>';
-    panel.querySelectorAll('.sess-mode[data-mode]').forEach(function (b) { b.onclick = function () { setSessMode(b.getAttribute('data-mode')); }; });
     var addb = el('pl-add'); if (addb) addb.onclick = addBlankSheet;
-    panel.querySelectorAll('[data-open]').forEach(function (c) { c.onclick = function () { sess.active = c.getAttribute('data-open'); setSessMode('tabs'); }; });
     if (mode === 'tabs') panel.querySelectorAll('.sess-tab').forEach(function (t) { t.onclick = function () { sess.active = t.getAttribute('data-sid'); rebuildPlayers(); }; });
-    if (mode === 'columns') wireColumnReorder();
+    else wireColumnReorder();
   }
-  function rebuildPlayers() { var p = el('tab-content') || el('sec-players'); if (p) renderPlayers(p); }
+  function toolPane(tool) { var t = (sess.tabs || []).filter(function (x) { return x.tool === tool; })[0]; return t ? paneEl(t.id) : null; }
+  function rebuildPlayers() { var p = toolPane('party') || activeHost() || el('sec-players'); if (p) renderPlayers(p); }
   // Display name for a hosted sheet: the character's handle/name, else the id.
   function sheetLabel(sid) {
     var r = sess.camp && sess.camp.getSheet && sess.camp.getSheet(sid), j = r && r.json;
@@ -2212,7 +2531,7 @@
       var sid = sess.camp.createSheet(name, { name: name, handle: name });
       if (sess.order.indexOf(sid) < 0) sess.order.push(sid);
       if (sess.hosted.indexOf(sid) < 0) sess.hosted.push(sid);
-      sess.active = sid; sess.mode = 'tabs';
+      sess.active = sid;
       rebuildPlayers();
     });
   }
@@ -2260,7 +2579,7 @@
     el('tools-frame').hidden = false;
     if (sess.role === 'player' && /nightcity/.test(url)) { var fr = host.querySelector('iframe'); if (fr) fr.onload = ncSyncToFrame; }
   }
-  function sessCombat() { var m = (sess.camp && sess.camp.combatMeta && sess.camp.combatMeta()) || {}; if (m.active) openCombatStage(); else openCombatSetup(); }
+  function sessCombat() { var m = (sess.camp && sess.camp.combatMeta && sess.camp.combatMeta()) || {}; if (m.active) openCombatStage(); else if (window.Shell) Shell.switchSection('combat'); else openCombatSetup(); }
 
   // Push synced public locations to any open player NC-map iframe (Locations
   // section or Tools) as an overlay layer.
@@ -2268,15 +2587,20 @@
     if (sess.role !== 'player') return;
     var vs = el('view-session'); if (!vs) return;
     var locs = ovGet().locations || [];
-    var msg = { type: 'nc-sync-layers', layers: locs.length ? [{ id: 'sync-camp', name: 'Campaign locations', entries: locs }] : [], maps: ovGet().locMaps || [], order: ovGet().locOrder || [] };
+    var msg = { type: 'nc-sync-layers', layers: locs.length ? [{ id: 'sync-camp', name: 'Campaign locations', entries: locs }] : [], maps: ovGet().locMaps || [], order: ovGet().locOrder || [], worldPlaces: ovGet().locWorld || [], worldCities: ovGet().locWorldCities || {} };
     vs.querySelectorAll('iframe').forEach(function (fr) { if (/nightcity/.test(fr.src || '') && fr.contentWindow) fr.contentWindow.postMessage(msg, '*'); });
   }
   // GM edits public locations/maps in the embedded NC planner → push to players live.
   window.addEventListener('message', function (ev) {
     var d = ev.data; if (!d) return;
+    if (d.type === 'nav-key') {   // ⌘K / Esc relayed from a tool iframe (sheet/map)
+      if (d.key === 'k' && window.Palette) window.Palette.toggle();
+      else if (d.key === 'escape' && window.Palette && window.Palette.isOpen()) window.Palette.close();
+      return;
+    }
     if (d.type === 'nc-open-shop') { openShopFor('location', d.name); return; }
     if (d.type !== 'nc-gm-public') return;
-    if (sess.role === 'gm' && sess.camp && sess.camp.setOverview && d.campaign === sess.id) sess.camp.setOverview({ locations: d.places || [], locMaps: d.maps || [], locOrder: d.order || [] });
+    if (sess.role === 'gm' && sess.camp && sess.camp.setOverview && d.campaign === sess.id) sess.camp.setOverview({ locations: d.places || [], locMaps: d.maps || [], locOrder: d.order || [], locWorld: d.worldPlaces || [], locWorldCities: d.worldCities || {} });
   });
 
   /* Files — the "Établi" sourcebook reader, fed from the hub's local books folder. */
@@ -2395,8 +2719,8 @@
         '<label>Chrome<select id="gen-chrome">' + chromeOpts + '</select></label>' +
         '<label>Playstyle<select id="gen-role">' + roleOpts + '</select></label>' +
         '<label>CP2020 role<select id="gen-cp">' + cpOpts + '</select></label>' +
-        '<label>Scope<select id="gen-scope">' + opt('one', 'Single NPC', 'one') + opt('team', 'Coherent team', 'one') + '</select></label>' +
-        '<label>Count <input type="number" id="gen-count" value="1" min="1" max="12"></label>' +
+        '<label>Scope<select id="gen-scope">' + opt('one', 'Single NPC', ctx.scope || 'one') + opt('team', 'Coherent gang', ctx.scope || 'one') + '</select></label>' +
+        '<label>Count <input type="number" id="gen-count" value="' + (ctx.scope === 'team' ? 4 : 1) + '" min="1" max="12"></label>' +
       '</div>' +
       '<button class="app-btn app-btn-go" id="gen-roll">' + (ctx.onParams ? '◆ Add to encounter' : 'Generate') + '</button>' +
       '<div id="gen-preview" class="gen-preview"></div>' +
@@ -2456,7 +2780,10 @@
     return Promise.all([loadCombatDBs(), ORG_CORPS ? Promise.resolve(ORG_CORPS) : fetch('data/corporations.json').then(function (r) { return r.json(); }).catch(function () { return []; })])
       .then(function (res) { ORG_CORPS = res[1] || []; return { weapons: res[0].weapons, cyber: res[0].cyber, armor: res[0].armor, corps: ORG_CORPS }; });
   }
-  function orgGenModal(id) {
+  // ctx: { onSave(orgs) } — the caller owns persistence (Store docs). Without a
+  // ctx.onSave the modal falls back to legacy name-files in the live campaign.
+  function orgGenModal(ctx) {
+    ctx = ctx && typeof ctx === 'object' ? ctx : {};
     var G = window.OrgGen; if (!G) { alert('Org generator not loaded.'); return; }
     var kindOpts = G.list().map(function (k) { return opt(k.id, k.label, 'corporation'); }).join('');
     var scaleOpts = Object.keys(G.SCALE).map(function (s) { return opt(s, G.SCALE[s].label, 'local'); }).join('');
@@ -2483,9 +2810,10 @@
         el('org-actions').innerHTML = '<button class="app-btn" data-x>Close</button><button class="app-btn app-modal-ok" id="org-save">Save ' + last.length + ' org' + (last.length > 1 ? 's' : '') + '</button>';
         el('org-actions').querySelector('[data-x]').onclick = close;
         el('org-save').onclick = function () {
+          if (ctx.onSave) { close(); ctx.onSave(last); return; }
           Promise.all(last.map(function (o) {
             var nm = (o.name || 'org').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) + '-' + Date.now().toString(36) + '.org.json';
-            return api('POST', 'campaigns/' + encodeURIComponent(id) + '/orgs', { name: nm, json: o });
+            return api('POST', 'campaigns/' + encodeURIComponent(sess.id) + '/orgs', { name: nm, json: o });
           })).then(function () { close(); renderTabContent(); });
         };
       });
@@ -2504,7 +2832,10 @@
 
   function openCombatSetup() {
     var id = sess.id;
-    api('GET', 'campaigns/' + encodeURIComponent(id)).then(function (d) {
+    // Squads are docs now (squads/) — fetched through the Store alongside the campaign.
+    var sqP = window.Store ? Store.index('squad').then(function (rows) { return rows.map(function (r) { return r.json; }); }).catch(function () { return []; }) : Promise.resolve([]);
+    Promise.all([api('GET', 'campaigns/' + encodeURIComponent(id)), sqP]).then(function (res2) {
+      var d = res2[0], squadDocs = res2[1];
       var npcDocs = (d && d.docs && d.docs.npcs) || [];
       var pcs = sess.order.map(function (sid) {
         return '<label class="cbs-row"><span class="cbs-name">' + esc(sid) + ' <span class="cbs-tag">PC</span></span><input type="checkbox" data-pc="' + esc(sid) + '" checked></label>';
@@ -2517,7 +2848,7 @@
       var ov = document.createElement('div'); ov.id = 'app-modal-ov'; ov.className = 'app-modal-ov';
       ov.innerHTML = '<div class="app-modal app-modal-wide"><div class="app-modal-head">Start combat</div>' +
         '<div class="app-modal-body">' +
-        (((d.meta && d.meta.prep && d.meta.prep.squads) || []).length ? '<div class="app-kicker">// SQUAD</div><div class="cbs-mook">Squad <select id="cbs-enc"><option value="">— none —</option>' + (d.meta.prep.squads).map(function (e, i) { return '<option value="' + i + '">' + esc(e.name || 'Squad') + '</option>'; }).join('') + '</select><button class="app-btn" id="cbs-encload">Load</button></div>' : '') +
+        (squadDocs.length ? '<div class="app-kicker">// SQUAD</div><div class="cbs-mook">Squad <select id="cbs-enc"><option value="">— none —</option>' + squadDocs.map(function (e, i) { return '<option value="' + i + '">' + esc(e.name || 'Squad') + '</option>'; }).join('') + '</select><button class="app-btn" id="cbs-encload">Load</button></div>' : '') +
         '<div class="app-kicker">// COMBATANTS</div>' + pcs + (npcs || '<div class="cd-empty">No NPCs in this campaign.</div>') +
         (window.NPCGen ? '<div class="app-kicker" style="margin-top:10px">// ARCHETYPES</div>' +
           '<button class="app-btn app-btn-go" id="cbs-gen">Generate archetype →</button><div id="cbs-gen-list" class="cbs-genlist"></div>' : '') +
@@ -2545,7 +2876,7 @@
       var encLoad = el('cbs-encload');
       if (encLoad) encLoad.onclick = function () {
         var idx = el('cbs-enc').value; if (idx === '') return;
-        var enc = d.meta.prep.squads[+idx]; if (!enc) return;
+        var enc = squadDocs[+idx]; if (!enc) return;
         if (enc.settings) { el('cbs-mode').value = enc.settings.mode || 'hybrid'; el('cbs-vis').value = enc.settings.npcVis || 'full'; }
         window.CombatEngine && loadCombatDBs().then(function (DBs) {
           (enc.members || []).forEach(function (m) {
@@ -2634,12 +2965,196 @@
     document.body.appendChild(ov);
     combatUI = window.CombatUI.mount(el('cbt-mount'), { camp: sess.camp, role: 'gm' });
     el('cbt-collapse').onclick = closeCombatStage;
+    renderCombatPill();
   }
   function closeCombatStage() {
     if (combatUI) { try { combatUI.destroy(); } catch (e) {} combatUI = null; }
     var ov = el('cbt-overlay'); if (ov) ov.parentNode.removeChild(ov);
     syncCombatBtn();
+    // Refresh the COMBAT pane so it shows the live/resume screen, and surface a
+    // persistent RESUME pill so a collapsed fight is always reachable.
+    if (window.Shell && Shell.state().active === 'combat') Shell.renderTabContent();
+    renderCombatPill();
   }
+  // Floating RESUME pill — visible from any section while combat is live & collapsed.
+  function renderCombatPill() {
+    var m = (sess.camp && sess.camp.combatMeta && sess.camp.combatMeta()) || {};
+    var show = sess.role === 'gm' && m.active && !el('cbt-overlay');
+    var p = el('cbt-pill');
+    if (!show) { if (p) p.parentNode.removeChild(p); return; }
+    if (!p) { p = document.createElement('button'); p.id = 'cbt-pill'; p.className = 'cbt-pill'; document.body.appendChild(p); p.onclick = openCombatStage; }
+    p.innerHTML = '◆ COMBAT LIVE · <b>Round ' + (m.round || 1) + '</b> — RESUME ▸';
+  }
+
+  /* ── Peek drawer: transient right-side preview of an entity. Esc closes,
+     "Open as tab" promotes it to a real tab. One peek at a time. ── */
+  var _peekEl = null;
+  function ensurePeek() {
+    if (_peekEl) return _peekEl;
+    var d = document.createElement('div'); d.id = 'peek'; d.className = 'peek';
+    d.innerHTML = '<div class="peek-back"></div>' +
+      '<aside class="peek-panel" role="dialog" aria-modal="true">' +
+      '<div class="peek-head"><span class="peek-kicker" id="peek-kicker"></span><button class="peek-x" id="peek-x" title="Close (Esc)">✕</button></div>' +
+      '<div class="peek-body" id="peek-body"></div>' +
+      '<div class="peek-foot"><button class="rt-btn rt-btn--gold" id="peek-open">Open as tab ▸</button></div></aside>';
+    document.body.appendChild(d);
+    d.querySelector('.peek-back').onclick = closePeek;
+    el('peek-x').onclick = closePeek;
+    _peekEl = d; return d;
+  }
+  function openPeek(opts) {
+    ensurePeek();
+    el('peek-kicker').textContent = opts.kicker || 'Peek';
+    el('peek-body').innerHTML = opts.bodyHtml || '';
+    var ob = el('peek-open');
+    if (opts.onOpenTab) { ob.style.display = ''; ob.onclick = function () { var f = opts.onOpenTab; closePeek(); f(); }; } else ob.style.display = 'none';
+    _peekEl.classList.add('open');
+  }
+  function closePeek() { if (_peekEl) _peekEl.classList.remove('open'); }
+  function peekIsOpen() { return !!(_peekEl && _peekEl.classList.contains('open')); }
+  function peekNpc(name) {
+    openPeek({ kicker: 'NPC · ' + idOf(name), bodyHtml: '<div class="app-empty">Loading…</div>', onOpenTab: (sess.role === 'gm' ? function () { openEntity('npc', name, idOf(name)); } : function () { openTool('npc'); }) });
+    fetch('/__api/campaigns/' + encodeURIComponent(sess.id) + '/npcs/' + encodeURIComponent(name)).then(function (r) { return r.json(); }).then(function (s) {
+      s = s || {}; var statKeys = ['INT', 'REF', 'TECH', 'COOL', 'BODY', 'MA'];
+      var statsHtml = s.stats ? statKeys.map(function (k) { return '<div class="rt-stat"><div class="rt-stat-l">' + k + '</div><div class="rt-stat-v">' + (s.stats[k] != null ? s.stats[k] : '—') + '</div></div>'; }).join('') : '';
+      var gear = [].concat((s.weapons || []).map(function (w) { return esc(w.name || w); }), (s.cyberware || []).map(function (c) { return esc(c.name || c); }));
+      var b = el('peek-body'); if (!b) return;
+      b.innerHTML = '<div class="rt-head-title" style="font-size:22px">' + esc(idOf(name)) + '</div>' +
+        '<div class="rt-head-sub">' + esc((s.role || 'NPC') + (s.sa ? ' · ' + s.sa : '')) + '</div>' +
+        (s.notes ? '<p class="peek-notes">' + esc(s.notes) + '</p>' : '') +
+        (statsHtml ? '<div class="rt-stats" style="margin:12px 0">' + statsHtml + '</div>' : '') +
+        (gear.length ? '<div class="rt-field-l">Gear &amp; chrome</div>' + gear.map(function (g) { return '<div class="rt-rowline"><span>' + g + '</span></div>'; }).join('') : '');
+    }).catch(function () { var b = el('peek-body'); if (b) b.innerHTML = '<div class="app-empty">Could not load.</div>'; });
+  }
+  function peekShop(id) {
+    var s = (typeof shopById === 'function') ? shopById(id) : null; if (!s) return;
+    var items = s.items || [];
+    var meta = [s.kind === 'online' ? 'Online' : 'Physical', s.public ? 'Public' : 'Hidden'];
+    if (s.link && s.link.type && s.link.type !== 'url' && s.link.ref) meta.push('@ ' + s.link.ref);
+    var rows = items.slice(0, 16).map(function (it) {
+      var price = it.price ? Math.round(it.price) + 'eb' : '';
+      var stock = it.qty == null ? '' : (it.qty <= 0 ? 'sold out' : it.qty + ' left');
+      return '<div class="rt-rowline"><span>' + esc(it.name || it.ref || 'Item') + '<span class="peek-dim"> · ' + esc(SHOP_CAT_LABEL[it.cat] || it.cat || '') + '</span></span>' +
+        '<span>' + price + (stock ? ' <span class="peek-dim">' + stock + '</span>' : '') + '</span></div>';
+    }).join('');
+    openPeek({ kicker: 'Shop', onOpenTab: function () { sess.shopSel = id; openTool('shop', true); },
+      bodyHtml: '<div class="rt-head-title" style="font-size:22px">' + esc(s.name || 'Shop') + '</div>' +
+        '<div class="rt-head-sub">' + esc(meta.join(' · ')) + '</div>' +
+        (s.pitch ? '<p class="peek-notes">' + esc(s.pitch) + '</p>' : '') +
+        '<div class="rt-field-l">' + items.length + ' item' + (items.length === 1 ? '' : 's') + '</div>' +
+        (rows || '<div class="app-empty">No items yet.</div>') });
+  }
+  function peekLocation(name) {
+    var l = shopLocations().filter(function (x) { return x.name === name; })[0] || { name: name };
+    var linked = shopsLinkedTo('location', l.name) || [];
+    openPeek({ kicker: 'Location', onOpenTab: function () { openTool('map'); },
+      bodyHtml: '<div class="rt-head-title" style="font-size:22px">' + esc(l.name) + '</div>' +
+        (l.sub ? '<div class="rt-head-sub">' + esc(l.sub) + '</div>' : '') +
+        (linked.length ? '<div class="rt-field-l">Storefronts here</div>' + linked.map(function (s) { return '<div class="rt-rowline"><span>▣ ' + esc(s.name || 'Shop') + '</span></div>'; }).join('') : '<p class="peek-notes">No linked storefront.</p>') });
+  }
+  function peekSheet(sid) {
+    var rec = sess.camp && sess.camp.getSheet && sess.camp.getSheet(idOf(sid)); var j = (rec && rec.json) || {};
+    var statKeys = ['INT', 'REF', 'TECH', 'COOL', 'BODY', 'MA', 'EMP'];
+    var statsHtml = j.stats ? statKeys.map(function (k) { return '<div class="rt-stat"><div class="rt-stat-l">' + k + '</div><div class="rt-stat-v">' + (j.stats[k] != null && j.stats[k] !== '' ? j.stats[k] : '—') + '</div></div>'; }).join('') : '';
+    var cash = (j.lifestyle && j.lifestyle.cash != null) ? Math.round(parseFloat(j.lifestyle.cash) || 0) : null;
+    var sub = [j.role, (j.handle && j.name) ? j.name : ''].filter(Boolean).join(' · ') || 'Character';
+    openPeek({ kicker: 'Sheet', onOpenTab: function () { openEntity('sheet', idOf(sid), sheetLabel(sid)); },
+      bodyHtml: '<div class="rt-head-title" style="font-size:22px">' + esc(sheetLabel(sid)) + '</div>' +
+        '<div class="rt-head-sub">' + esc(sub) + '</div>' +
+        (statsHtml ? '<div class="rt-stats" style="margin:12px 0">' + statsHtml + '</div>' : '') +
+        '<div class="rt-rowline"><span>Eddies</span><span>' + (cash != null ? cash + 'eb' : '—') + '</span></div>' +
+        '<div class="rt-rowline"><span>Weapons</span><span>' + (j.weapons || []).length + '</span></div>' +
+        '<div class="rt-rowline"><span>Cyberware</span><span>' + (j.cyberware || []).length + '</span></div>' });
+  }
+
+  /* ── History (back/forward across tab focus) + breadcrumb ── */
+  var _navJumping = false;
+  function _navInit() { if (!sess.nav) sess.nav = { stack: [], i: -1 }; }
+  function navRecord(id) { _navInit(); var n = sess.nav; if (n.stack[n.i] === id) return; n.stack = n.stack.slice(0, n.i + 1); n.stack.push(id); n.i = n.stack.length - 1; if (n.stack.length > 50) { n.stack.shift(); n.i--; } }
+  function navCanBack() { _navInit(); return sess.nav.i > 0; }
+  function navCanForward() { _navInit(); return sess.nav.i < sess.nav.stack.length - 1; }
+  function _navGo(delta) {
+    _navInit(); var n = sess.nav, ni = n.i, ids = (sess.tabs || []).map(function (x) { return x.id; });
+    do { ni += delta; } while (ni >= 0 && ni < n.stack.length && ids.indexOf(n.stack[ni]) < 0);
+    if (ni < 0 || ni >= n.stack.length) return;
+    n.i = ni; _navJumping = true; sess.activeTab = n.stack[ni]; renderTabs(); _navJumping = false;
+  }
+  function navBack() { _navGo(-1); }
+  function navForward() { _navGo(1); }
+  function campName() { return (cdData && cdData.name) || (sess && sess.id) || ''; }
+  function entityLabelFor(t) {
+    if (!t) return '';
+    if (t.kind) return t.label || idOf(t.ref);
+    if (t.tool === 'party' && sess.active) return sheetLabel(sess.active);
+    if (t.tool === 'shop' && sess.shopSel) { var s = shopById(sess.shopSel); return s ? s.name : ''; }
+    return '';
+  }
+  function renderCrumbs() {
+    var c = el('app-crumbs'); if (!c) return;
+    if (!sess || !sess.id) { c.innerHTML = ''; return; }
+    var t = activeTab();
+    var toolLbl = t && t.kind ? (t.kind.charAt(0).toUpperCase() + t.kind.slice(1)) : (t && t.tool ? toolMeta(t.tool).label : (t ? 'New tab' : ''));
+    var ent = entityLabelFor(t);
+    var isGm = sess.role === 'gm';
+    c.innerHTML = '<button class="crumb-arrow" id="crumb-b" title="Back (⌘[)"' + (navCanBack() ? '' : ' disabled') + '>‹</button>' +
+      '<button class="crumb-arrow" id="crumb-f" title="Forward (⌘])"' + (navCanForward() ? '' : ' disabled') + '>›</button>' +
+      '<' + (isGm ? 'a' : 'span') + ' class="crumb crumb-camp"' + (isGm ? ' id="crumb-home"' : '') + '>' + esc(campName()) + '</' + (isGm ? 'a' : 'span') + '>' +
+      (toolLbl ? '<span class="crumb-sep">▸</span><span class="crumb">' + esc(toolLbl) + '</span>' : '') +
+      (ent ? '<span class="crumb-sep">▸</span><span class="crumb crumb-ent">' + esc(ent) + '</span>' : '');
+    if (el('crumb-b')) el('crumb-b').onclick = navBack;
+    if (el('crumb-f')) el('crumb-f').onclick = navForward;
+    if (el('crumb-home')) el('crumb-home').onclick = function () { renderCampaigns(); };
+  }
+
+  /* ── Command palette bridge + global keyboard shortcuts ── */
+  // The palette (js/palette.js) is a standalone overlay; it pulls a fresh, flat
+  // command list from here each time it opens. Selecting an item runs its `run`.
+  /* One command list for BOTH the ⌘K palette and the sidebar search.
+     Entities come from the Shell's live Store index (Shell.corpusEntities) —
+     the same corpus the DATA section renders — never from legacy prep()/docs. */
+  window.AppNav = {
+    ready: function () { return !!(sess && sess.id); },
+    commands: function () {
+      var out = []; if (!sess || !sess.id) return out;
+      if (window.Shell) Shell.sectionDefs().forEach(function (s, i) {
+        if (s.disabled) return;
+        out.push({ group: 'Sections', label: s.label, sub: '⌘' + (i + 1), run: function () { Shell.openSection(s.key); } });
+      });
+      if (window.Shell && Shell.openDataTab) {
+        out.push({ group: 'Views', label: 'Contacts', sub: 'from the sheets', run: function () { Shell.openDataTab({ tool: 'data-view', dtype: 'npc', builtin: 'contacts', label: 'Contacts' }); } });
+        out.push({ group: 'Views', label: 'Database', sub: 'lore reference', run: function () { Shell.openDataTab({ tool: 'data-db', label: 'DATABASE' }); } });
+      }
+      try {
+        ((window.Shell && Shell.corpusEntities && Shell.corpusEntities()) || []).forEach(function (e) {
+          out.push({ group: e.group, label: e.label, sub: e.sub, run: function () { Shell.openEntity(e.type, e.id, e.label); } });
+        });
+      } catch (e) {}
+      try { (sess.order || []).forEach(function (sid) { out.push({ group: 'Sheets', label: sheetLabel(sid), sub: 'player sheet', run: function () { openEntity('sheet', idOf(sid), sheetLabel(sid)); }, peek: function () { peekSheet(sid); } }); }); } catch (e) {}
+      out.push({ group: 'Actions', label: 'New tab', sub: '⌘T', run: navNewTab });
+      out.push({ group: 'Actions', label: 'Journal', sub: 'session log', run: function () { if (window.Shell) Shell.openLogDrawer(); } });
+      out.push({ group: 'Actions', label: 'Settings', sub: 'sidebar · party layout', run: function () { if (window.Shell) Shell.settingsModal(); } });
+      out.push({ group: 'Actions', label: 'Keyboard shortcuts', sub: 'cheat sheet', run: function () { if (window.Shell && Shell.shortcutsModal) Shell.shortcutsModal(); } });
+      out.push({ group: 'Actions', label: 'Sourcebooks', sub: 'PDF reader', run: function () { if (window.openReaderApp) window.openReaderApp(); } });
+      if (sess.role === 'gm') {
+        out.push({ group: 'Actions', label: 'Share player links', sub: 'join links', run: shareLinks });
+        if (sess.camp && sess.camp.setPaused) out.push({ group: 'Actions', label: sess.camp.isPaused() ? 'Resume session' : 'Pause session', sub: 'players see a PAUSED banner', run: function () { var p = !sess.camp.isPaused(); sess.camp.setPaused(p); saveSessionMeta(sess.id, { paused: p }); renderSessionShell(); } });
+      }
+      return out;
+    }
+  };
+  // In the Electron app, ⌘T/⌘W/⌘⇧T/⌘K come through the native menu (below) so they
+  // aren't swallowed by window accelerators; in a plain browser we handle them here.
+  var _menuNav = !!(window.bartmoss && window.bartmoss.onNavShortcut);
+  if (_menuNav) window.bartmoss.onNavShortcut(function (action) {
+    if (action === 'palette') { if (window.Palette) window.Palette.toggle(); return; }
+    if (!sess || !sess.id) return;
+    if (action === 'newtab') navNewTab(); else if (action === 'closetab') navCloseActive(); else if (action === 'reopen') navReopen();
+  });
+  // Keyboard is owned by the Shell (⌘1..6 sections, ⌃Tab tabs, ⌘T/W/⇧T, ⌘K).
+  // Only the peek-drawer Escape stays here (peek internals live in this file).
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && peekIsOpen()) { closePeek(); return; }
+  });
 
   /* ── boot ── */
   // A GM "Share" link (app.html?campaign=&sheet=) drops a player straight into

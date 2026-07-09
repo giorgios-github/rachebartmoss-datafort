@@ -251,6 +251,25 @@ var TUTORIALS = {
       '</ul></div>'
   },
 
+  'press-card': {
+    title: 'Press Card',
+    teaser: 'For Media characters: your Credibility, the outlets you write for, your paying contracts, and your heat. Anyone can investigate — Credibility is what gets a story heard.',
+    html:
+      '<p>The journalist’s counterpart to the netrunner’s deck. It surfaces your <b class="tuto-ui">Credibility</b> (the Media special ability) and how you get paid.</p>' +
+      '<h4>Credibility</h4>' +
+      '<p>Set it in <b class="tuto-ui">Stats &amp; Skills → Special Abilities</b>. It governs how far a story travels every time you publish from a media suite; non-Media sit at 0 and die in obscurity.</p>' +
+      '<h4>Contracts — three ways to get paid</h4>' +
+      '<ul>' +
+        '<li><b class="tuto-ui">Ad deal</b> — clean money running an advertiser’s placement on an outlet.</li>' +
+        '<li><b class="tuto-ui">Advertorial</b> — a client supplies the material; you stake your Credibility. Disclose it (safe, less reach) or bury it (lucrative — a Credibility roll at the table if it surfaces).</li>' +
+        '<li><b class="tuto-ui">Staff</b> — on the payroll, paid per article or per month against a quota.</li>' +
+      '</ul>' +
+      '<div class="tuto-links"><b class="tuto-links-h">&harr; Links</b><ul>' +
+        '<li><span class="tuto-arrow">&rarr; Stats / Skills:</span> Credibility lives under Special Abilities.</li>' +
+        '<li><span class="tuto-arrow">&rarr; Web / Media app:</span> the advertorial disclosure here mirrors the <i>commissioned</i> toggle when you compose a piece.</li>' +
+      '</ul></div>'
+  },
+
   'sec-stats': {
     title: 'Stats &amp; Derived',
     teaser: 'Your nine stats and everything they feed: movement, carry, BTM, Humanity, and every skill total.',
@@ -591,19 +610,61 @@ function playerConnect() {
   var ov = _tutoPopupEl();
   document.getElementById('tuto-popup-title').innerHTML = 'Connect to your GM';
   document.getElementById('tuto-popup-body').innerHTML =
-    '<p>On the same Wi-Fi as your GM. Paste the link they gave you (or fill it in) to join the session.</p>' +
-    '<label class="pc-label">Paste the link your GM gave you</label>' +
-    '<input id="pc-link" class="pc-input" placeholder="http://192.168.1.42:8787/app.html?campaign=main&amp;sheet=Player_1">' +
-    '<div class="pc-or">— or fill it in —</div>' +
-    '<div class="pc-row">' +
-      '<div><label class="pc-label">Campaign</label><input id="pc-camp" class="pc-input" value="main"></div>' +
-      '<div><label class="pc-label">Your sheet id</label><input id="pc-sheet" class="pc-input" placeholder="Player_1"></div>' +
-    '</div>' +
-    '<div class="pc-actions">' +
-      '<button class="pc-btn pc-btn-recv" onclick="_playerGo(\'join\')">⇄ CONNECT<small>join the session</small></button>' +
-    '</div>' +
+    '<div id="pc-discover"></div>' +
+    '<div id="pc-roster"><p class="pc-loading">Looking for your GM…</p></div>' +
+    '<details class="pc-manual"><summary>Connect manually</summary>' +
+      '<label class="pc-label">Paste the link your GM gave you</label>' +
+      '<input id="pc-link" class="pc-input" placeholder="http://192.168.1.42:8787/app.html?campaign=main&amp;sheet=Player_1">' +
+      '<div class="pc-or">— or fill it in —</div>' +
+      '<div class="pc-row">' +
+        '<div><label class="pc-label">Campaign</label><input id="pc-camp" class="pc-input" value="main"></div>' +
+        '<div><label class="pc-label">Your sheet id</label><input id="pc-sheet" class="pc-input" placeholder="Player_1"></div>' +
+      '</div>' +
+      '<div class="pc-actions">' +
+        '<button class="pc-btn pc-btn-recv" onclick="_playerGo(\'join\')">⇄ CONNECT<small>join the session</small></button>' +
+      '</div>' +
+    '</details>' +
     '<div id="pc-err" class="pc-err"></div>';
   ov.style.display = 'flex';
+  _pcLoadDiscover(); _pcLoadRoster();
+}
+function _pcApi(path) { return fetch('/__api/' + path).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }); }
+// Characters the GM is hosting on this hub (same-origin) → click to join directly.
+function _pcLoadRoster() {
+  _pcApi('roster').then(function (d) {
+    var box = document.getElementById('pc-roster'); if (!box) return;
+    var camps = (d && d.campaigns) || [], withSheets = camps.filter(function (c) { return c.sheets && c.sheets.length; });
+    if (!withSheets.length) {
+      box.innerHTML = '<p class="pc-empty">' + (d
+        ? 'No characters hosted yet — ask your GM to go live, or connect manually below.'
+        : 'Open your GM\'s link on the same Wi-Fi to see the character list, or connect manually below.') + '</p>';
+      return;
+    }
+    box.innerHTML = '<p class="pc-pick">Pick your character:</p>' + withSheets.map(function (c) {
+      return '<div class="pc-sec-h">' + _esc(c.name || c.id) + (c.live ? ' <span class="pc-live">LIVE</span>' : '') + '</div>' +
+        '<div class="pc-chars">' + c.sheets.map(function (s) {
+          var av = s.photo ? '<img class="pc-char-av" src="' + _esc(s.photo) + '">'
+            : '<span class="pc-char-av pc-char-noav">' + _esc((s.name || '?').slice(0, 1).toUpperCase()) + '</span>';
+          return '<button class="pc-char" onclick="_playerJoinSheet(\'' + _esc(c.id) + '\',\'' + _esc(s.id) + '\')">' + av +
+            '<span class="pc-char-t"><b>' + _esc(s.name || s.id) + '</b>' + (s.handle ? '<span class="pc-char-h">"' + _esc(s.handle) + '"</span>' : '') + '</span></button>';
+        }).join('') + '</div>';
+    }).join('');
+  });
+}
+// Other GMs seen on the LAN (mDNS). Click → open that hub's site, which lists its own roster.
+function _pcLoadDiscover() {
+  _pcApi('discover').then(function (d) {
+    var box = document.getElementById('pc-discover'); if (!box) return;
+    var hubs = (d && d.hubs) || []; if (!hubs.length) { box.innerHTML = ''; return; }
+    box.innerHTML = '<div class="pc-sec-h">On your network</div>' + hubs.map(function (h) {
+      return '<button class="pc-hub" onclick="location.href=\'http://' + _esc(h.host) + ':' + h.port + '/index.html?player=1&autoconnect=1\'">' +
+        '<span class="pc-hub-ico">◈</span><span class="pc-hub-t"><b>' + _esc(h.name || 'Datafort Hub') + '</b>' +
+        (h.campaign ? '<span class="pc-hub-c">' + _esc(h.campaign) + '</span>' : '') + '</span><span class="pc-hub-go">▸</span></button>';
+    }).join('');
+  });
+}
+function _playerJoinSheet(camp, sheet) {
+  window.location.href = 'app.html?campaign=' + encodeURIComponent(camp) + '&sheet=' + encodeURIComponent(sheet);
 }
 function _playerGo(mode) {
   var errEl = document.getElementById('pc-err');
@@ -760,13 +821,22 @@ function dbRender() {
   document.getElementById('db-count').textContent = rows.length + '/' + DB[dbCur].length;
   var arrow = function(s) { return s === dbSort ? '<span style="font-size:10px;margin-left:2px;">' + (dbSortAsc ? '▲' : '▼') + '</span>' : ''; };
   document.getElementById('db-thead').innerHTML = '<tr>' + cols.map(function(c) { return '<th data-col="' + c + '">' + c + arrow(c) + '</th>'; }).join('') + '</tr>';
-  document.getElementById('db-tbody').innerHTML = rows.map(function(r) {
-    return '<tr>' + cols.map(function(c) {
+  var tb = document.getElementById('db-tbody');
+  tb.innerHTML = rows.map(function(r, i) {
+    return '<tr data-dbr="' + i + '">' + cols.map(function(c) {
       var v = dbFlat(r[c]), cls = c === 'name' ? 'cn' : (numCols.indexOf(c) >= 0 && v ? 'cnum' : '');
       if (!v) cls += ' cempty';
       return '<td class="' + cls + '">' + (v || '—') + '</td>';
     }).join('') + '</tr>';
   }).join('');
+  if (window.CtxMenu) tb.querySelectorAll('tr[data-dbr]').forEach(function(tr) { CtxMenu.attach(tr, function() { return _siteDbMenu(rows[+tr.getAttribute('data-dbr')]); }); });
+}
+function _siteDbMenu(r) {
+  if (!r) return null;
+  var ref = (r.source && (r.source.book ? r.source.book + ' p.' + (r.source.page || '') : r.source)) || '';
+  var items = [{ label: 'Copy name', icon: '⧉', onClick: function() { try { navigator.clipboard.writeText(r.name || ''); } catch (e) {} } }];
+  if (ref) items.push({ label: 'Copy reference', icon: '▤', onClick: function() { try { navigator.clipboard.writeText((r.name || '') + ' — ' + ref); } catch (e) {} } });
+  return items;
 }
 
 function setDbTab(name) {
@@ -803,6 +873,7 @@ function makeBlankCS() {
     vehicles: [],
     netrunner: { mode:'vanilla', deckId:null, deckPhoto:'', deckCustomOptions:[], programs:[], quickhacks:[],
       icon:{ name:'', style:'', photo:'' }, interface:'plugs', netAccessCode:'', heat:0, heatNotes:'', signatureProgramId:null },
+    net: { computer:null, deliveries:[], bookmarks:[], pinned:[], groups:[], history:[] },  // Net access device, deliveries, browser state
     lifepath: { freeform: '', fields: {}, rolled: {}, collapsed: {}, events: [] },  // CP2020 background + life events
     contacts: [],          // network roster (friends, enemies, fixers…)
     jobs: [],              // gig / run pipeline
@@ -1047,6 +1118,7 @@ function setSkill(name, val) {
 function setSpecialAbility(name, val) {
   CS.specialAbilities[name] = parseInt(val) || 0;
   renderSkills();
+  if (name === 'Credibility') { try { renderPress(); } catch (e) {} }  // press card shows the live Credibility
 }
 
 function addCustomSkill() {
@@ -1072,7 +1144,7 @@ function searchItems(type) {
   var configs = {
     cyber:  { db: DB.cyberware, field: 'cyber',  fmt: function(i) { return i.name + '<span class="dd-sub">' + i.type + (i.subtype ? ' / ' + i.subtype : '') + ' — HC:' + i.hc + ' — ' + i.cost + 'eb — ' + (i.notes || '') + '</span>'; } },
     weap:   { db: DB.weapons,   field: 'weap',   fmt: function(i) { return i.name + '<span class="dd-sub">' + (i.type || '') + ' ' + (i.damage || '') + ' ' + (i.ammo || '') + ' ' + (i.shots || '') + 'rds — ' + (i.cost || 0) + 'eb</span>'; } },
-    gear:   { db: DB.gear.filter(function(g) { return g.category !== 'ARMOR/CLOTHING'; }), field: 'gear',   fmt: function(i) { return i.name + '<span class="dd-sub">' + i.category + ' — ' + i.cost + 'eb — ' + (i.notes || '') + '</span>'; } },
+    gear:   { db: DB.gear.filter(function(g) { return g.category !== 'ARMOR/CLOTHING' && !(g.category === 'COMPUTER' && g.connection); }), field: 'gear',   fmt: function(i) { return i.name + '<span class="dd-sub">' + i.category + ' — ' + i.cost + 'eb — ' + (i.notes || '') + '</span>'; } },
     outfit: { db: outfitDB,     field: 'outfit', fmt: function(i) { return i.name + '<span class="dd-sub">' + fmtSlots(i) + (i.cost||0) + 'eb — ' + (i.notes || '') + '</span>'; } },
     fashion:{ db: storageDB,    field: 'fashion',fmt: function(i) { return i.name + '<span class="dd-sub">' + fmtSlots(i) + (i.cost||0) + 'eb — ' + (i.notes || '') + '</span>'; } },
     armor:  { db: ARMOR_DB,     field: 'armor',  fmt: function(i) { return i.name + '<span class="dd-sub">' + i.cost + 'eb — ' + (i.notes || '') + '</span>'; } },
@@ -1488,7 +1560,7 @@ function setWeapDesc(idx, val) { CS.weapons[idx].description = val; }
 
 function renderWeapons() {
   document.getElementById('weap-list').innerHTML = CS.weapons.map(function(w, i) {
-    return '<div class="inv-item">' +
+    return '<div class="inv-item" data-wi="' + i + '">' +
       '<div class="inv-top"><span class="inv-name">' + w.name + '</span>' +
       '<div class="inv-tags">' +
       editTag('weapons', i, 'type', 'Type:', '', 30) +
@@ -1511,6 +1583,8 @@ function renderWeapons() {
       '<textarea class="inv-desc-input" placeholder="Description..." oninput="setWeapDesc(' + i + ',this.value)">' + (w.description || '') + '</textarea>' +
       '</div>';
   }).join('');
+  var wl = document.getElementById('weap-list');
+  if (wl && window.CtxMenu) wl.querySelectorAll('.inv-item[data-wi]').forEach(function (n) { CtxMenu.attach(n, function () { return _weaponCtxMenu(+n.getAttribute('data-wi')); }); });
 }
 
 /* ─── Armor ─── */
@@ -1742,7 +1816,6 @@ function addCustomToWardrobe() {
     cost: 0, wt: 0, notes: '', isArmor: sp > 0, sp: sp, description: '' });
   renderWardrobe();
 }
-function addCustomOutfit() { addCustomToWardrobe(); }
 function addCustomArmor()  { addCustomToWardrobe(); }
 function removeFromWardrobe(wi) { CS.wardrobe.splice(wi, 1); renderWardrobe(); }
 
@@ -1921,7 +1994,6 @@ function wardrobeAddFromSearch(name, isArmorItem) {
   renderWardrobe();
 }
 
-function removeOutfit(idx) { renderOutfitSection(); } // legacy shim
 function renderOutfit() { renderOutfitSection(); }   // legacy shim
 
 /* ── Storage containers (Fashion → Inventory containers) ── */
@@ -2313,7 +2385,7 @@ function renderFashion() {
           'onclick="event.stopPropagation();CS.fashion[' + fi + '].equipped=!CS.fashion[' + fi + '].equipped;renderFashion()" ' +
           'title="Equipped">E</span>'
       : '';
-    return '<div class="fashion-item' + (f.isOutfit ? ' fi-outfit' : '') + '">' +
+    return '<div class="fashion-item' + (f.isOutfit ? ' fi-outfit' : '') + '" data-cfi="' + fi + '">' +
       eBadge +
       '<div class="fashion-head" ' + (!f.isOutfit ? 'draggable="true" ondragstart="fashionContainerDragStart(event,' + fi + ')"' : '') + '>' +
         '<span class="fashion-name">' + f.name + '</span>' + badge +
@@ -2332,11 +2404,12 @@ function renderFashion() {
   }).join('');
 
   el.innerHTML = handsHtml + outfitContainersHtml + fashionHtml + vehCargoHtml + houseCargoHtml;
+  if (window.CtxMenu) el.querySelectorAll('.fashion-item[data-cfi]').forEach(function (n) { CtxMenu.attach(n, function () { return _containerCtxMenu(+n.getAttribute('data-cfi')); }); });
 }
 
 /* ─── Gear ─── */
 function addGear(item) {
-  var g = { name: item.name, category: item.category || '', cost: item.cost || 0, wt: item.wt || 0, notes: item.notes || '', description: '' };
+  var g = { name: item.name, category: item.category || '', cost: item.cost || 0, wt: item.wt || 0, qty: 1, notes: item.notes || '', description: '' };
   CS.gear.push(g);
   pendPurchase(g, 'gear');
   renderGear();
@@ -2363,17 +2436,30 @@ function _removeLinkedWeaponByUid(uid) {
   if (typeof renderFashion === 'function') renderFashion();
 }
 function setGearDesc(idx, val) { CS.gear[idx].description = val; }
+// Quantity per gear entry — drives the price charged in the buytray (unit × qty).
+function setGearQty(idx, val) {
+  var g = CS.gear[idx]; if (!g) return;
+  g.qty = Math.max(1, Math.round(parseFloat(val) || 1));
+  if (g.buyId && Array.isArray(CS.pending)) {
+    var p = CS.pending.filter(function (x) { return x.id === g.buyId; })[0];
+    if (p) { p.qty = g.qty; p.unit = (g.cost || 0); p.cost = Math.round((g.cost || 0) * g.qty); }
+  }
+  try { _csPersist(); } catch (e) {}
+  renderGear(); renderPending();
+}
 
 function renderGear() {
   var el = document.getElementById('gear-list');
   if (!el) return;
   el.innerHTML = CS.gear.map(function(g, i) {
-    return '<div class="inv-item" draggable="true" ondragstart="gearItemDragStart(event,' + i + ')">' +
+    return '<div class="inv-item' + (g._forSale ? ' inv-forsale' : '') + '" data-gi="' + i + '" draggable="true" ondragstart="gearItemDragStart(event,' + i + ')">' +
       '<div class="inv-top">' +
       '<span class="drag-handle" title="Drag into a container">⠿</span>' +
-      '<span class="inv-name">' + g.name + '</span>' +
+      '<span class="inv-name">' + g.name + (g._forSale ? ' <span class="inv-forsale-tag">on sale</span>' : '') + '</span>' +
       '<div class="inv-tags">' +
       editTag('gear', i, 'category', 'Cat:', '', 60) +
+      '<span class="inv-tag-label">×</span>' +
+      '<input class="inv-tag-edit" type="number" min="1" step="1" style="width:42px" value="' + (g.qty || 1) + '" title="Quantity" onchange="setGearQty(' + i + ',this.value)">' +
       editTagNum('gear', i, 'cost', '', 'eb', 50) +
       editTagNum('gear', i, 'wt', '', 'kg', 40) +
       '</div>' +
@@ -2382,6 +2468,61 @@ function renderGear() {
       '<textarea class="inv-desc-input" placeholder="Description..." oninput="setGearDesc(' + i + ',this.value)">' + (g.description || '') + '</textarea>' +
       '</div>';
   }).join('');
+  if (window.CtxMenu) el.querySelectorAll('.inv-item[data-gi]').forEach(function (n) { CtxMenu.attach(n, function () { return _gearCtxMenu(+n.getAttribute('data-gi')); }); });
+}
+/* ─── Inventory right-click menus ─── */
+function _ctxInvRefresh() {
+  renderGear(); renderFashion();
+  if (typeof renderVehicles === 'function') renderVehicles();
+  if (typeof renderLifestyle === 'function') renderLifestyle();
+  if (typeof renderNotStored === 'function') renderNotStored();
+  try { _csPersist(); } catch (e) {}
+}
+// Submenu of destinations a loose item can be moved into (bags, vehicles, apartments).
+function _invMoveSubmenu(take) {
+  var subs = [];
+  (CS.fashion || []).forEach(function (f) {
+    if (f.isArmor || !(f.slots > 0)) return;
+    var full = (f.contents || []).length >= f.slots;
+    subs.push({ label: f.name + ' (' + (f.contents || []).length + '/' + f.slots + ')', disabled: full, onClick: function () { var it = take(); if (it) { (f.contents || (f.contents = [])).push(it); _ctxInvRefresh(); } } });
+  });
+  (CS.vehicles || []).forEach(function (v) {
+    if (!v.name) return; var cap = _getVehCargoSlots(v);
+    subs.push({ label: '🚗 ' + v.name, disabled: _cargoUsed(v.cargoContents) + 1 > cap, onClick: function () { var it = take(); if (it) { (v.cargoContents || (v.cargoContents = [])).push(it); _ctxInvRefresh(); } } });
+  });
+  ((CS.lifestyle && CS.lifestyle.housing) || []).forEach(function (h) {
+    if (!h.name) return; var cap = _lsHousingCargoSlots(h);
+    subs.push({ label: '⌂ ' + h.name, disabled: _cargoUsed(h.cargoContents) + 1 > cap, onClick: function () { var it = take(); if (it) { (h.cargoContents || (h.cargoContents = [])).push(it); _ctxInvRefresh(); } } });
+  });
+  if (!subs.length) subs.push({ label: 'No containers yet', disabled: true });
+  return subs;
+}
+function _gearCtxMenu(gi) {
+  var g = CS.gear[gi]; if (!g) return null;
+  return [
+    { label: 'Move to…', icon: '⇢', submenu: function () { return _invMoveSubmenu(function () { return CS.gear.splice(gi, 1)[0]; }); } },
+    { label: 'Duplicate', icon: '⧉', onClick: function () { CS.gear.push(JSON.parse(JSON.stringify(g))); _ctxInvRefresh(); } },
+    { sep: true },
+    { label: 'Delete', icon: '✕', danger: true, onClick: function () { removeGear(gi); try { _csPersist(); } catch (e) {} } }
+  ];
+}
+function _weaponCtxMenu(wi) {
+  var w = CS.weapons[wi]; if (!w) return null;
+  return [
+    { label: 'Reload', icon: '⟳', disabled: !(w.shots > 0), onClick: function () { ammoReload(wi); try { _csPersist(); } catch (e) {} } },
+    { sep: true },
+    { label: 'Delete', icon: '✕', danger: true, onClick: function () { removeWeapon(wi); try { _csPersist(); } catch (e) {} } }
+  ];
+}
+function _containerCtxMenu(fi) {
+  var f = CS.fashion[fi]; if (!f) return null;
+  var items = [];
+  if (!f.nonPortable && !f.isArmor) items.push({ label: f.equipped ? 'Unequip' : 'Equip', icon: 'E', onClick: function () { f.equipped = !f.equipped; renderFashion(); try { _csPersist(); } catch (e) {} } });
+  items.push({ label: 'Empty (to Not stored)', icon: '⇩', disabled: !((f.contents || []).length), onClick: function () { CS.notStored = (CS.notStored || []).concat(f.contents || []); f.contents = []; renderFashion(); if (typeof renderNotStored === 'function') renderNotStored(); try { _csPersist(); } catch (e) {} } });
+  items.push({ label: 'Rename', icon: '✎', onClick: function () { var v = prompt('Container name:', f.name || ''); if (v != null && v.trim()) { f.name = v.trim(); renderFashion(); try { _csPersist(); } catch (e) {} } } });
+  items.push({ sep: true });
+  items.push({ label: 'Remove', icon: '✕', danger: true, onClick: function () { removeFashion(fi); try { _csPersist(); } catch (e) {} } });
+  return items;
 }
 
 /* ─── LIFESTYLE ─── */
@@ -2638,7 +2779,7 @@ function lsEndOfMonth() {
 function lsAddHousing() {
   CS.lifestyle.housing.push({
     name: 'New Place', type: 'Apartment', rooms: 1, rent: 0, owned: false,
-    location: '', description: '', utilities: [], cargoContents: [], cargoOpen: false
+    location: '', district: '', description: '', utilities: [], cargoContents: [], cargoOpen: false
   });
   renderLifestyle(); renderFashion();
 }
@@ -2683,8 +2824,17 @@ function lsAddService(item) {
   renderLifestyle();
 }
 function lsRemoveService(si) {
+  var svc = CS.lifestyle.services[si];
+  // A web subscription is linked to an app: dropping the service cancels the sub.
+  var wasApp = !!(svc && svc.app);
+  if (wasApp && CS.net && CS.net.apps && CS.net.apps[svc.app]) CS.net.apps[svc.app].premium = false;
+  // A desktop subscription (NÜ Premium) → dropping the service cancels the sub.
+  if (svc && svc.desktopPro) { CS.net = CS.net || {}; CS.net.desktop = CS.net.desktop || {}; CS.net.desktop.nuePro = false; }
   CS.lifestyle.services.splice(si, 1);
   renderLifestyle();
+  try { _csPersist(); } catch (e) {}
+  // Reload so the Net app immediately reflects the cancelled subscription.
+  if (wasApp) setTimeout(function () { location.reload(); }, 200);
 }
 function lsSetServiceAccount(si, accId) {
   if (CS.lifestyle.services[si]) CS.lifestyle.services[si].accountId = accId || null;
@@ -2839,12 +2989,13 @@ function _ledgerPush(acc, type, label, amount) {
    right wall; the panel debits all or a selected subset from cash or any bank
    account, or clears without paying. Removing the item drops its line too. */
 function pendPurchase(obj, kind, costOverride) {
-  var cost = Math.round(parseFloat(costOverride != null ? costOverride : (obj && obj.cost)) || 0);
-  if (!cost || cost <= 0) return;                 // only priced catalog buys
+  var unit = Math.round(parseFloat(costOverride != null ? costOverride : (obj && obj.cost)) || 0);
+  if (!unit || unit <= 0) return;                 // only priced catalog buys
   if (!Array.isArray(CS.pending)) CS.pending = [];
   var id = _bankUid();
+  var qty = (obj && obj.qty > 1) ? Math.round(obj.qty) : 1;   // gear can be bought in bulk
   if (obj && typeof obj === 'object') obj.buyId = id;   // link line ↔ inventory item
-  CS.pending.push({ id: id, buyId: id, name: (obj && obj.name) || 'Item', cost: cost, kind: kind || '' });
+  CS.pending.push({ id: id, buyId: id, name: (obj && obj.name) || 'Item', unit: unit, qty: qty, cost: unit * qty, kind: kind || '' });
   try { _csPersist(); } catch (e) {}
   renderPending();
 }
@@ -2853,6 +3004,7 @@ function _inventoryBuyIds() {
   var ids = {};
   function scan(arr) { (arr || []).forEach(function (x) { if (x && x.buyId) ids[x.buyId] = 1; if (x && Array.isArray(x.options)) x.options.forEach(function (o) { if (o && o.buyId) ids[o.buyId] = 1; }); }); }
   scan(CS.weapons); scan(CS.gear); scan(CS.cyberware); scan(CS.wardrobe); scan(CS.vehicles);
+  scan((CS.net && CS.net.owned) || []);   // computers live in the device locker, not the gear list
   return ids;
 }
 function _csCash() { var ls = CS.lifestyle || {}; return parseFloat(ls.cash != null ? ls.cash : (CS.money || 0)) || 0; }
@@ -2910,7 +3062,7 @@ function renderPending() {
       '<div class="buytray-head">UNPAID PURCHASES</div>' +
       '<div class="buytray-list">' + list.map(function (p) {
         return '<label class="buytray-row"><input type="checkbox" data-pid="' + p.id + '" checked>' +
-          '<span class="buytray-name">' + _esc(p.name) + (p.kind ? ' <i>' + _esc(p.kind) + '</i>' : '') + '</span>' +
+          '<span class="buytray-name">' + _esc(p.name) + (p.qty > 1 ? ' <b class="buytray-qty">×' + p.qty + '</b>' : '') + (p.kind ? ' <i>' + _esc(p.kind) + '</i>' : '') + '</span>' +
           '<span class="buytray-cost">' + (p.cost || 0).toLocaleString() + 'eb</span></label>';
       }).join('') + '</div>' +
       '<div class="buytray-total">Total <b>' + total.toLocaleString() + 'eb</b></div>' +
@@ -3575,7 +3727,7 @@ function renderLifepath() {
         : '<input class="lp-input" value="' + _esc(val) + '" placeholder="' + _esc(f.label) + '..." oninput="lpSetField(\'' + f.key + '\',this.value)">';
       return '<div class="lp-row"><span class="lp-label">' + f.label + '</span>' + input + rollBtn + '</div>';
     }).join('');
-    return '<div class="lp-group' + (collapsed?' lp-group-collapsed':'') + '">' +
+    return '<div class="lp-group' + (collapsed?' lp-group-collapsed':'') + '" data-group="' + g[0] + '">' +
       '<div class="lp-group-head">' + _cToggle(g[0]) + g[1] + '</div>' +
       (collapsed ? '' : rows) +
     '</div>';
@@ -4086,12 +4238,16 @@ function renderLifestyle() {
     var typeOpts = HOUSING_TYPES.map(function(t) {
       return '<option value="' + t + '"' + (h.type === t ? ' selected' : '') + '>' + t + '</option>';
     }).join('');
+    var distOpts = '<option value=""' + (!h.district ? ' selected' : '') + '>— district —</option>' + NC_DISTRICTS.map(function(d) {
+      return '<option value="' + d + '"' + (h.district === d ? ' selected' : '') + '>' + d + '</option>';
+    }).join('');
 
     return '<div class="ls-housing-card">' +
       '<div class="ls-housing-head">' +
         '<input class="ls-housing-name" value="' + (h.name||'').replace(/"/g,'&quot;') + '" ' +
           'oninput="CS.lifestyle.housing[' + hi + '].name=this.value;renderFashion()">' +
         '<select class="ls-housing-type" onchange="CS.lifestyle.housing[' + hi + '].type=this.value;renderFashion()">' + typeOpts + '</select>' +
+        '<select class="ls-housing-type" title="Delivery district" onchange="CS.lifestyle.housing[' + hi + '].district=this.value">' + distOpts + '</select>' +
         '<span class="ls-rm" onclick="removeHousing(' + hi + ')">✕</span>' +
       '</div>' +
       '<div class="ls-housing-body">' +
@@ -4627,6 +4783,662 @@ function _netMuUsed() {
   return (_nr().programs || []).filter(function(p){ return p.slotted; }).reduce(function(t,p){ return t + (parseInt(p.mu)||0); }, 0);
 }
 
+/* ─── COMPUTER (Net access device gating exploration + deliveries) ─── */
+var NC_DISTRICTS = ['A1 Little Italy','A2 Northside','A3 City Center','A4 Upper Eastside','A5 Upper Marina','A6 East Marina','B1 Westhill Gardens','B2 Corp. Center','B3 City Center Closeup','B4 Bank Block','B5 Old Downtown','B6 New Harbor','C1 NC University','C2 Lake Park','C3 Eastpark & Japantown','C4 Little China','C5 Studio City','C6 Charter Hill'];
+function _csNet() {
+  if (!CS.net) CS.net = { computer:null, owned:[], deliveries:[], bookmarks:[], pinned:[], groups:[], history:[] };
+  var n = CS.net;
+  if (!Array.isArray(n.owned)) n.owned = [];
+  // migrate a legacy single active machine into the owned list
+  if (n.computer) { if (!n.computer.id) n.computer.id = _bankUid(); if (!n.owned.some(function (d) { return d.id === n.computer.id; })) n.owned.unshift(n.computer); n.activeDeviceId = n.computer.id; }
+  return n;
+}
+function _compReach(c) { return c && typeof c.reach === 'number' ? c.reach : 0; }
+function _compPower(c) { return c && typeof c.power === 'number' ? c.power : 0; }
+function _compStealth(c) { return c && typeof c.stealth === 'number' ? c.stealth : 0; }
+function _compUplink(c) { return (c && c.connection) || ''; }
+function _deckReach() { var nr = CS.netrunner; return (nr && nr.deckId) ? 2 : 0; }
+// Perk-adjusted effective stats (a machine carries at most one perk).
+function _devReach(c) { if (!c) return 0; var r = _compReach(c); if (c.perk === 'signal' && c.connection === 'cellular') r += 1; return Math.max(0, Math.min(4, r)); }
+function _devStealth(c) { if (!c) return 0; var s = _compStealth(c); if (c.perk === 'ghostos') s += 1; if (c.perk === 'hot') s -= 2; return Math.max(0, Math.min(3, s)); }
+function _devPower(c) { if (!c) return 0; var p = _compPower(c); if (c.perk === 'compress') p += 1; return Math.max(0, p); }
+function _effReach() { return Math.max(_devReach(_csNet().computer), _deckReach()); }
+function _hasDevice() { return !!_csNet().computer || _deckReach() > 0; }
+function _clampn(v, lo, hi) { v = parseInt(v, 10); if (isNaN(v)) v = lo; return Math.max(lo, Math.min(hi, v)); }
+function _uplinkWord(u) { return u === 'landline' ? 'WIRED' : u === 'satellite' ? 'SAT' : u === 'cellular' ? 'CELL' : '—'; }
+var COMP_PERKS = {
+  // ── actually useful (wired to real mechanics) ──
+  adblock:   { name:'Ad-scrubber',      desc:'Strips ads before they render — your feed stays clean.' },
+  compress:  { name:'Compression core', desc:'Renders one tier above its class (+1 effective Power against the bandwidth gate).' },
+  haggle:    { name:'Haggler AI',       desc:'Auto-negotiates every Net purchase — 15% off the sticker price.' },
+  courier:   { name:'Priority courier', desc:'Bundled courier net — your Net orders arrive twice as fast.' },
+  signal:    { name:'Signal booster',   desc:'Extends reach in the field (+1 Reach on a cellular uplink).' },
+  ghostos:   { name:'Ghost OS',         desc:'Hardened, anonymized stack (+1 effective Stealth).' },
+  ai:        { name:'AI copilot',       desc:'Auto-files every lead you uncover straight to your Files — no clicking.' },
+  hot:       { name:'Hot (stolen)',     desc:'Flagged hardware — cheap for the specs, but it screams your location (−2 Stealth).' },
+  // ── kept for lore / flavor (little or no mechanical effect) ──
+  retro:     { name:'Retro core',       desc:'Renders classic old-web beautifully — a collector’s soul.', lore:true },
+  sublock:   { name:'Subsidized',       desc:'Cheap, but a monthly corp fee and every packet is monitored.', lore:true },
+  hardened:  { name:'EMP-hardened',     desc:'Shrugs off surges and jamming — a GM’s stat-drops bounce off it.', lore:true },
+  overclock: { name:'Overclocked',      desc:'Pushed render, runs hot and loud (already baked into the numbers).', lore:true },
+  mesh:      { name:'Mesh relay',       desc:'Off-grid short-range mesh — stays online where the towers die.', lore:true }
+};
+var COMP_CSS = '<style>' +
+  '#computer-section .comp-card{border:2px solid #111;background:#fff;margin-bottom:16px}' +
+  '#computer-section .comp-hud{display:flex;background:#111}' +
+  '#computer-section .comp-hud-stat{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:12px 4px;border-right:1px solid #333}' +
+  '#computer-section .comp-hud-stat:last-child{border-right:none}' +
+  '#computer-section .comp-hud-lbl{font-family:var(--head,sans-serif);font-size:9px;letter-spacing:1px;text-transform:uppercase;color:#9a9a9a}' +
+  '#computer-section .comp-hud-val{font-family:var(--mono,monospace);font-size:23px;font-weight:bold;color:#fff;line-height:1}' +
+  '#computer-section .comp-hud-word{font-size:15px;padding-top:5px}' +
+  '#computer-section .comp-hud-sub{font-family:var(--mono,monospace);font-size:9px;color:#6f6f6f}' +
+  '#computer-section .comp-name-row{display:flex;align-items:baseline;gap:8px;padding:11px 16px 0}' +
+  '#computer-section .comp-name{font-family:var(--head,sans-serif);font-size:15px;letter-spacing:1px;text-transform:uppercase}' +
+  '#computer-section .comp-maker{font-family:var(--mono,monospace);font-size:11px;color:#888}' +
+  '#computer-section .comp-illegal{margin-left:auto;font-family:var(--head,sans-serif);font-size:9px;letter-spacing:1px;text-transform:uppercase;color:#fff;background:#c0392b;padding:2px 6px}' +
+  '#computer-section .comp-blurb{font-family:var(--mono,monospace);font-size:12px;font-style:italic;color:#555;padding:4px 16px 0}' +
+  '#computer-section .comp-perk{font-family:var(--mono,monospace);font-size:11px;color:#333;background:#f7f2e2;border-left:3px solid #b8860b;margin:9px 16px 0;padding:7px 10px;line-height:1.5}' +
+  '#computer-section .comp-perk b{color:#111}' +
+  '#computer-section .comp-readout{padding:6px 16px 14px}' +
+  '#computer-section .comp-read{display:flex;gap:10px;padding:7px 0;border-top:1px solid #eee}' +
+  '#computer-section .comp-read-k{flex:0 0 68px;font-family:var(--head,sans-serif);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#111;padding-top:1px}' +
+  '#computer-section .comp-read-v{flex:1;font-family:var(--mono,monospace);font-size:12px;line-height:1.5;color:#333}' +
+  '#computer-section .comp-read-v b{color:#111}' +
+  '#computer-section .comp-warn{color:#b8860b}' +
+  '#computer-section .comp-none{color:#767676;font-family:var(--mono,monospace);font-size:13px;padding:16px;line-height:1.6}' +
+  '#computer-section .comp-none b{color:#111}' +
+  '#computer-section .comp-dev-h{font-family:var(--head,sans-serif);font-size:11px;letter-spacing:2px;text-transform:uppercase;margin:4px 0 6px}' +
+  '#computer-section .comp-dev{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid #ddd;margin-bottom:6px}' +
+  '#computer-section .comp-dev.active{border-color:#111;background:#fafafa}' +
+  '#computer-section .comp-dev-n{flex:1;font-family:var(--mono,monospace);font-size:13px}' +
+  '#computer-section .comp-dev-tag{font-family:var(--head,sans-serif);font-size:8px;letter-spacing:1px;text-transform:uppercase;color:#888;border:1px solid #ccc;padding:1px 4px;margin-left:4px}' +
+  '#computer-section .comp-dev-ill{color:#c0392b;border-color:#c0392b}' +
+  '#computer-section .comp-dev-s{font-family:var(--mono,monospace);font-size:11px;color:#666;white-space:nowrap}' +
+  '#computer-section .comp-dev-act{font-family:var(--mono,monospace);font-size:11px;color:#1a7a2e;font-weight:bold;white-space:nowrap}' +
+  '#computer-section .comp-dev-use{font-family:var(--head,sans-serif);font-size:10px;letter-spacing:1px;text-transform:uppercase;border:1px solid #111;background:#fff;padding:4px 8px;cursor:pointer}' +
+  '#computer-section .comp-dev-use:hover{background:#111;color:#fff}' +
+  '#computer-section .comp-dev-x{border:none;background:none;color:#bbb;cursor:pointer;font-family:var(--mono,monospace)}' +
+  '#computer-section .comp-dev-x:hover{color:#c0392b}' +
+  '#computer-section .comp-acts{display:flex;gap:8px;margin:4px 0 16px}' +
+  '#computer-section .comp-act{font-family:var(--head,sans-serif);font-size:10px;letter-spacing:1px;text-transform:uppercase;border:1.5px solid #111;background:#fff;padding:8px 12px;cursor:pointer}' +
+  '#computer-section .comp-act:hover{background:#111;color:#fff}' +
+  '.cc-cat-list{max-height:56vh;overflow:auto;margin:2px 0}' +
+  '.cc-grp{font-family:var(--head,sans-serif);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#999;padding:14px 6px 5px}' +
+  '.cc-cat-row{display:grid;grid-template-columns:1fr auto;grid-template-areas:\'main cost\' \'perk cost\';gap:3px 12px;padding:9px 6px;border-bottom:1px solid #eee;cursor:pointer}' +
+  '.cc-cat-row:hover{background:#f7f5ee}' +
+  '.cc-cat-main{grid-area:main;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}' +
+  '.cc-cat-n{font-family:var(--mono,monospace);font-size:13px;font-weight:bold}' +
+  '.cc-cat-ill{color:#c0392b;font-size:9px;letter-spacing:1px;text-transform:uppercase;font-family:var(--head,sans-serif);margin-left:6px}' +
+  '.cc-cat-s{font-family:var(--mono,monospace);font-size:11px;color:#888}' +
+  '.cc-cat-perk{grid-area:perk;font-family:var(--mono,monospace);font-size:11px;color:#6a5a1a;background:#f7f2e2;border-left:3px solid #b8860b;padding:3px 8px;line-height:1.45;align-self:start}' +
+  '.cc-cat-perk b{color:#111}.cc-cat-perk i{font-style:normal;font-size:8px;letter-spacing:1px;text-transform:uppercase;color:#b0a06a}' +
+  '.cc-cat-perk.lore{color:#999;background:#f3f3f3;border-left-color:#ccc}.cc-cat-perk.lore b{color:#666}.cc-cat-perk.lore i{color:#bbb}' +
+  '.cc-cat-noperk{color:#bbb;background:none;border-left-color:#eee}' +
+  '.cc-cat-c{grid-area:cost;align-self:center;font-family:var(--mono,monospace);color:#b8860b;font-weight:bold;white-space:nowrap}' +
+  '#computer-section .comp-deliv-wrap{margin-top:4px}' +
+  '#computer-section .comp-deliv-h{font-family:var(--head,sans-serif);font-size:11px;letter-spacing:2px;text-transform:uppercase;margin:4px 0 6px}' +
+  '#computer-section .comp-deliv{display:flex;align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid #eee}' +
+  '#computer-section .comp-deliv-n{flex:1;font-family:var(--mono,monospace);font-size:13px}' +
+  '#computer-section .comp-deliv-s{font-family:var(--mono,monospace);font-size:12px}' +
+  '#computer-section .comp-in_transit{color:#b8860b}#computer-section .comp-delivered{color:#1a7a2e}#computer-section .comp-seized{color:#c0392b}' +
+  '#computer-section .comp-deliv-a{color:#888;font-size:11px}' +
+  '#computer-section .comp-os-h{font-family:var(--head,sans-serif);font-size:11px;letter-spacing:2px;text-transform:uppercase;margin:18px 0 8px}' +
+  '#computer-section .comp-os-cur{border:2px solid #111;background:#fff;padding:12px 14px;margin-bottom:10px}' +
+  '#computer-section .comp-os-name{font-family:var(--head,sans-serif);font-size:16px;letter-spacing:1px;text-transform:uppercase;display:flex;align-items:baseline;gap:10px}' +
+  '#computer-section .comp-os-maker{font-family:var(--mono,monospace);font-size:11px;color:#888;text-transform:none;letter-spacing:0}' +
+  '#computer-section .comp-os-tag{font-family:var(--mono,monospace);font-size:12px;font-style:italic;color:#555;margin-top:3px}' +
+  '#computer-section .comp-os-lock{font-family:var(--mono,monospace);font-size:11px;color:#b8860b;margin-top:8px}' +
+  '#computer-section .comp-os-list{display:flex;flex-direction:column;gap:8px}' +
+  '#computer-section .comp-os-opt{border:1px solid #ddd;padding:10px 12px}' +
+  '#computer-section .comp-os-opt.active{border-color:#111;background:#fafafa}' +
+  '#computer-section .comp-os-opt-head{display:flex;align-items:baseline;gap:10px}' +
+  '#computer-section .comp-os-opt-n{font-family:var(--mono,monospace);font-size:13px;font-weight:bold}' +
+  '#computer-section .comp-os-opt-v{font-family:var(--mono,monospace);font-size:11px;color:#999}' +
+  '#computer-section .comp-os-badge{margin-left:auto;font-family:var(--head,sans-serif);font-size:9px;letter-spacing:1px;text-transform:uppercase;color:#1a7a2e;white-space:nowrap}' +
+  '#computer-section .comp-os-use{margin-left:auto;font-family:var(--head,sans-serif);font-size:10px;letter-spacing:1px;text-transform:uppercase;border:1px solid #111;background:#fff;padding:4px 10px;cursor:pointer;white-space:nowrap}' +
+  '#computer-section .comp-os-use:hover{background:#111;color:#fff}' +
+  '#computer-section .comp-os-pc{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px;margin-top:8px}' +
+  '#computer-section .comp-os-perk{font-family:var(--mono,monospace);font-size:11px;color:#2a6b3a;line-height:1.4}' +
+  '#computer-section .comp-os-quirk{font-family:var(--mono,monospace);font-size:11px;color:#a05a2a;line-height:1.4}' +
+  '#computer-section .comp-os-sb{margin-top:10px;border-top:1px solid #eee}' +
+  '#computer-section .comp-os-sb-row{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid #f2f2f2}' +
+  '#computer-section .comp-os-sb-k{flex:0 0 30%;font-family:var(--head,sans-serif);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#111;padding-top:1px}' +
+  '#computer-section .comp-os-sb-v{flex:1;font-family:var(--mono,monospace);font-size:11px;color:#555;line-height:1.4}' +
+  '#computer-section .comp-os-sb-v b{color:#111}' +
+  '#computer-section .comp-os-stamp{display:inline-block;width:8px;height:8px;margin-right:6px;vertical-align:middle}' +
+  '#computer-section .comp-os-stamp.good{background:#1a7a2e}' +
+  '#computer-section .comp-os-stamp.warn{background:#b8860b}' +
+  '#computer-section .comp-os-stamp.bad{background:#c0392b}' +
+  '#computer-section .comp-os-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}' +
+  '#computer-section .comp-os-mtag{font-family:var(--mono,monospace);font-size:10px;padding:1px 6px;border:1px solid #ddd;color:#666}' +
+  '#computer-section .comp-os-mtag.good{color:#1a7a2e;border-color:#1a7a2e}' +
+  '#computer-section .comp-os-mtag.warn{color:#b8860b;border-color:#b8860b}' +
+  '#computer-section .comp-os-mtag.bad{color:#c0392b;border-color:#c0392b}' +
+'</style>';
+
+/* ═══════════════ PRESS CARD (Media role) ═══════════════
+   Sibling of the netrunner deck. Surfaces the character's Credibility (the CP2020 Media
+   special ability that gates published reach on the Net), the outlets they're attached to,
+   and their three kinds of paying contract:
+     · ad-régie    — clean money, selling ad space on an outlet they run;
+     · advertorial — a client supplies the material; the journalist composes it and stakes
+                     their Credibility (disclose = safe/−reach, bury = lucrative/risky);
+     · staff       — on the payroll, paid per article or per month against a quota.
+   The app never rolls: the "Credibility roll" on a buried advertorial is a flag the table
+   resolves. This mirrors the COMMISSIONED overlay in the Media desktop app. */
+function _csPress() {
+  if (!CS.press) CS.press = { affiliations: [], contracts: [], heat: 0, notes: '' };
+  var p = CS.press;
+  if (!Array.isArray(p.affiliations)) p.affiliations = [];
+  if (!Array.isArray(p.contracts)) p.contracts = [];
+  if (typeof p.heat !== 'number') p.heat = 0;
+  if (typeof p.notes !== 'string') p.notes = '';
+  return p;
+}
+function _pressCred() { return (CS.specialAbilities && CS.specialAbilities['Credibility']) || 0; }
+var PRESS_MODES = {
+  adregie:     { label: 'AD DEAL',     blurb: 'Clean money — you run an advertiser’s placement on an outlet.' },
+  advertorial: { label: 'ADVERTORIAL', blurb: 'A client supplies the material; you compose it and stake your Credibility.' },
+  staff:       { label: 'STAFF',       blurb: 'On the payroll — paid per article or per month against a quota.' }
+};
+function _pcMoney(n) { n = parseInt(n, 10) || 0; return n ? '€' + n.toLocaleString() : 'no fee'; }
+function _pcPayout(po) { if (!po || !po.metric || po.metric === 'onPublish') return 'paid on delivery'; var l = { reach: 'reach', likes: 'likes', comments: 'comments' }[po.metric] || po.metric; return 'paid when ' + l + ' reach ' + (parseInt(po.threshold, 10) || 0); }
+function _pcTerms(c) {
+  if (c.mode === 'adregie') {
+    var cpm = parseInt(c.cpm, 10) || 0;
+    return '<div class="pc-terms">' + (cpm ? '€' + cpm.toLocaleString() + ' per 1,000 views' : 'unpaid placement') + (c.contentType && c.contentType !== 'any' ? ' · ' + _esc(c.contentType) + ' content' : '') + '</div>';
+  }
+  var feeVal = (c.fee != null ? c.fee : c.rate);
+  if (feeVal == null && !c.payout) return '';
+  return '<div class="pc-terms">' + _pcMoney(feeVal) + (c.payout ? ' · ' + _pcPayout(c.payout) : '') +
+    (c.discloseRequired ? ' · disclosure required' : '') + '</div>';
+}
+function _pcAccountRow() {
+  var accs = ((CS.lifestyle && CS.lifestyle.accounts) || []).filter(function (a) { return a && !a.closed; });
+  if (!accs.length) return '<div class="pc-payacct pc-payacct-none">No bank account yet — open one in <b>Life</b> to receive fees.</div>';
+  var cur = (CS.press && CS.press.payAccount) || (CS.lifestyle && CS.lifestyle.activeAccountId) || accs[0].id;
+  return '<div class="pc-payacct"><span class="pc-payacct-l">Pay fees into</span><select class="pc-in" onchange="pressSetPayAccount(this.value)">' +
+    accs.map(function (a) { return '<option value="' + a.id + '"' + (a.id === cur ? ' selected' : '') + '>' + _esc(a.name || 'account') + ' (' + (parseFloat(a.balance) || 0).toLocaleString() + 'eb)</option>'; }).join('') +
+    '</select></div>';
+}
+function _pcMarket() { var m = window.__mediaMarket; return (m && m.market) ? m.market : { ads: [], posts: [], sponsors: [] }; }
+// Existing press outlets (app==='press' sites) — fetched from the hub in joined mode; empty offline.
+var _pcOutletsCache = null;
+function _pressOutlets(cb) {
+  if (_pcOutletsCache) { cb(_pcOutletsCache); return; }
+  var code = new URLSearchParams(location.search).get('campaign');
+  if (!code) { cb([]); return; }
+  _pcApi('campaigns/' + encodeURIComponent(code) + '/sites').then(function (d) {
+    var items = (d && d.items) || [];
+    if (!items.length) { _pcOutletsCache = []; cb([]); return; }
+    Promise.all(items.map(function (it) {
+      return _pcApi('campaigns/' + encodeURIComponent(code) + '/sites/' + encodeURIComponent(it.name)).then(function (site) {
+        var j = site && (site.json || site);
+        return (j && j.app === 'press') ? { id: j.id, name: j.name || 'outlet' } : null;
+      });
+    })).then(function (arr) { _pcOutletsCache = arr.filter(Boolean); cb(_pcOutletsCache); }, function () { cb([]); });
+  }, function () { cb([]); });
+}
+function _fillOutletDatalist() {
+  var dl = document.getElementById('pc-outlets'); if (!dl) return;
+  _pressOutlets(function (list) { var d2 = document.getElementById('pc-outlets'); if (!d2) return; d2.innerHTML = list.map(function (o) { return '<option value="' + _esc(o.name) + '"></option>'; }).join(''); });
+}
+var PRESS_CSS = '<style>' +
+  '#press-section{font-family:var(--mono,monospace);margin-top:18px;border:2px solid #111;background:#fff;padding:14px}' +
+  '#press-section .pc-head{display:flex;align-items:center;gap:8px;font-size:13px;letter-spacing:2.5px;font-weight:700;margin-bottom:12px;padding-bottom:10px;border-bottom:2px solid #111}' +
+  '#press-section .pc-tut{margin-left:auto;background:none;border:0;color:#888;cursor:pointer;font:inherit;font-size:11px;letter-spacing:1px;text-decoration:underline;text-underline-offset:3px}#press-section .pc-tut:hover{color:#111}' +
+  '#press-section .pc-terms{font-size:12px;font-weight:700;letter-spacing:.5px;margin:8px 0;padding:5px 8px;background:#f4f4f4;border-left:3px solid #111}' +
+  '#press-section .pc-payacct{display:flex;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px dashed #ccc;font-size:12px}' +
+  '#press-section .pc-payacct-l{font-size:10px;letter-spacing:1px;color:#666;text-transform:uppercase;white-space:nowrap}' +
+  '#press-section .pc-payacct select{flex:1;max-width:280px}' +
+  '#press-section .pc-payacct-none{display:block;color:#888;border-bottom:1px dashed #ccc;padding-bottom:10px}' +
+  '#press-section .pc-offer{border:1.5px solid #111;padding:9px 11px;margin-bottom:9px}' +
+  '#press-section .pc-offer-k{font-size:10px;letter-spacing:1px;font-weight:700;border:1px solid #111;display:inline-block;padding:1px 6px;margin-bottom:6px}' +
+  '#press-section .pc-offer-b{font-size:13px;margin-bottom:4px}' +
+  '#press-section .pc-offer-d{font-size:12px;color:#555;line-height:1.45;margin-bottom:6px;border-left:2px solid #ddd;padding-left:8px}' +
+  '#press-section .pc-offer-a{display:flex;align-items:center;gap:8px;flex-wrap:wrap}' +
+  '#press-section .pc-offer-note{font-size:11px;color:#888;flex:1}' +
+  '#press-section .pc-hero{display:flex;align-items:stretch;gap:0;border:2px solid #111;margin-bottom:14px}' +
+  '#press-section .pc-hero-cred{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 16px;background:#111;color:#fff;min-width:92px}' +
+  '#press-section .pc-cred-n{font-size:40px;font-weight:700;line-height:.95}#press-section .pc-cred-n small{font-size:15px;vertical-align:super}' +
+  '#press-section .pc-cred-l{font-size:9px;letter-spacing:2px;margin-top:4px}' +
+  '#press-section .pc-hero-txt{padding:10px 14px;display:flex;flex-direction:column;justify-content:center;font-size:12px;color:#333;line-height:1.5}' +
+  '#press-section .pc-hero-txt b{color:#111}' +
+  '#press-section.pc-nocred .pc-hero-cred{background:#666}' +
+  '#press-section .pc-warn{color:#c0392b;font-weight:700}' +
+  '#press-section .pc-grp{border:2px solid #111;margin-bottom:14px}' +
+  '#press-section .pc-grp-h{background:#111;color:#fff;padding:5px 10px;font-size:11px;letter-spacing:2px;font-weight:700;display:flex;align-items:center;justify-content:space-between}' +
+  '#press-section .pc-grp-body{padding:10px}' +
+  '#press-section .pc-empty{color:#888;font-size:12px;padding:6px 2px}' +
+  '#press-section .pc-addrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}' +
+  '#press-section .pc-add{font:inherit;font-size:11px;letter-spacing:1px;font-weight:700;background:#fff;border:1.5px solid #111;padding:5px 9px;cursor:pointer}#press-section .pc-add:hover{background:#111;color:#fff}' +
+  '#press-section .pc-card{border:1.5px solid #111;padding:8px 10px;margin-bottom:8px}' +
+  '#press-section .pc-card:last-child{margin-bottom:0}' +
+  '#press-section .pc-card.ended{opacity:.55}' +
+  '#press-section .pc-card-h{display:flex;align-items:center;gap:8px;margin-bottom:8px}' +
+  '#press-section .pc-badge{font-size:10px;letter-spacing:1px;font-weight:700;border:1.5px solid #111;padding:2px 6px}' +
+  '#press-section .pc-card-blurb{flex:1;font-size:11px;color:#666;line-height:1.4}' +
+  '#press-section .pc-card-a{display:flex;gap:4px}' +
+  '#press-section .pc-mini{font:inherit;font-size:10px;letter-spacing:1px;background:#fff;border:1px solid #111;padding:2px 7px;cursor:pointer}#press-section .pc-mini:hover{background:#111;color:#fff}' +
+  '#press-section .pc-mini.del:hover{background:#c0392b;border-color:#c0392b}' +
+  '#press-section .pc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}' +
+  '#press-section .pc-f{display:flex;flex-direction:column;gap:3px}' +
+  '#press-section .pc-f-l{font-size:9px;letter-spacing:1px;color:#888;text-transform:uppercase}' +
+  '#press-section .pc-in{font:inherit;font-size:12px;border:1px solid #ccc;padding:4px 6px;background:#fff}#press-section .pc-in:focus{outline:none;border-color:#111}' +
+  '#press-section .pc-chk{display:flex;align-items:center;gap:6px;font-size:12px;margin-top:8px;cursor:pointer}' +
+  '#press-section .pc-note-line{font-size:11px;color:#c0392b;margin-top:6px;font-weight:700}' +
+  '#press-section .pc-note-ok{font-size:11px;color:#666;margin-top:6px}' +
+  '#press-section .pc-quota{font-size:11px;color:#333;margin-top:6px}' +
+  '#press-section .pc-heat{display:flex;align-items:center;gap:10px}' +
+  '#press-section .pc-heat input[type=range]{flex:1}' +
+  '#press-section .pc-heat-v{font-size:22px;font-weight:700;min-width:34px;text-align:right}' +
+  '#press-section .pc-heat-l{font-size:11px;color:#666}' +
+  '#press-section .pc-ta{width:100%;font:inherit;font-size:12px;border:1px solid #ccc;padding:6px;background:#fff;resize:vertical;min-height:44px;box-sizing:border-box}#press-section .pc-ta:focus{outline:none;border-color:#111}' +
+'</style>';
+
+function _pcField(label, inner) { return '<label class="pc-f"><span class="pc-f-l">' + label + '</span>' + inner + '</label>'; }
+function _pcOutletIn(id, field, val) {
+  return '<input class="pc-in" list="pc-outlets" value="' + _esc(val == null ? '' : String(val)) + '" placeholder="pick or type an outlet" oninput="pressSetContract(\'' + id + '\',\'' + field + '\',this.value)">';
+}
+function _pcIn(id, field, val, ph, type) {
+  return '<input class="pc-in" type="' + (type || 'text') + '"' + (type === 'number' ? ' min="0"' : '') +
+    ' value="' + _esc(val == null ? '' : String(val)) + '" placeholder="' + _esc(ph || '') + '"' +
+    ' oninput="pressSetContract(\'' + id + '\',\'' + field + '\',this.value)">';
+}
+function _pcContractFields(c) {
+  if (c.mode === 'adregie') {
+    return '<div class="pc-grid">' +
+      _pcField('client / advertiser', _pcIn(c.id, 'client', c.client, 'who’s paying')) +
+      _pcField('outlet it runs on', _pcOutletIn(c.id, 'siteName', c.siteName)) +
+      _pcField('rate (€ / 1,000 views)', _pcIn(c.id, 'cpm', c.cpm, '0', 'number')) +
+    '</div>' +
+    '<div class="pc-note-ok">Pays each cycle as the piece gains views' + (parseInt(c.paidViews, 10) ? ' — earned on ' + (parseInt(c.paidViews, 10) || 0).toLocaleString() + ' views so far' : '') + '.</div>';
+  }
+  if (c.mode === 'advertorial') {
+    var disc = c.disclosed !== false;
+    return '<div class="pc-grid">' +
+      _pcField('client', _pcIn(c.id, 'client', c.client, 'who commissioned it')) +
+      _pcField('subject', _pcIn(c.id, 'subject', c.subject, 'what it pushes / buries')) +
+      _pcField('fee (€)', _pcIn(c.id, 'fee', c.fee, '0', 'number')) +
+    '</div>' +
+    '<label class="pc-chk"><input type="checkbox"' + (disc ? ' checked' : '') + ' onchange="pressToggleContract(\'' + c.id + '\',\'disclosed\')"> disclose it’s sponsored</label>' +
+    (disc
+      ? '<div class="pc-note-ok">Disclosed — safe, but reach takes a hit (×0.7). No Credibility at stake.</div>'
+      : '<div class="pc-note-line">Buried — lucrative (×1.15 reach) but if it surfaces the table calls a Credibility roll → crash.</div>');
+  }
+  // staff
+  var per = c.per === 'month' ? 'month' : 'article';
+  var quota = parseInt(c.quota, 10) || 0, filled = parseInt(c.filled, 10) || 0;
+  return '<div class="pc-grid">' +
+    _pcField('outlet / employer', _pcOutletIn(c.id, 'outlet', c.outlet)) +
+    _pcField('pay (€)', _pcIn(c.id, 'pay', c.pay, '0', 'number')) +
+    _pcField('per', '<select class="pc-in" onchange="pressSetContract(\'' + c.id + '\',\'per\',this.value)">' +
+      '<option value="article"' + (per === 'article' ? ' selected' : '') + '>article</option>' +
+      '<option value="month"' + (per === 'month' ? ' selected' : '') + '>month</option></select>') +
+    _pcField('quota', _pcIn(c.id, 'quota', c.quota, '0', 'number')) +
+    _pcField('filed', _pcIn(c.id, 'filled', c.filled, '0', 'number')) +
+  '</div>' +
+  (quota ? '<div class="pc-quota">Filed <b>' + filled + '</b> / ' + quota + (filled >= quota ? ' — quota met.' : ' — ' + (quota - filled) + ' to go.') + '</div>' : '');
+}
+
+function renderPress() {
+  var host = document.getElementById('press-section'); if (!host) return;
+  // Media-only, exactly like the netrunner's Digital Identity block: hidden for everyone else.
+  if (!_isMedia()) { host.innerHTML = ''; host.style.display = 'none'; return; }
+  host.style.display = '';
+  var p = _csPress(), cred = _pressCred();
+  host.className = cred > 0 ? '' : 'pc-nocred';
+
+  var hero = '<div class="pc-head">PRESS CARD' +
+      '<button class="pc-tut" onclick="tutoOpen(\'press-card\')">how it works</button></div>' +
+    '<div class="pc-hero">' +
+    '<div class="pc-hero-cred"><span class="pc-cred-n">' + cred + '<small>/10</small></span><span class="pc-cred-l">CREDIBILITY</span></div>' +
+    '<div class="pc-hero-txt">' + (cred > 0
+      ? 'Credibility is the Media special ability that governs how far your stories travel — it gates reach every time you publish from a media suite.'
+      : '<b>Credibility not set.</b> Your stories won’t travel until you set it in <b>Stats &amp; Skills → Special Abilities</b>.') +
+    '</div></div>';
+
+  /* Affiliations */
+  var affRows = p.affiliations.length ? p.affiliations.map(function (a) {
+    return '<div class="pc-card"><div class="pc-card-h"><span class="pc-badge">OUTLET</span>' +
+      '<div class="pc-card-a"><button class="pc-mini del" onclick="pressDelAffil(\'' + a.id + '\')">remove</button></div></div>' +
+      '<div class="pc-grid">' +
+        _pcField('outlet', '<input class="pc-in" list="pc-outlets" value="' + _esc(a.outlet || '') + '" placeholder="pick or type an outlet" oninput="pressSetAffil(\'' + a.id + '\',\'outlet\',this.value)">') +
+        _pcField('your role', '<select class="pc-in" onchange="pressSetAffil(\'' + a.id + '\',\'rel\',this.value)">' +
+          ['staff', 'freelance', 'stringer', 'owner'].map(function (r) { return '<option value="' + r + '"' + ((a.rel || 'freelance') === r ? ' selected' : '') + '>' + r + '</option>'; }).join('') + '</select>') +
+        _pcField('press pass #', '<input class="pc-in" value="' + _esc(a.pass || '') + '" placeholder="optional" oninput="pressSetAffil(\'' + a.id + '\',\'pass\',this.value)">') +
+      '</div></div>';
+  }).join('') : '<div class="pc-empty">No outlet affiliations. Add the mastheads you write for.</div>';
+  var affGrp = '<div class="pc-grp"><div class="pc-grp-h"><span>AFFILIATIONS</span></div><div class="pc-grp-body">' +
+    affRows + '<div class="pc-addrow"><button class="pc-add" onclick="pressAddAffil()">+ outlet</button></div></div></div>';
+
+  /* Offers proposed by the GM (targeted sponsors on the sheet + the open marketplace) */
+  var offersT = ((CS.net && CS.net.media && CS.net.media.offers) || []);
+  var _mk = _pcMarket(), _taken = {};
+  p.contracts.concat(p.affiliations).forEach(function (x) { if (x.sourceId) _taken[x.sourceId] = 1; });
+  var _oAds = (_mk.ads || []).filter(function (a) { return !a.hidden && !_taken[a.id]; });
+  var _oPos = (_mk.posts || []).filter(function (x) { return !_taken[x.id]; });
+  var offRows = '';
+  offersT.forEach(function (o) {
+    offRows += '<div class="pc-offer"><div class="pc-offer-k">SPONSOR</div>' +
+      '<div class="pc-offer-b"><b>' + _esc(o.client || 'a client') + '</b> · ' + _pcMoney(o.fee) + ' · ' + _esc(_pcPayout(o.payout)) + (o.disclose ? ' · disclosure required' : '') + '</div>' +
+      (o.brief ? '<div class="pc-offer-d">' + _esc(o.brief) + '</div>' : '') +
+      '<div class="pc-offer-a"><span class="pc-offer-note">accept it in your media app to open the dossier</span><button class="pc-mini del" onclick="pressDismissSponsor(\'' + o.id + '\')">dismiss</button></div></div>';
+  });
+  _oAds.forEach(function (a) {
+    offRows += '<div class="pc-offer"><div class="pc-offer-k">AD DEAL</div>' +
+      '<div class="pc-offer-b"><b>' + _esc(a.name || 'Ad deal') + '</b> · €' + (parseInt(a.cpm, 10) || 0).toLocaleString() + ' per 1,000 views · ' + _esc(a.contentType || 'any') + ' content</div>' +
+      '<div class="pc-offer-a"><button class="pc-mini" onclick="pressTakeAd(\'' + a.id + '\')">take</button></div></div>';
+  });
+  _oPos.forEach(function (x) {
+    offRows += '<div class="pc-offer"><div class="pc-offer-k">POSITION</div>' +
+      '<div class="pc-offer-b"><b>' + _esc(x.role || 'freelance') + '</b> at <b>' + _esc(x.outletName || 'outlet') + '</b>' + (x.role === 'staff' ? ' · €' + (parseInt(x.pay, 10) || 0).toLocaleString() + ' / piece · quota ' + (parseInt(x.quota, 10) || 0) : '') + '</div>' +
+      '<div class="pc-offer-a"><button class="pc-mini" onclick="pressJoinPost(\'' + x.id + '\')">join</button></div></div>';
+  });
+  var offGrp = offRows ? '<div class="pc-grp"><div class="pc-grp-h"><span>OFFERS FROM THE DESK</span></div><div class="pc-grp-body">' + offRows + '</div></div>' : '';
+
+  /* Contracts */
+  var conRows = p.contracts.length ? p.contracts.map(function (c) {
+    var m = PRESS_MODES[c.mode] || PRESS_MODES.adregie, ended = c.status === 'ended';
+    return '<div class="pc-card' + (ended ? ' ended' : '') + '">' +
+      '<div class="pc-card-h"><span class="pc-badge">' + m.label + '</span>' +
+      '<span class="pc-card-blurb">' + m.blurb + '</span>' +
+      '<div class="pc-card-a">' +
+        '<button class="pc-mini" onclick="pressToggleContract(\'' + c.id + '\',\'status\')">' + (ended ? 'reopen' : 'end') + '</button>' +
+        '<button class="pc-mini del" onclick="pressDelContract(\'' + c.id + '\')">remove</button>' +
+      '</div></div>' + _pcTerms(c) + _pcContractFields(c) + '</div>';
+  }).join('') : '<div class="pc-empty">No contracts yet. Take a gig from your media app’s desk — or add one here.</div>';
+  var conGrp = '<div class="pc-grp"><div class="pc-grp-h"><span>CONTRACTS</span></div><div class="pc-grp-body">' +
+    _pcAccountRow() + conRows + '<div class="pc-addrow">' +
+      '<button class="pc-add" onclick="pressAddContract(\'adregie\')">+ ad deal</button>' +
+      '<button class="pc-add" onclick="pressAddContract(\'advertorial\')">+ advertorial</button>' +
+      '<button class="pc-add" onclick="pressAddContract(\'staff\')">+ staff</button>' +
+    '</div></div></div>';
+
+  /* Heat + notes */
+  var heatWords = ['clean — nobody’s watching', 'noticed — a few enemies made', 'flagged — someone’s building a file', 'targeted — legal threats, tails', 'marked — they want you silenced'];
+  var hw = heatWords[Math.min(4, Math.floor(p.heat / 2.5))] || heatWords[0];
+  var heatGrp = '<div class="pc-grp"><div class="pc-grp-h"><span>REPUTATION &amp; HEAT</span></div><div class="pc-grp-body">' +
+    '<div class="pc-heat"><input type="range" min="0" max="10" value="' + p.heat + '" oninput="pressSetHeat(this.value)">' +
+    '<span class="pc-heat-v" id="pc-heat-v">' + p.heat + '</span></div>' +
+    '<div class="pc-heat-l" id="pc-heat-l">' + hw + '</div>' +
+    '<textarea class="pc-ta" placeholder="Reputation notes — who you’ve burned, who owes you, standing scoops…" oninput="pressSetNotes(this.value)" style="margin-top:8px">' + _esc(p.notes || '') + '</textarea>' +
+  '</div></div>';
+
+  host.innerHTML = PRESS_CSS + '<datalist id="pc-outlets"></datalist>' + hero + offGrp + affGrp + conGrp + heatGrp;
+  _fillOutletDatalist();
+}
+
+/* press mutators — text edits persist silently (keep focus); structural edits re-render */
+function pressAddContract(mode) {
+  var p = _csPress();
+  var c = { id: _bankUid(), mode: mode, status: 'active', client: '', notes: '' };
+  if (mode === 'advertorial') c.disclosed = true;
+  if (mode === 'adregie') { c.cpm = 0; c.paidViews = 0; }
+  if (mode === 'staff') { c.per = 'article'; c.quota = 0; c.filled = 0; }
+  p.contracts.push(c); _csPersist(); renderPress();
+}
+function _pressContract(id) { var p = _csPress(); for (var i = 0; i < p.contracts.length; i++) if (p.contracts[i].id === id) return p.contracts[i]; return null; }
+function pressSetContract(id, field, val) { var c = _pressContract(id); if (!c) return; c[field] = val; _csPersist(); }
+function pressToggleContract(id, field) {
+  var c = _pressContract(id); if (!c) return;
+  if (field === 'status') c.status = c.status === 'ended' ? 'active' : 'ended';
+  else if (field === 'disclosed') c.disclosed = c.disclosed === false ? true : false;
+  _csPersist(); renderPress();
+}
+function pressDelContract(id) { var p = _csPress(); p.contracts = p.contracts.filter(function (c) { return c.id !== id; }); _csPersist(); renderPress(); }
+function pressSetPayAccount(id) { var p = _csPress(); p.payAccount = id; _csPersist(); }
+function pressTakeAd(id) {
+  var ad = (_pcMarket().ads || []).filter(function (a) { return a.id === id; })[0]; if (!ad) return;
+  var p = _csPress(); if (p.contracts.some(function (x) { return x.sourceId === id; })) return;
+  p.contracts.push({ id: _bankUid(), mode: 'adregie', status: 'active', client: ad.name || 'Ad deal', siteName: '', cpm: parseInt(ad.cpm, 10) || 0, contentType: ad.contentType || 'any', sourceId: id, paidViews: 0, notes: '' });
+  _csPersist(); renderPress();
+}
+function pressJoinPost(id) {
+  var post = (_pcMarket().posts || []).filter(function (x) { return x.id === id; })[0]; if (!post) return;
+  var p = _csPress(); if (p.affiliations.some(function (x) { return x.sourceId === id; })) return;
+  p.affiliations.push({ id: _bankUid(), sourceId: id, outlet: post.outletName || '', outletId: post.outletId || '', rel: post.role || 'freelance', pass: '' });
+  if (post.role === 'staff') p.contracts.push({ id: _bankUid(), mode: 'staff', status: 'active', outlet: post.outletName || '', pay: parseInt(post.pay, 10) || 0, per: 'article', quota: parseInt(post.quota, 10) || 0, filled: 0, sourceId: id, notes: '' });
+  _csPersist(); renderPress();
+}
+function pressDismissSponsor(id) { if (!(CS.net && CS.net.media && CS.net.media.offers)) return; CS.net.media.offers = CS.net.media.offers.filter(function (x) { return x.id !== id; }); _csPersist(); renderPress(); }
+function pressAddAffil() { var p = _csPress(); p.affiliations.push({ id: _bankUid(), outlet: '', rel: 'freelance', pass: '' }); _csPersist(); renderPress(); }
+function _pressAffil(id) { var p = _csPress(); for (var i = 0; i < p.affiliations.length; i++) if (p.affiliations[i].id === id) return p.affiliations[i]; return null; }
+function pressSetAffil(id, field, val) { var a = _pressAffil(id); if (!a) return; a[field] = val; _csPersist(); }
+function pressDelAffil(id) { var p = _csPress(); p.affiliations = p.affiliations.filter(function (a) { return a.id !== id; }); _csPersist(); renderPress(); }
+function pressSetHeat(v) {
+  var p = _csPress(); p.heat = _clampn(v, 0, 10); _csPersist();
+  var vEl = document.getElementById('pc-heat-v'); if (vEl) vEl.textContent = p.heat;
+  var lEl = document.getElementById('pc-heat-l'); if (lEl) { var w = ['clean — nobody’s watching', 'noticed — a few enemies made', 'flagged — someone’s building a file', 'targeted — legal threats, tails', 'marked — they want you silenced']; lEl.textContent = w[Math.min(4, Math.floor(p.heat / 2.5))] || w[0]; }
+}
+function pressSetNotes(v) { var p = _csPress(); p.notes = v; _csPersist(); }
+
+function renderComputer() {
+  var host = document.getElementById('computer-section'); if (!host) return;
+  var net = _csNet(), c = net.computer, hasDeck = _deckReach() > 0, reach = _effReach();
+  var reachLabels = ['broadcast sites only (citywide & up)','+ district nets','+ local & neighborhood sites','+ distant regions','the whole grid'];
+  var powerLabels = ['nothing','text & old-web pages only','+ light media & one chat app','standard sites & chat apps — heavy corpo / braindance load stripped','rich media, apps & most corpo platforms','anything — corpo intranets included'];
+  var uplinkText = { landline:'wired line — browse from a home only; private, hard to trace', cellular:'cellular — browse anywhere in city coverage; traceable to the towers', satellite:'satellite — connect anywhere incl. off-grid; laggy and conspicuous' };
+  var stealthLabels = ['wide open — every move logged; shady buys leave a trail','light footprint — risky darknet / illegal buys may leave a trace','masked — reasonably quiet on the underground','ghost — you move through the dark net without a trace'];
+  function readRow(k, v) { return '<div class="comp-read"><span class="comp-read-k">' + k + '</span><span class="comp-read-v">' + v + '</span></div>'; }
+
+  var main;
+  if (c) {
+    var dR = _devReach(c), dS = _devStealth(c), pw = _compPower(c), up = _compUplink(c), perk = c.perk && COMP_PERKS[c.perk];
+    main = '<div class="comp-hud">' +
+        '<div class="comp-hud-stat"><span class="comp-hud-lbl">Reach</span><b class="comp-hud-val">' + dR + '</b><span class="comp-hud-sub">of 4</span></div>' +
+        '<div class="comp-hud-stat"><span class="comp-hud-lbl">Power</span><b class="comp-hud-val">' + pw + '</b><span class="comp-hud-sub">of 5</span></div>' +
+        '<div class="comp-hud-stat"><span class="comp-hud-lbl">Uplink</span><b class="comp-hud-val comp-hud-word">' + _uplinkWord(up) + '</b><span class="comp-hud-sub">' + _esc(up || '') + '</span></div>' +
+        '<div class="comp-hud-stat"><span class="comp-hud-lbl">Stealth</span><b class="comp-hud-val">' + dS + '</b><span class="comp-hud-sub">of 3</span></div>' +
+      '</div>' +
+      '<div class="comp-name-row"><span class="comp-name">' + _esc(c.name || 'Device') + '</span>' + (c.maker && c.maker !== 'custom' && c.maker !== 'jury-rig' ? '<span class="comp-maker">' + _esc(c.maker) + '</span>' : '') + (c.legal === false ? '<span class="comp-illegal">illegal</span>' : '') + '</div>' +
+      (c.blurb ? '<div class="comp-blurb">“' + _esc(c.blurb) + '”</div>' : '') +
+      (perk ? '<div class="comp-perk"><b>' + _esc(perk.name) + '</b> — ' + _esc(perk.desc) + '</div>' : '') +
+      '<div class="comp-readout">' +
+        readRow('See', 'REACH ' + reach + ' — you reach ' + reachLabels[reach] + '.' + (_deckReach() > dR ? ' <span class="comp-warn">(boosted by your cyberdeck)</span>' : '')) +
+        readRow('Render', 'POWER ' + pw + ' — ' + powerLabels[Math.min(5, pw)] + '.') +
+        readRow('Connect', _esc(uplinkText[up] || 'unknown uplink') + '.') +
+        readRow('Hide', 'STEALTH ' + dS + ' — ' + stealthLabels[dS] + '.') +
+      '</div>';
+  } else if (hasDeck) {
+    main = '<div class="comp-none">No personal computer. You reach the Net through your <b>cyberdeck</b> only (reach ' + reach + ') — heavy and conspicuous, but it works. A dedicated machine is safer and renders more.</div>';
+  } else {
+    main = '<div class="comp-none"><b>No device — the Net is dark.</b> Without a computer or a jacked cyberdeck you can’t get online at all. Add a machine below.</div>';
+  }
+
+  var owned = net.owned || [];
+  var devs = owned.length ? owned.map(function (d) {
+    var actv = c && d.id === net.activeDeviceId;
+    return '<div class="comp-dev' + (actv ? ' active' : '') + '">' +
+      '<span class="comp-dev-n">' + _esc(d.name || 'Device') + (d.custom ? '<span class="comp-dev-tag">custom</span>' : '') + (d.legal === false ? '<span class="comp-dev-tag comp-dev-ill">illegal</span>' : '') + '</span>' +
+      '<span class="comp-dev-s">R' + _devReach(d) + ' P' + _compPower(d) + ' ' + _uplinkWord(_compUplink(d)) + ' S' + _devStealth(d) + '</span>' +
+      (actv ? '<span class="comp-dev-act">● active</span>' : '<button class="comp-dev-use" onclick="csSetActiveDevice(\'' + d.id + '\')">use</button>') +
+      '<button class="comp-dev-x" title="Remove" onclick="csRemoveDevice(\'' + d.id + '\')">✕</button>' +
+    '</div>';
+  }).join('') : '<div class="comp-none" style="padding:8px 0">No devices yet — add one below.</div>';
+  var actions = '<div class="comp-acts"><button class="comp-act" onclick="csAddFromCatalog()">＋ From catalog</button><button class="comp-act" onclick="csDesignCustom()">✎ Design custom</button></div>';
+
+  var ds = net.deliveries || [];
+  var deliv = '<div class="comp-deliv-h">Deliveries</div>' + (ds.length ?
+    ds.slice().reverse().map(function(d){
+      return '<div class="comp-deliv"><span class="comp-deliv-n">' + _esc(d.name||'item') + '</span>' +
+        '<span class="comp-deliv-s comp-' + _esc(d.status) + '">' + _esc(d.status) + (d.status==='in_transit' ? ' · ETA ' + d.eta + 'h' : '') + '</span>' +
+        '<span class="comp-deliv-a">→ ' + _esc(d.address||'') + '</span></div>';
+    }).join('') :
+    '<div class="comp-none">No deliveries. Buy something on the Net and it ships to your home.</div>');
+
+  host.innerHTML = COMP_CSS +
+    '<div class="comp-card">' + main + '</div>' +
+    _osBlock(c) +
+    '<div class="comp-dev-h">Your devices</div>' + devs + actions +
+    '<div class="comp-deliv-wrap">' + deliv + '</div>';
+}
+/* ── Operating system: chosen HERE (on the sheet), gated by the machine. The
+      desktop app (app.html) reads net.desktop.os; a corpo rig forces its OS. ── */
+function _osBlock(c) {
+  if (!window.DesktopOS) return '';
+  if (!c) return '<div class="comp-os-h">Operating system</div><div class="comp-none">Add a machine to install an operating system.</div>';
+  var dk = (CS.net && CS.net.desktop) || {};
+  var chosen = dk.os || null, owned = dk.ownedOS || [];
+  var forcedId = DesktopOS.forced(c), curId = DesktopOS.resolve(c, chosen, owned), cur = DesktopOS.byId(curId) || {};
+  var html = '<div class="comp-os-h">Operating system</div>' +
+    '<div class="comp-os-cur"><div class="comp-os-name">' + _esc(cur.name || '—') + '<span class="comp-os-maker">' + _esc(cur.vendor || '') + '</span></div>' +
+    '<div class="comp-os-tag">' + _esc(cur.tagline || '') + '</div>' +
+    (forcedId ? '<div class="comp-os-lock">▣ Locked by this hardware — a corporate machine only runs its own OS.</div>' : '') +
+    _osStatFull(cur) + '</div>';
+  html += '<div class="comp-os-list">';
+  DesktopOS.available(c).forEach(function (o) {
+    var isCur = o.id === curId, locked = forcedId && o.id !== curId;
+    html += '<div class="comp-os-opt' + (isCur ? ' active' : '') + '"><div class="comp-os-opt-head">' +
+      '<span class="comp-os-opt-n">' + _esc(o.name) + '</span><span class="comp-os-opt-v">' + _esc(o.vendor) + '</span>' +
+      (isCur ? '<span class="comp-os-badge">● installed</span>' : (locked ? '' : csOsBtn(o, owned))) +
+      '</div>' + _osTags(o) + '</div>';
+  });
+  return html + '</div>';
+}
+// The current OS's full mechanical stat-block (sourcebook), on the sheet.
+function _osStatFull(o) {
+  var DOS = window.DesktopOS, m = o.mech || {};
+  return '<div class="comp-os-sb">' + DOS.MECH_ORDER.map(function (axis) {
+    var spec = DOS.MECH[axis], v = spec.values[m[axis]] || {};
+    return '<div class="comp-os-sb-row"><span class="comp-os-sb-k">' + _esc(spec.label) + '</span>' +
+      '<span class="comp-os-sb-v"><span class="comp-os-stamp ' + (v.stamp || 'warn') + '"></span><b>' + _esc(v.tag || '—') + '</b> — ' + _esc(v.note || '') + '</span></div>';
+  }).join('') +
+  (o.traits || []).map(function (t) {
+    return '<div class="comp-os-sb-row"><span class="comp-os-sb-k">Trait</span><span class="comp-os-sb-v">◆ ' + _esc(t) + '</span></div>';
+  }).join('') + '</div>';
+}
+// A compact 4-tag mechanical summary for an OS option.
+function _osTags(o) {
+  var DOS = window.DesktopOS, m = o.mech || {};
+  return '<div class="comp-os-tags">' + DOS.MECH_ORDER.map(function (axis) {
+    var v = DOS.MECH[axis].values[m[axis]] || {};
+    return '<span class="comp-os-mtag ' + (v.stamp || 'warn') + '">' + _esc(v.tag || '—') + '</span>';
+  }).join('') + '</div>';
+}
+// Install button: shows the one-time price for a paid OS you don't own yet.
+function csOsBtn(o, owned) {
+  var cost = (window.DesktopOS && DesktopOS.installCost(o)) || 0, have = (owned || []).indexOf(o.id) >= 0;
+  var lbl = (cost && !have) ? ('install · ' + cost + 'eb') : (have ? 'switch' : 'install');
+  return '<button class="comp-os-use" onclick="csSetOS(\'' + o.id + '\')">' + lbl + '</button>';
+}
+function csSetOS(id) {
+  var net = _csNet(); net.desktop = net.desktop || {}; net.desktop.ownedOS = net.desktop.ownedOS || [];
+  var o = window.DesktopOS && DesktopOS.byId(id), cost = (window.DesktopOS && DesktopOS.installCost(o)) || 0;
+  if (cost > 0 && net.desktop.ownedOS.indexOf(id) < 0) { csBuyOS(id, o, cost); return; }        // pay once
+  if (o && o.sketchy && net.desktop.ownedOS.indexOf(id) < 0) { csWarnOS(id, o); return; }        // unsigned: warn first
+  net.desktop.os = id; renderComputer(); try { _csPersist(); } catch (e) {}
+}
+// An unsigned / cracked OS isn't a one-click install — you accept the risk.
+function csWarnOS(id, o) {
+  var warn = o.installWarn || 'This is an <b>unsigned, cracked</b> build. It’s free and it works — but nobody vouches for it, and you don’t know what someone left inside. Install at your own risk (your GM may call for a <i>Programming</i> / <i>Awareness</i> roll).';
+  _modalOpen('Install ' + (o.name || id) + '?',
+    '<p class="cs-modal-lbl">' + warn + '</p>' +
+    '<div class="cs-modal-actions"><button class="btn btn-sm" onclick="_modalClose()">Cancel</button><button class="btn btn-sm btn-cy" onclick="csConfirmSketchy(\'' + id + '\')">Install anyway</button></div>');
+}
+function csConfirmSketchy(id) {
+  var net = _csNet(); net.desktop = net.desktop || {}; net.desktop.ownedOS = net.desktop.ownedOS || [];
+  if (net.desktop.ownedOS.indexOf(id) < 0) net.desktop.ownedOS.push(id);
+  net.desktop.os = id; try { _modalClose(); } catch (e) {} renderComputer(); try { _csPersist(); } catch (e) {}
+}
+// One-time OS license: pick cash or an account, then debit + mark owned.
+function csBuyOS(id, o, cost) {
+  var accs = ((CS.lifestyle && CS.lifestyle.accounts) || []).filter(function (a) { return !a.closed; });
+  var opts = '<option value="cash">Cash (' + Math.round(_csCash()) + 'eb)</option>' +
+    accs.map(function (a) { return '<option value="' + a.id + '">' + _esc(a.name) + ' (' + Math.round(parseFloat(a.balance) || 0) + 'eb)</option>'; }).join('');
+  _modalOpen('Install ' + (o.name || id) + ' — ' + cost + 'eb',
+    '<p class="cs-modal-lbl">A one-time license. ' + _esc(o.tagline || '') + '</p>' +
+    '<label class="cs-modal-lbl">Pay from</label><select id="os-pay" class="cs-modal-inp">' + opts + '</select>' +
+    '<div class="cs-modal-actions"><button class="btn btn-sm" onclick="_modalClose()">Cancel</button><button class="btn btn-sm btn-cy" onclick="csConfirmOS(\'' + id + '\',' + cost + ')">Pay &amp; install</button></div>');
+}
+function csConfirmOS(id, cost) {
+  var src = (document.getElementById('os-pay') || {}).value || 'cash';
+  if (src === 'cash') {
+    if (_csCash() < cost) { alert('Not enough cash for that license (' + cost + 'eb).'); return; }
+    CS.lifestyle = CS.lifestyle || {}; CS.lifestyle.cash = _csCash() - cost;
+  } else {
+    var acc = _accById(src); if (!acc) { alert('Account not found.'); return; }
+    if ((parseFloat(acc.balance) || 0) < cost) { alert('Not enough in that account.'); return; }
+    acc.balance = (parseFloat(acc.balance) || 0) - cost;
+    _ledgerPush(acc, 'expense', 'OS license: ' + ((window.DesktopOS && DesktopOS.byId(id) || {}).name || id), cost);
+  }
+  var net = _csNet(); net.desktop = net.desktop || {}; net.desktop.ownedOS = net.desktop.ownedOS || [];
+  if (net.desktop.ownedOS.indexOf(id) < 0) net.desktop.ownedOS.push(id);
+  net.desktop.os = id;
+  try { _modalClose(); } catch (e) {}
+  try { applyCS(); } catch (e) {} try { renderComputer(); } catch (e) {} try { _csPersist(); } catch (e) {}
+}
+// ── Device management: you OWN devices (bought / found / built); one is active ──
+function csAcquireDevice(d, activate, charge) {
+  var net = _csNet();
+  if (!d.id) d.id = _bankUid();
+  net.owned = net.owned || [];
+  net.owned.push(d);
+  if (charge && d.cost > 0) { try { pendPurchase(d, 'computer', d.cost); } catch (e) {} }   // drops a buytray line, linked to the device via d.buyId
+  if (activate || !net.computer) csSetActiveDevice(d.id);
+  else { renderComputer(); try { _csPersist(); } catch (e) {} }
+}
+function csSetActiveDevice(id) {
+  var net = _csNet();
+  var d = (net.owned || []).filter(function (x) { return x.id === id; })[0] || null;
+  net.computer = d; net.activeDeviceId = d ? d.id : null;
+  renderComputer(); try { _csPersist(); } catch (e) {}
+}
+function csRemoveDevice(id) {
+  var net = _csNet();
+  net.owned = (net.owned || []).filter(function (x) { return x.id !== id; });
+  if (net.activeDeviceId === id) { var f = net.owned[0] || null; net.computer = f; net.activeDeviceId = f ? f.id : null; }
+  renderComputer(); try { _csPersist(); } catch (e) {}
+}
+var COMP_CLASS_LABEL = { phone:'Phones & burners', pocket:'Pocket decks', desktop:'Desktops', agent:'Field agents', wrist:'Wearables', implant:'Cyberware implants', vehicle:'Vehicle consoles', ai:'AI agents', salvage:'Salvage', custom:'Custom' };
+var COMP_CLASS_ORDER = ['phone','pocket','desktop','agent','wrist','implant','vehicle','ai','salvage'];
+function csAddFromCatalog() {
+  var comps = (DB && DB.computers) || [];
+  if (!comps.length) { alert('Computer catalog not loaded.'); return; }
+  var groups = {}; comps.forEach(function (m, i) { (groups[m.class] = groups[m.class] || []).push(i); });
+  var html = COMP_CLASS_ORDER.filter(function (k) { return groups[k]; }).map(function (k) {
+    return '<div class="cc-grp">' + _esc(COMP_CLASS_LABEL[k] || k) + '</div>' + groups[k].map(function (i) {
+      var m = comps[i], perk = m.perk && COMP_PERKS[m.perk];
+      return '<div class="cc-cat-row" onclick="csCatPick(' + i + ')">' +
+        '<div class="cc-cat-main"><span class="cc-cat-n">' + _esc(m.name) + (m.legal === false ? '<span class="cc-cat-ill">illegal</span>' : '') + '</span>' +
+          '<span class="cc-cat-s">R' + m.reach + ' · P' + m.power + ' · ' + _uplinkWord(m.connection) + ' · S' + (m.stealth || 0) + '</span></div>' +
+        (perk ? '<div class="cc-cat-perk' + (perk.lore ? ' lore' : '') + '"><b>' + _esc(perk.name) + '</b>' + (perk.lore ? ' <i>lore</i>' : '') + ' — ' + _esc(perk.desc) + '</div>' : '<div class="cc-cat-perk cc-cat-noperk">no perk</div>') +
+        '<div class="cc-cat-c">' + (m.cost || 0) + 'eb</div></div>';
+    }).join('');
+  }).join('');
+  _modalOpen('Add a machine — catalog', '<p class="cs-modal-lbl" style="margin:0 0 6px">Picking one charges its price to your buytray and stores it in your devices.</p><div class="cc-cat-list">' + html + '</div>' +
+    '<div class="cs-modal-actions"><button class="btn btn-sm" onclick="_modalClose()">Close</button></div>');
+}
+function csCatPick(i) {
+  var m = ((DB && DB.computers) || [])[i]; if (!m) return;
+  var d = JSON.parse(JSON.stringify(m)); d.id = _bankUid();
+  _modalClose(); csAcquireDevice(d, true, true);
+}
+function csDesignCustom() {
+  var perkOpts = '<option value="">— no perk —</option>' + Object.keys(COMP_PERKS).map(function (k) { return '<option value="' + k + '">' + COMP_PERKS[k].name + '</option>'; }).join('');
+  _modalOpen('Design a custom machine',
+    '<label class="cs-modal-lbl">Name</label><input id="cc-name" class="cs-modal-inp" placeholder="e.g. Franken-rig">' +
+    '<label class="cs-modal-lbl">Reach (0–4) — how far you see</label><input id="cc-reach" class="cs-modal-inp" type="number" min="0" max="4" value="1">' +
+    '<label class="cs-modal-lbl">Power (1–5) — how much you render / run</label><input id="cc-power" class="cs-modal-inp" type="number" min="1" max="5" value="2">' +
+    '<label class="cs-modal-lbl">Uplink</label><select id="cc-uplink" class="cs-modal-inp"><option value="landline">wired — home only, private</option><option value="cellular" selected>cellular — mobile, traceable</option><option value="satellite">satellite — anywhere, loud</option></select>' +
+    '<label class="cs-modal-lbl">Stealth (0–3) — how hidden</label><input id="cc-stealth" class="cs-modal-inp" type="number" min="0" max="3" value="1">' +
+    '<label class="cs-modal-lbl">Perk</label><select id="cc-perk" class="cs-modal-inp">' + perkOpts + '</select>' +
+    '<label class="cs-modal-lbl">Notes (optional)</label><input id="cc-blurb" class="cs-modal-inp" placeholder="what makes it yours">' +
+    '<div class="cs-modal-actions"><button class="btn btn-sm" onclick="_modalClose()">Cancel</button><button class="btn btn-sm btn-cy" onclick="csSaveCustom()">Build it</button></div>');
+}
+function csSaveCustom() {
+  var g = function (id) { return (document.getElementById(id) || {}).value; };
+  var name = (g('cc-name') || '').trim(); if (!name) { alert('Name your machine.'); return; }
+  var d = { id: _bankUid(), name: name, maker: 'custom', class: 'custom', reach: _clampn(g('cc-reach'), 0, 4), power: _clampn(g('cc-power'), 1, 5), connection: g('cc-uplink') || 'cellular', stealth: _clampn(g('cc-stealth'), 0, 3), perk: g('cc-perk') || '', blurb: (g('cc-blurb') || '').trim(), cost: 0, legal: true, rarity: 'custom', custom: true };
+  _modalClose(); csAcquireDevice(d, true, false);
+}
+// Legacy shim — old callers passed a catalog name.
+function csSetComputer(name) {
+  if (!name) { var net = _csNet(); net.computer = null; net.activeDeviceId = null; renderComputer(); try { _csPersist(); } catch (e) {} return; }
+  var m = ((DB && DB.computers) || []).filter(function (x) { return x.name === name; })[0]; if (!m) return;
+  var d = JSON.parse(JSON.stringify(m)); d.id = _bankUid(); csAcquireDevice(d, true);
+}
+
 function renderNet() {
   var el = document.getElementById('net-section'); if (!el) return;
   var nr = _nr();
@@ -4890,6 +5702,7 @@ function netRemoveQuickhack(id) {
 
 /* ═══ NETRUNNER DIGITAL IDENTITY (extension of the Identity section) ═══ */
 function _isNetrunner() { return ((CS.role||'').toLowerCase().indexOf('netrunner') >= 0) || !!(CS.settings && CS.settings.forceNetrunner); }
+function _isMedia() { return ((CS.role||'').toLowerCase().indexOf('media') >= 0) || _pressCred() > 0 || !!(CS.settings && CS.settings.forceMedia); }
 
 function renderNetIdentity() {
   var el = document.getElementById('net-identity-wrap'); if (!el) return;
@@ -5651,7 +6464,7 @@ function csSetOption(key, val) {
    CUSTOM SECTIONS / FIELDS + REUSABLE TEMPLATES (CS)
    ═══════════════════════════════════════════════ */
 var _TPL_KEY = 'bartmoss_templates';   // shared template library (CS + NPC later)
-var NATIVE_SECTION_IDS = ['sec-identity','sec-life','sec-stats','sec-skills','sec-cyber','sec-net','sec-weapons','sec-fashion','sec-inventory','sec-vehicles','sec-lifestyle','sec-network','sec-lifepath','sec-notes'];
+var NATIVE_SECTION_IDS = ['sec-identity','sec-life','sec-stats','sec-skills','sec-cyber','sec-net','sec-computer','sec-weapons','sec-fashion','sec-inventory','sec-vehicles','sec-lifestyle','sec-network','sec-lifepath','sec-notes'];
 var NATIVE_SLOTS = {
   'sec-identity:fields': { sel:'#sec-identity .id-fields', style:'field',      addLabel:'+ field' },
   'sec-stats:primary':   { sel:'#stats-grid',             style:'statbox',    addLabel:'+ stat'  },
@@ -5734,6 +6547,12 @@ function _csNormalizeCustom() {
   CS.layout.order.forEach(function(k) { if (want.indexOf(k) >= 0 && !seen[k]) { order.push(k); seen[k] = 1; } });
   want.forEach(function(k) { if (!seen[k]) { order.push(k); seen[k] = 1; } });
   CS.layout.order = order;
+  // one-shot: pin Computer & Web right after Cyberdeck & Net (it used to land at the bottom for old sheets)
+  if (!CS._secCompMoved) {
+    var _o = CS.layout.order, _ci = _o.indexOf('sec-computer'), _ni = _o.indexOf('sec-net');
+    if (_ci >= 0 && _ni >= 0 && _ci !== _ni + 1) { _o.splice(_ci, 1); _ni = _o.indexOf('sec-net'); _o.splice(_ni + 1, 0, 'sec-computer'); }
+    CS._secCompMoved = true;
+  }
 }
 function _normField(f) { f.kind = 'field'; if (!f.id) f.id = _bankUid(); if (!FIELD_TYPES[f.type]) f.type = 'text'; if (!f.display || FIELD_TYPES[f.type].displays.indexOf(f.display) < 0) f.display = _defaultDisplay(f.type); if (f.value === undefined) f.value = _fieldBlank(f.type); if (typeof f.placeholder !== 'string') f.placeholder = ''; if (typeof f.inline !== 'boolean') f.inline = false; if (!f.opts || typeof f.opts !== 'object') f.opts = _defaultOpts(f.type); }
 function _normNode(node) {
@@ -6306,6 +7125,10 @@ function applyCS() {
     document.getElementById('photo-placeholder').style.display = '';
   }
   var _pc = document.getElementById('photo-clear'); if (_pc) _pc.style.display = CS.photo ? '' : 'none';
+  // A partial sheet (e.g. a GM-seeded Party sheet with only a name) may arrive without a skills
+  // map. Guard here — this runs before the other CS.* guards below, and a throw would abort applyCS
+  // and (in joined mode) stall live publishing so the sheet silently stops saving.
+  if (!CS.skills || typeof CS.skills !== 'object') CS.skills = {};
   DB.skills.forEach(function(s) { if (!(s.name in CS.skills)) CS.skills[s.name] = 0; });
   if (!CS.customSkills) CS.customSkills = [];
   _csNormalizeCustom();
@@ -6442,6 +7265,8 @@ function applyCS() {
   renderVehicles();
   renderNet();
   renderNetIdentity();
+  renderPress();
+  renderComputer();
   renderLifestyle();
   renderLifepath();
   renderNetwork();
@@ -6485,7 +7310,11 @@ function init() {
 
     // Player mode (in-app: role=player → index.html?player=1): add a prominent
     // CONNECT button to the sidebar foot, above the collapse arrow.
-    if (new URLSearchParams(location.search).get('player') === '1') _initPlayerConnect();
+    if (new URLSearchParams(location.search).get('player') === '1') {
+      _initPlayerConnect();
+      // Arrived here from LAN discovery on another hub → pop the connect dialog straight away.
+      if (new URLSearchParams(location.search).get('autoconnect') != null) setTimeout(playerConnect, 60);
+    }
   }
 
   /* ─── Character sheet data ─── */
@@ -6541,6 +7370,7 @@ function init() {
       document.getElementById('cs-sa').value = CS.sa;
       renderSkills();
       renderNetIdentity();
+      renderPress();
     });
   }
 
@@ -6600,6 +7430,8 @@ async function loadData() {
   DB = Object.fromEntries(entries);
   // Unwrap nested objects where the JSON is { key: [...] }
   if (DB.roles && !Array.isArray(DB.roles) && Array.isArray(DB.roles.roles)) DB.roles = DB.roles.roles;
+  // Computers live in the Gear DB (category COMPUTER + an uplink). Surface the net-capable ones as the device catalog.
+  DB.computers = (DB.gear || []).filter(function (g) { return g.category === 'COMPUTER' && g.connection; });
 
   // Load cyberware effects separately (not as a browsable DB), then init
   fetch(_cyberwareEffectsFile)
@@ -6615,3 +7447,11 @@ async function loadData() {
 }
 
 loadData();
+
+/* When embedded as a tool iframe in the app shell, relay ⌘K up so the command
+   palette can open even while focus is inside this sheet. */
+window.addEventListener('keydown', function (e) {
+  if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K') && window.parent && window.parent !== window) {
+    e.preventDefault(); try { window.parent.postMessage({ type: 'nav-key', key: 'k' }, '*'); } catch (_) {}
+  }
+});

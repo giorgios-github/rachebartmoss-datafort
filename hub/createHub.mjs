@@ -197,7 +197,7 @@ export function createHub(opts = {}) {
   function bindCampaignFolder() { return bindRoom(CAMPAIGN); }
 
   /* ── Campaign JSON API (file-backed, used by the in-app campaign manager) ── */
-  const DOC_TYPES = ['sheets', 'npcs', 'orgs', 'nightcity', 'documents'];
+  const DOC_TYPES = ['sheets', 'npcs', 'orgs', 'nightcity', 'documents', 'locations', 'shops', 'items', 'casts', 'clocks', 'rules', 'squads', 'sites', 'links'];
   const slug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'campaign';
   const safeName = (n) => path.basename(String(n || '')).replace(/[^\w. -]+/g, '_');
   const campDir = (id) => path.join(DATA, safeName(id));
@@ -222,6 +222,28 @@ export function createHub(opts = {}) {
   async function apiHandler(req, res, urlPath) {
     const parts = urlPath.replace(/^\/__api\//, '').split('/').filter(Boolean).map(decodeURIComponent);
     const m = req.method;
+    // /discover — other datafort hubs seen on the LAN via mDNS (for the player picker).
+    if (parts[0] === 'discover') return jsonRes(res, 200, { hubs: discoverPeers() });
+    // /roster — every player character sheet across campaigns, enriched with name/handle/photo,
+    // so a player can click a character instead of typing a sheet id. One call, this hub only.
+    // Lists ALL sheets (not just meta.session.hosted) so newly-created Party sheets show up too;
+    // the `hosted` flag is kept per-sheet only for an optional "in session" badge.
+    if (parts[0] === 'roster') {
+      const out = [];
+      for (const c of listCampaigns()) {
+        let meta = {}; try { meta = JSON.parse(fs.readFileSync(path.join(campDir(c.id), 'meta.json'), 'utf8')); } catch {}
+        const ss = meta.session || {}, live = !!ss.active;
+        const hostedIds = Array.isArray(ss.hosted) ? ss.hosted : [];
+        const sheets = listType(c.id, 'sheets').map((f) => {
+          const id = f.name.replace(/\.json$/i, '');
+          let j = {}; try { j = JSON.parse(fs.readFileSync(path.join(campDir(c.id), 'sheets', f.name), 'utf8')); } catch {}
+          const cs = j.json || j;   // tolerate {json:{…}} wrappers
+          return { id, name: cs.name || id, handle: cs.handle || '', photo: cs.photo || cs.portrait || '', hosted: hostedIds.indexOf(id) >= 0 };
+        });
+        out.push({ id: c.id, name: c.name, live, sheets });
+      }
+      return jsonRes(res, 200, { campaigns: out });
+    }
     // /books — the local sourcebook folder (DATA/__books): list PDFs + stream one.
     if (parts[0] === 'books') {
       const booksDir = path.join(DATA, '__books');
@@ -311,7 +333,33 @@ export function createHub(opts = {}) {
     sheets.forEach((rec, id) => { if (!isJunkId(id)) out.push({ id, name: rec.name || id, url: playerLink(id) }); });
     return out;
   }
-  function stop() { try { wss.close(); } catch {} try { server.close(); } catch {} }
+  // ── mDNS / DNS-SD (optional) ──────────────────────────────────────────────
+  // Advertise this hub as a "datafort" service so player apps can auto-find the GM
+  // on the LAN, and browse for peers so /__api/discover can list them. Fully
+  // optional: if the module or multicast is unavailable, the hub still runs and
+  // discover returns []. Players can always connect manually by URL.
+  let _bonjour = null, _mdnsBrowser = null, _hubId = '';
+  async function _setupMdns() {
+    try {
+      const mod = await import('bonjour-service');
+      const Bonjour = mod.Bonjour || (mod.default && mod.default.Bonjour) || mod.default;
+      if (!Bonjour) return;
+      _hubId = CAMPAIGN + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      _bonjour = new Bonjour();
+      _bonjour.publish({ name: 'Datafort Hub (' + CAMPAIGN + ')', type: 'datafort', port: PORT, txt: { campaign: CAMPAIGN, hubid: _hubId } });
+      _mdnsBrowser = _bonjour.find({ type: 'datafort' });
+    } catch (e) { log('  ! mDNS unavailable: ' + ((e && e.message) || e)); }
+  }
+  function discoverPeers() {
+    if (!_mdnsBrowser) return [];
+    return (_mdnsBrowser.services || [])
+      .filter((s) => { const t = s.txt || {}; return t.hubid && t.hubid !== _hubId; })   // exclude self
+      .map((s) => {
+        const v4 = (s.addresses || []).find((a) => /^\d+\.\d+\.\d+\.\d+$/.test(a)) || (s.addresses || [])[0] || s.host;
+        return { name: s.name, host: v4, port: s.port, campaign: (s.txt || {}).campaign || '' };
+      });
+  }
+  function stop() { try { if (_bonjour) _bonjour.destroy(); } catch {} try { wss.close(); } catch {} try { server.close(); } catch {} }
 
   // Listen, with one fallback to an ephemeral port if the requested one is taken.
   return new Promise((resolve) => {
@@ -325,6 +373,7 @@ export function createHub(opts = {}) {
     server.on('listening', () => {
       PORT = server.address().port;
       const loaded = bindCampaignFolder();
+      _setupMdns();
       resolve({ port: PORT, primaryHost: PRIMARY_HOST, sheetsDir: SHEETS_DIR, dataDir: DATA, campaign: CAMPAIGN, loaded, links, stop, server });
     });
     server.listen(REQ_PORT, '0.0.0.0');

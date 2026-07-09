@@ -11,6 +11,11 @@
   src:
     url("EurostileExtendedBlack.ttf") format("truetype");
 }
+@font-face {
+  font-family: "Terminal Grotesque";
+  src:
+    url("terminal-grotesque.ttf") format("truetype");
+}
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg:#fff;--bg1:#fff;--bg2:#fff;--text:#111;--text2:#666;--head:'Eurostile',sans-serif;--mono:'Space Mono',monospace}
 body{font-family:var(--mono);background:var(--bg);color:var(--text);font-size:12px;overflow:hidden;height:100vh;display:flex;flex-direction:column}
@@ -24,7 +29,10 @@ body{font-family:var(--mono);background:var(--bg);color:var(--text);font-size:12
 #app{flex:1;display:flex;overflow:hidden}
 
 /* SIDEBAR */
-#sidebar{width:280px;min-width:280px;background:var(--bg1);border-left:2px solid #111;display:flex;flex-direction:column;overflow:hidden}
+#sidebar{width:280px;min-width:280px;background:var(--bg1);border-left:2px solid #111;display:flex;flex-direction:column;overflow:hidden;transition:width .16s ease,min-width .16s ease}
+#app.nc-side-collapsed #sidebar{width:0;min-width:0;border-left:none}
+#nc-side-toggle{flex:0 0 auto;width:14px;align-self:stretch;border:none;background:#111;color:#999;cursor:pointer;font-family:var(--mono);font-size:12px;padding:0}
+#nc-side-toggle:hover{color:#fff}
 #sidebar-head{background:#111;color:#fff;font-family:var(--head);font-size:13px;letter-spacing:3px;padding:8px 12px;cursor:pointer}
 #sidebar-head:hover{background:#333}
 #district-list{overflow-y:auto;flex:1}
@@ -104,14 +112,16 @@ body{font-family:var(--mono);background:var(--bg);color:var(--text);font-size:12
 .legend-desc{font-size:11px;color:var(--text2);line-height:1.6;padding:0 0 6px 30px;display:none}
 .legend-item.open .legend-desc{display:block}
 </style>
-<!-- <link rel="stylesheet" href="css/themes.css"> -->
+<link rel="stylesheet" href="css/vendor/leaflet.css">
 <link rel="stylesheet" href="css/nightcity.css">
 </head>
 <body>
-<div id="nc-ctxbar"></div>
+<div id="nc-ctxbar" style="display:none"></div>
 <div id="nc-maps-bar" style="display:none"></div>
 <div id="app">
+  <div id="nc-mapnav"></div>
   <div id="content">
+    <div id="view-world" style="display:none"></div>
     <div id="view-custom" style="display:none"></div>
     <div id="overview">
       <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;border-bottom:3px solid #111;padding-bottom:6px">
@@ -176,6 +186,7 @@ body{font-family:var(--mono);background:var(--bg);color:var(--text);font-size:12
       <div id="tab-other" class="tab-content"></div>
     </div>
   </div>
+  <button id="nc-side-toggle" title="Toggle panel" aria-label="Toggle panel" onclick="var a=document.getElementById('app');a.classList.toggle('nc-side-collapsed');this.textContent=a.classList.contains('nc-side-collapsed')?'‹':'›';">›</button>
   <div id="sidebar">
     <div id="nc-modebar">
       <button class="nc-mode active" data-mode="ref" onclick="ncSetMode('ref')">Reference</button>
@@ -3535,7 +3546,7 @@ function renderMapTab(code, d) {
   }
 }
 </script>
-<!-- <script src="js/theme.js"></script> -->
+<script src="js/vendor/leaflet.js"></script>
 <script src="js/nightcity.js"></script>
 </body>
 </html>

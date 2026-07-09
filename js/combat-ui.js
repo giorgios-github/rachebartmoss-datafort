@@ -141,9 +141,9 @@
       var weapons = (c.weapons && c.weapons.length) ? '<div class="cs-block"><div class="cs-blbl">WEAPONS</div>' + c.weapons.map(function (w) {
         var ammoLabel = w.ammoMax > 0 ? (w.ammo + '/' + w.ammoMax) : '—';
         return '<div class="cs-weap' + (canUse ? ' use' : '') + '"' + (canUse ? ' data-usew="' + esc(w.id) + '"' : '') + '>' +
-          '<span class="cs-wname">⌖ ' + esc(w.name) + '</span>' +
+          '<span class="cs-wname">' + esc(w.name) + '</span>' +
           '<span class="cs-wmeta">' + esc(w.damage) + ' · ' + esc(w.skill) + (w.skillVal ? ' ' + w.skillVal : '') + ' · ROF ' + w.rof + ' · ' + w.range + 'm' + (w.ammoType ? ' · ' + esc(w.ammoType) : '') + '</span>' +
-          '<span class="cs-ammo' + (w.ammoMax > 0 && w.ammo === 0 ? ' empty' : '') + '">' + ammoLabel + (w.ammoMax > 0 ? ' ⬩' : '') + '</span></div>';
+          '<span class="cs-ammo' + (w.ammoMax > 0 && w.ammo === 0 ? ' empty' : '') + '">' + ammoLabel + '</span></div>';
       }).join('') + '</div>' : '';
       // Full skill list, grouped by governing stat like a real sheet.
       var skills = '';
@@ -217,7 +217,7 @@
       if (act.step === 'pick') {
         var tiles = (sel.weapons || []).map(function (w) {
           var dry = w.ammoMax > 0 && w.ammo === 0; // only ranged weapons run dry
-          var ammoTxt = w.ammoMax > 0 ? ' · ' + w.ammo + '/' + w.ammoMax + ' ⬩' : '';
+          var ammoTxt = w.ammoMax > 0 ? ' · ' + w.ammo + '/' + w.ammoMax : '';
           return '<button class="cck-tile" data-atk="' + esc(w.id) + '"' + (dry ? ' disabled title="Out of ammo — reload first"' : '') + '>' +
             '<span class="cck-tic">⌖</span><span class="cck-tname">' + esc(w.name) + '</span>' +
             '<span class="cck-tsub">' + esc(w.damage) + ' · ' + esc(w.skill) + ammoTxt + '</span></button>';

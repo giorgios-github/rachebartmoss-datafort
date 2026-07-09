@@ -783,9 +783,7 @@ function _nodeVisH(n) {
 function _isLeafNode(n) { return true; }
 
 /* Center-x of a column in SVG node-space */
-function _colToSvgX(col) { return col * _GRID_CELL_W; }
 /* Top-y of a row in SVG node-space */
-function _rowToSvgY(row) { return (row - 1) * _GRID_CELL_H; }
 
 /* SVG node-space → nearest grid cell. svgX/svgY should be the CENTER of the card. */
 function _svgToGridCell(svgX, svgY) {
@@ -3316,7 +3314,6 @@ function renderProducts() {
     '</div>';
 }
 function prodSet(idx, field, val) { var org = _getActive(); if (!org) return; org.products.items[idx][field]=val; _schedSave(); }
-function addProd() { addProdToGroup(''); }
 function addProdToGroup(subcat) {
   var org = _getActive(); if (!org) return;
   org.products.items.push({ id:_uid(), name:'', category:'', description:'', price:'', availability:'Common', isPrivate:false, image:'', subcat:subcat||'' });
