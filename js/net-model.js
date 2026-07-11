@@ -181,23 +181,38 @@
      either into the run's inputs (MU capacity, Speed→actions, reach). [CORE] p.132–134. */
   function blankDeck() {
     // Standard cyberdeck baseline. [CORE] p.132. reach fixed by the deck ([BWB]).
-    return { type: 'standard', memoryMU: 10, speed: 0, dataWalls: 2, specialOptions: [], reach: 2, access: 'jack' };
+    // deckId (optional) = chassis pointer into data/cp2020decks.json; null = custom.
+    return { type: 'standard', deckId: null, memoryMU: 10, speed: 0, dataWalls: 2, specialOptions: [], reach: 2, access: 'jack' };
+  }
+
+  // The chassis id (a row in data/cp2020decks.json) behind this runner's deck.
+  // UNIFIES the two representations (contract §2): the object's `deckId` wins,
+  // then the legacy top-level `nr.deckId`. Callers resolve the catalog row from
+  // this id and pass it to deckStats() as deckRecord.
+  function deckChassisId(netrunner) {
+    netrunner = netrunner || {};
+    return (netrunner.deck && netrunner.deck.deckId) || netrunner.deckId || null;
   }
 
   // Normalize a runner's deck into run inputs. Accepts (netrunner, deckRecord?)
-  // where deckRecord is a row from cp2020decks.json (has _mu, speed, dataWall).
+  // where deckRecord is the cp2020decks.json row for deckChassisId(netrunner)
+  // (has _mu, speed, dataWall). Resolution per stat: object override ?? chassis
+  // catalog ?? standard default — so a pointer-only `{deckId}` deck picks up the
+  // chassis' real stats, while an explicit field on the object overrides them.
   function deckStats(netrunner, deckRecord) {
     netrunner = netrunner || {};
     var d = netrunner.deck || {};
     var rec = deckRecord || {};
+    var chassis = deckChassisId(netrunner);
     var baseMu = num(d.memoryMU, num(rec._mu, 10));
     var speed = clamp(num(d.speed, num(rec.speed, 0)), 0, 5);          // max Speed 5 ([CORE] p.134)
     var wall = clamp(num(d.dataWalls, num(rec.dataWall, 2)), 0, MAX_STR);
     var iface = ifaceKey(d.access || netrunner.interface);            // 'plugs' (legacy) → 'jack'
     var loaded = arr(netrunner.programs);
     var loadedMu = sum(loaded, function (p) { return num(p.mu, num(p._mu, 1)); });
-    var reach = d.reach != null ? num(d.reach) : (netrunner.deckId || netrunner.deck ? 2 : 0);
+    var reach = d.reach != null ? num(d.reach) : (chassis || netrunner.deck ? 2 : 0);
     return {
+      deckId: chassis,
       memoryMU: baseMu, speed: speed, dataWalls: wall,
       access: iface, refMod: INTERFACES[iface].ref, biofeedback: INTERFACES[iface].biofeedback,
       actions: 1 + speed,                      // runner plays 1 + Speed actions/round (contract §4)
@@ -268,7 +283,16 @@
   function ensureNetrunner(cs) {
     if (!cs) return null;
     var nr = cs.netrunner || (cs.netrunner = {});
-    if (!nr.deck || typeof nr.deck !== 'object') nr.deck = blankDeck();
+    // Unify the two deck representations non-destructively: `nr.deck` is the one
+    // object. A legacy top-level `nr.deckId` becomes a chassis pointer INSIDE it
+    // (a POINTER-ONLY deck — baking blankDeck() here would shadow the chassis'
+    // real MU/Speed; deckStats resolves those from the catalog row instead). The
+    // legacy `nr.deckId` field is kept intact (main.js still reads it).
+    if (!nr.deck || typeof nr.deck !== 'object') {
+      nr.deck = nr.deckId ? { deckId: nr.deckId } : blankDeck();
+    } else if (!nr.deck.deckId && nr.deckId) {
+      nr.deck.deckId = nr.deckId;
+    }
     if (!nr.access || typeof nr.access !== 'object') {
       nr.access = blankAccess({ code: nr.netAccessCode || '' });  // fold the legacy string in
     }
@@ -302,7 +326,7 @@
     intOf: intOf, muOf: muOf, actsOf: actsOf, muUsed: muUsed, canHostAI: canHostAI,
     makeIceEntry: makeIceEntry, makeFileEntry: makeFileEntry, makeRemoteEntry: makeRemoteEntry,
     // deck + programs
-    blankDeck: blankDeck, deckStats: deckStats, makeProgram: makeProgram,
+    blankDeck: blankDeck, deckStats: deckStats, deckChassisId: deckChassisId, makeProgram: makeProgram,
     // access
     blankAccess: blankAccess, accessStatus: accessStatus, tollFor: tollFor,
     ensureNetrunner: ensureNetrunner,
