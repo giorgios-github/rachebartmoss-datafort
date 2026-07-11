@@ -4764,23 +4764,108 @@ function _lsBuildFinanceTab(acc) {
 /* ═══ CYBERDECK & NETRUNNING ═══ */
 var _NET_PROG_COLORS = { intrusion:'#c0392b', decryption:'#1769aa', detection:'#2ecc71', alarm:'#e67e22', stealth:'#8e44ad', evasion:'#16a085', protection:'#2c3e50', 'anti-system':'#d35400', 'anti-program':'#7f8c8d', 'anti-personnel':'#922b21' };
 var _NET_QH_TYPES = ['Daemon','Interface','Turret','Environment','Comms'];
+/* Grimoire ⑧ — emergent sigil = an ink Unicode glyph (never SVG/emoji, charte). Derived from
+   the program class; Demons (carry containers) get their own container glyph. Text-default glyphs only. */
+var _NET_SIGILS = {
+  intrusion:'◆', decryption:'⊟', detection:'◎', alarm:'⌁', stealth:'◇', evasion:'↯',
+  protection:'⊕', 'anti-system':'⊗', 'anti-program':'⊘', 'anti-personnel':'⊠',
+  controller:'⌾', utility:'▤', 'anti-ic':'⊗', 'anti-personel':'⊠'
+};
+/* Net-assets ⑪ — pre-established access kinds (backdoors / forged creds / taps / planted / favors). */
+var _NET_ASSET_KINDS = {
+  backdoor: { label:'Backdoor',         sigil:'⊐' },
+  cred:     { label:'Forged cred',      sigil:'▤' },
+  tap:      { label:'Tap / wiretap',    sigil:'⋔' },
+  planted:  { label:'Planted program',  sigil:'◉' },
+  favor:    { label:'Favor owed',       sigil:'☆' }
+};
 var _netDragId = null;
 
 function _nr() {
-  if (!CS.netrunner) CS.netrunner = { mode:'vanilla', deckId:null, deckPhoto:'', deckCustomOptions:[], programs:[], quickhacks:[] };
+  if (!CS.netrunner) CS.netrunner = { mode:'vanilla', deckId:null, deckPhoto:'', deckCustomOptions:[], programs:[], quickhacks:[], assets:[] };
+  // Shared sheet-side normalizer (net-interface-contract §2/§5) — the single source of truth.
+  // Adds cs.netrunner.deck + .access + .programs. DORMANT until net-model.js lands on main + is
+  // script-tagged in cs.html; falls back to the local defaults below so cs.html still boots today.
+  if (window.NetModel && NetModel.ensureNetrunner) NetModel.ensureNetrunner(CS);
+  if (!Array.isArray(CS.netrunner.assets)) CS.netrunner.assets = [];   // ROLES-only field (net-assets ⑪)
+  _netSeedPreset(CS.netrunner);
   return CS.netrunner;
 }
-function _deckByName(name) { return (DB.decks || []).filter(function(d){ return d.name === name; })[0] || null; }
-function _netMuTotal(deck) {
-  if (!deck) return 0;
-  var mu = parseInt(deck._mu) || 0;
-  var nr = _nr();
-  (nr.deckCustomOptions || []).forEach(function(opt) { if (opt.mods && opt.mods.mu) mu += opt.mods.mu; });
-  if (deck.doubleMu) mu *= 2;
-  return mu;
+/* Seed the v1 starter loadout so the grimoire doesn't start empty (net-progress-audit §ROLES).
+   Uses NetModel.PRESET_LOADOUT (6 programs, ΣMU=10) via makeProgram — no local copy, so it can't
+   diverge. Dormant until NetModel is present; seeds once per sheet. */
+function _netSeedPreset(nr) {
+  if (nr._presetSeeded) return;
+  if (!window.NetModel || !NetModel.PRESET_LOADOUT || !NetModel.makeProgram) return;
+  if ((nr.programs || []).length) { nr._presetSeeded = true; return; }   // never seed over an existing loadout
+  var hasDeck = !!(nr.deckId || (nr.deck && typeof nr.deck === 'object'));
+  nr.programs = NetModel.PRESET_LOADOUT.map(function(t){ var p = NetModel.makeProgram(t); p.slotted = hasDeck; return p; });
+  nr._presetSeeded = true;
 }
-function _netMuUsed() {
-  return (_nr().programs || []).filter(function(p){ return p.slotted; }).reduce(function(t,p){ return t + (parseInt(p.mu)||0); }, 0);
+function _deckByName(name) { return (DB.decks || []).filter(function(d){ return d.name === name; })[0] || null; }
+/* The deck the grimoire renders/measures against: a chosen DB.decks row (legacy deckId), else the
+   NetModel deck object on cs.netrunner.deck (contract §2), synthesized into a display record. */
+function _activeDeckRecord() {
+  var nr = _nr();
+  if (nr.deckId) return _deckByName(nr.deckId);
+  var d = nr.deck;
+  if (d && typeof d === 'object') {
+    var tname = d.type ? (d.type.charAt(0).toUpperCase() + d.type.slice(1)) : 'Standard';
+    return { name: tname + ' cyberdeck', _mu: d.memoryMU, speed: d.speed, dataWall: d.dataWalls, codeGate: 0,
+      description: 'Deck built from your loadout (' + (d.access || 'jack') + ' interface).', options: [], _fromModel: true };
+  }
+  return null;
+}
+/* Programs actually loaded on the deck = slotted top-level programs, each Demon expanded to include
+   the sub-programs it carries (they deploy as one). Feeds the MU accounting. */
+function _loadedList() {
+  var out = [];
+  (_nr().programs || []).forEach(function(p) {
+    if (!p.slotted || _progCarrier(p.id)) return;
+    out.push(p);
+    if (p.demon) (p.carries || []).forEach(function(cid){ var c = _progById(cid); if (c) out.push(c); });
+  });
+  return out;
+}
+/* Deck MU accounting — SINGLE SOURCE OF TRUTH is window.NetModel.deckStats when present
+   (net-interface-contract §2). Returns { memoryMU, loadedMu, freeMu }. Falls back to the local
+   computation until net-model.js lands + is script-tagged (keeps today's behavior identical). */
+function _deckStats() {
+  var nr = _nr(); var rec = _activeDeckRecord();
+  if (window.NetModel && NetModel.deckStats) {
+    var st = NetModel.deckStats({ deck: nr.deck, deckId: nr.deckId, interface: nr.interface, programs: _loadedList() }, rec);
+    var bonus = 0; (nr.deckCustomOptions || []).forEach(function(o){ if (o.mods && o.mods.mu) bonus += o.mods.mu; });  // ROLES-only hardware-option MU
+    var memoryMU = (st.memoryMU || 0) + bonus;
+    return { memoryMU: memoryMU, loadedMu: st.loadedMu || 0, freeMu: memoryMU - (st.loadedMu || 0) };
+  }
+  var mu = rec ? (parseInt(rec._mu) || 0) : 0;
+  (nr.deckCustomOptions || []).forEach(function(o){ if (o.mods && o.mods.mu) mu += o.mods.mu; });
+  if (rec && rec.doubleMu) mu *= 2;
+  var used = _loadedList().reduce(function(t,p){ return t + (parseInt(p.mu) || 0); }, 0);
+  return { memoryMU: mu, loadedMu: used, freeMu: mu - used };
+}
+function _netMuTotal(deck) { return _deckStats().memoryMU; }   // `deck` arg kept for call sites; source is _deckStats
+function _netMuUsed()      { return _deckStats().loadedMu; }
+/* ─ Program helpers (align with net-interface-contract §3: icon/effect/demon/carries) ─ */
+function _progById(id) { return (_nr().programs || []).filter(function(p){ return p.id === id; })[0] || null; }
+function _progSigil(p) {
+  if (p && p.demon) return '❖';                    // Demon = carry container
+  var c = ((p && p.class) || '').toLowerCase().trim();
+  return _NET_SIGILS[c] || '◈';
+}
+/* Clear, table-facing effect line — description of what the program DOES (never a formula). */
+function _progEffect(p) { return (p && (p.effect || p.description || p.notes)) || ''; }
+/* A program carried by any Demon (so it is nested, not listed/slotted on its own).
+   COORDINATION: `carries` is a ROLES field NOT yet in net-interface-contract §3 — pending DATA
+   ratification (net-progress-audit §ROLES, item 4). Kept minimal so it can be renamed on ratification. */
+function _progCarrier(id) {
+  return (_nr().programs || []).filter(function(d){ return d.demon && (d.carries||[]).indexOf(id) >= 0; })[0] || null;
+}
+/* Effective MU = own MU + (Demon) the MU of everything it carries. */
+function _progEffMu(p) {
+  var mu = parseInt(p && p.mu) || 0;
+  if (p && p.demon) (p.carries || []).forEach(function(cid){ var c = _progById(cid); if (c) mu += parseInt(c.mu) || 0; });
+  return mu;
 }
 
 /* ─── COMPUTER (Net access device gating exploration + deliveries) ─── */
@@ -5442,7 +5527,7 @@ function csSetComputer(name) {
 function renderNet() {
   var el = document.getElementById('net-section'); if (!el) return;
   var nr = _nr();
-  var deck = nr.deckId ? _deckByName(nr.deckId) : null;
+  var deck = _activeDeckRecord();
   var muTotal = _netMuTotal(deck);
   var muUsed  = _netMuUsed();
 
@@ -5505,14 +5590,17 @@ var imgCol = '<div class="net-img-wrap">' +
       '<div class="slot-bar"><div class="slot-bar-fill" style="width:' + pct + '%"></div></div>' +
     '</div>';
 
-    /* slotted programs */
-    var slotted = (nr.programs || []).filter(function(p){ return p.slotted; });
+    /* slotted programs (top-level only — carried subs roll up into their Demon) */
+    var slotted = (nr.programs || []).filter(function(p){ return p.slotted && !_progCarrier(p.id); });
     var slottedRows = slotted.length ? slotted.map(function(p) {
-      var col = _NET_PROG_COLORS[p.class] || '#555';
-      return '<div class="net-slotted-row">' +
-        '<span class="prog-badge" style="background:' + col + '">' + _esc((p.class||'').slice(0,3).toUpperCase()) + '</span>' +
-        '<span class="net-slotted-name">' + _esc(p.name) + '</span>' +
-        '<span class="net-mu-chip">MU' + (p.mu||0) + '</span>' +
+      var carried = p.demon ? (p.carries||[]).map(_progById).filter(Boolean) : [];
+      var subLine = carried.length
+        ? '<span class="net-slot-carry" title="Carried by this Demon">' + carried.map(function(c){ return _esc(c.name); }).join(' · ') + '</span>'
+        : '';
+      return '<div class="net-slotted-row"' + (p.demon ? ' data-demon="1"' : '') + '>' +
+        '<span class="net-sigil" title="' + _esc((p.class||'program')) + '">' + _progSigil(p) + '</span>' +
+        '<span class="net-slotted-name" title="' + _esc(_progEffect(p)) + '">' + _esc(p.name) + (p.demon ? ' <span class="net-demon-tag">DEMON</span>' : '') + subLine + '</span>' +
+        '<span class="net-mu-chip">MU' + _progEffMu(p) + '</span>' +
         '<span class="ls-rm" onclick="netUnslotProgram(\'' + p.id + '\')" title="Unslot">✕</span>' +
       '</div>';
     }).join('') : '<div class="net-empty">Drop programs from the library.</div>';
@@ -5547,23 +5635,44 @@ var imgCol = '<div class="net-img-wrap">' +
     }).join('') : '<div class="net-empty">No quickhacks.</div>';
     swCol = '<button class="btn btn-sm" onclick="netAddQuickhackModal()" style="margin-bottom:8px">+ Quickhack</button>' + qhRows;
   } else {
-    var progs = (nr.programs || []);
-    var progRows = progs.length ? progs.map(function(p) {
-      var col = _NET_PROG_COLORS[p.class] || '#555';
-      var canSlot = deck && !p.slotted && ((muUsed + (parseInt(p.mu)||0)) <= muTotal);
+    /* Grimoire ⑧ — top-level library (carried sub-programs are nested inside their Demon). */
+    var topLevel = (nr.programs || []).filter(function(p){ return !_progCarrier(p.id); });
+    var progRows = topLevel.length ? topLevel.map(function(p) {
+      var isDemon = !!p.demon;
+      var eff = _progEffMu(p);
+      var canSlot = deck && !p.slotted && ((muUsed + eff) <= muTotal);
       var slotBtn = deck
         ? (p.slotted
-          ? '<span class="net-slotted-chip">✓</span>'
+          ? '<span class="net-slotted-chip" title="Slotted">✓</span>'
           : '<button class="btn btn-sm' + (canSlot?'':' net-btn-disabled') + '" ' + (canSlot?'onclick="netSlotProgram(\''+p.id+'\')"':'title="Not enough MU"') + '>▸</button>')
         : '';
       var sig = (nr.signatureProgramId === p.id) ? '<span class="net-prog-sig" title="Signature program">★</span>' : '';
-      return '<div class="net-prog-row" draggable="true" ondragstart="netProgramDragStart(event,\'' + p.id + '\')" style="background:' + col + '18;border-left:3px solid ' + col + '">' +
+      var demonBtn = '<span class="net-prog-act" title="' + (isDemon?'Dissolve Demon (release carried programs)':'Make a Demon — carry container') + '" ' +
+        'onclick="' + (isDemon?'netUnmakeDemon':'netMakeDemon') + '(\'' + p.id + '\')">' + (isDemon?'⊘':'❖') + '</span>';
+      var row = '<div class="net-prog-row' + (isDemon?' net-prog-demon':'') + '" draggable="true" ondragstart="netProgramDragStart(event,\'' + p.id + '\')">' +
         sig +
-        '<span class="net-prog-name">' + _esc(p.name) + '</span>' +
-        '<span class="net-prog-meta">S:' + (p.str||0) + ' M:' + (p.mu||0) + '</span>' +
-        slotBtn +
-        '<span class="ls-rm" onclick="netRemoveProgram(\'' + p.id + '\')">✕</span>' +
+        '<span class="net-sigil" title="' + _esc(p.class||'program') + '">' + _progSigil(p) + '</span>' +
+        '<span class="net-prog-name" title="' + _esc(_progEffect(p)) + '">' + _esc(p.name) + (isDemon?' <span class="net-demon-tag">DEMON</span>':'') + '</span>' +
+        '<span class="net-prog-meta">S:' + (p.str||0) + ' M:' + eff + '</span>' +
+        slotBtn + demonBtn +
+        '<span class="ls-rm" onclick="netRemoveProgram(\'' + p.id + '\')" title="Remove">✕</span>' +
       '</div>';
+      if (isDemon) {
+        var carried = (p.carries || []).map(_progById).filter(Boolean);
+        var carriedRows = carried.map(function(c) {
+          return '<div class="net-carry-row">' +
+            '<span class="net-sigil sm" title="' + _esc(c.class||'program') + '">' + _progSigil(c) + '</span>' +
+            '<span class="net-carry-name" title="' + _esc(_progEffect(c)) + '">' + _esc(c.name) + '</span>' +
+            '<span class="net-prog-meta">M:' + (c.mu||0) + '</span>' +
+            '<span class="ls-rm" onclick="netUncarry(\'' + p.id + '\',\'' + c.id + '\')" title="Remove from Demon">✕</span>' +
+          '</div>';
+        }).join('');
+        row += '<div class="net-demon-box">' +
+          (carriedRows || '<div class="net-empty">Empty container.</div>') +
+          '<button class="btn btn-sm" onclick="netCarryPicker(\'' + p.id + '\')">＋ carry a program</button>' +
+        '</div>';
+      }
+      return row;
     }).join('') : '<div class="net-empty">No programs.</div>';
     swCol = '<div class="item-search" style="position:relative;margin-bottom:6px">' +
         '<input id="net-prog-search" placeholder="search programs..." oninput="searchItems(\'program\')" onfocus="searchItems(\'program\')" autocomplete="off">' +
@@ -5634,9 +5743,9 @@ function netSaveCustomDeck() {
 /* Programs */
 function netAddProgramFromDB(item) {
   var nr = _nr();
-  var p = { id:_bankUid(), name:item.name, class:item.class||'', str:item.str||0, mu:item.mu||0, cost:item.cost||0, notes:item.description||'', slotted:false, description:item.description||'' };
+  var p = { id:_bankUid(), name:item.name, class:item.class||'', str:item.str||0, mu:item.mu||0, cost:item.cost||0, notes:item.description||'', slotted:false, description:item.description||'', effect:item.description||'' };
   nr.programs.push(p);
-  renderNet();
+  renderNet(); _csPersistSafe();
 }
 function netAddProgramModal() {
   _modalOpen('Add custom program',
@@ -5644,31 +5753,83 @@ function netAddProgramModal() {
     '<label class="cs-modal-lbl">Class</label><input id="m-np-class" class="cs-modal-inp" placeholder="intrusion / stealth / ...">' +
     '<label class="cs-modal-lbl">STR</label><input id="m-np-str" class="cs-modal-inp" type="number" value="1">' +
     '<label class="cs-modal-lbl">MU</label><input id="m-np-mu" class="cs-modal-inp" type="number" value="1">' +
-    '<label class="cs-modal-lbl">Notes</label><input id="m-np-notes" class="cs-modal-inp" placeholder="optional">' +
+    '<label class="cs-modal-lbl">Effect (what it does — shown on hover)</label><input id="m-np-notes" class="cs-modal-inp" placeholder="e.g. pierces a data wall">' +
     '<div class="cs-modal-actions"><button class="btn btn-sm" onclick="_modalClose()">Cancel</button>' +
     '<button class="btn btn-sm btn-cy" onclick="netSaveProgram()">Add</button></div>');
 }
 function netSaveProgram() {
   var name = ((document.getElementById('m-np-name')||{}).value||'').trim();
   if (!name) { alert('Enter a program name.'); return; }
+  var eff = ((document.getElementById('m-np-notes')||{}).value||'').trim();
   _nr().programs.push({ id:_bankUid(), name:name, class:((document.getElementById('m-np-class')||{}).value||'').trim(),
     str:parseInt((document.getElementById('m-np-str')||{}).value)||0, mu:parseInt((document.getElementById('m-np-mu')||{}).value)||0,
-    notes:((document.getElementById('m-np-notes')||{}).value||'').trim(), slotted:false, description:'' });
-  _modalClose(); renderNet();
+    notes:eff, slotted:false, description:eff, effect:eff });
+  _modalClose(); renderNet(); _csPersistSafe();
 }
 function netSlotProgram(id) {
   var nr = _nr(); var deck = _deckByName(nr.deckId);
-  var p = (nr.programs||[]).filter(function(x){ return x.id===id; })[0]; if (!p||p.slotted) return;
-  if ((_netMuUsed() + (parseInt(p.mu)||0)) > _netMuTotal(deck)) { alert('Not enough MU to slot this program.'); return; }
-  p.slotted = true; renderNet();
+  var p = _progById(id); if (!p || p.slotted || _progCarrier(id)) return;
+  if ((_netMuUsed() + _progEffMu(p)) > _netMuTotal(deck)) { alert('Not enough MU to slot this program.'); return; }
+  p.slotted = true; renderNet(); _csPersistSafe();
 }
 function netUnslotProgram(id) {
-  var p = (_nr().programs||[]).filter(function(x){ return x.id===id; })[0]; if (!p) return;
-  p.slotted = false; renderNet();
+  var p = _progById(id); if (!p) return;
+  p.slotted = false; renderNet(); _csPersistSafe();
 }
 function netRemoveProgram(id) {
-  var nr = _nr(); nr.programs = (nr.programs||[]).filter(function(x){ return x.id!==id; }); renderNet();
+  var nr = _nr();
+  // drop the program AND clear it from any Demon that was carrying it
+  nr.programs = (nr.programs||[]).filter(function(x){ return x.id!==id; });
+  (nr.programs||[]).forEach(function(d){ if (d.demon && (d.carries||[]).indexOf(id) >= 0) d.carries = d.carries.filter(function(c){ return c!==id; }); });
+  renderNet(); _csPersistSafe();
 }
+
+/* ── Demons (carry containers) — Grimoire ⑧ ── */
+function netMakeDemon(id) {
+  var p = _progById(id); if (!p || _progCarrier(id)) return;  // a carried program can't itself be a Demon
+  p.demon = true; if (!Array.isArray(p.carries)) p.carries = [];
+  renderNet(); _csPersistSafe();
+}
+function netUnmakeDemon(id) {
+  var p = _progById(id); if (!p) return;
+  p.demon = false; p.carries = [];   // release: carried programs return to the top-level library
+  renderNet(); _csPersistSafe();
+}
+function netUncarry(demonId, subId) {
+  var d = _progById(demonId); if (!d || !d.demon) return;
+  d.carries = (d.carries||[]).filter(function(c){ return c!==subId; });
+  renderNet(); _csPersistSafe();
+}
+function netCarryPicker(demonId) {
+  var d = _progById(demonId); if (!d || !d.demon) return;
+  // eligible = owned programs that aren't Demons, aren't this one, and aren't already carried elsewhere
+  var eligible = (_nr().programs||[]).filter(function(p){ return !p.demon && p.id !== demonId && !_progCarrier(p.id); });
+  if (!eligible.length) { alert('No free sub-programs to carry. Add or free a program first.'); return; }
+  var opts = eligible.map(function(p){ return '<option value="' + p.id + '">' + _esc(p.name) + ' — ' + _esc(p.class||'program') + ' · MU' + (p.mu||0) + '</option>'; }).join('');
+  _modalOpen('Carry into Demon: ' + _esc(d.name),
+    '<label class="cs-modal-lbl">Sub-program</label><select id="m-carry-sel" class="cs-modal-inp">' + opts + '</select>' +
+    '<div class="cs-modal-actions"><button class="btn btn-sm" onclick="_modalClose()">Cancel</button>' +
+    '<button class="btn btn-sm btn-cy" onclick="netCarryConfirm(\'' + demonId + '\')">Carry</button></div>');
+}
+function netCarryConfirm(demonId) {
+  var d = _progById(demonId); if (!d || !d.demon) { _modalClose(); return; }
+  var subId = (document.getElementById('m-carry-sel')||{}).value;
+  var sub = _progById(subId); if (!sub || sub.demon || _progCarrier(subId)) { _modalClose(); return; }
+  // MU cap: if the Demon is already slotted, carrying a new sub grows its footprint on the deck.
+  // A sub that was itself slotted was already counted; an unslotted one adds its MU on top.
+  if (d.slotted) {
+    var addedMu = sub.slotted ? 0 : (parseInt(sub.mu) || 0);
+    if ((_netMuUsed() + addedMu) > _netMuTotal()) {
+      alert('Not enough free MU to carry that program into a slotted Demon. Unslot the Demon or free some MU first.');
+      _modalClose(); return;
+    }
+  }
+  if (!Array.isArray(d.carries)) d.carries = [];
+  sub.slotted = false;               // carried programs deploy with the Demon, not on their own
+  d.carries.push(subId);
+  _modalClose(); renderNet(); _csPersistSafe();
+}
+function _csPersistSafe() { try { _csPersist(); } catch (e) {} }
 
 /* Drag-and-drop programs → deck slot zone */
 function netProgramDragStart(e, id) { _netDragId = id; e.dataTransfer.effectAllowed = 'copy'; }
@@ -5796,6 +5957,72 @@ function netSetAccessCode(val) { _nr().netAccessCode = val; }
 function netSetHeat(n) { _nr().heat = Math.max(0, Math.min(10, parseInt(n)||0)); renderNetIdentity(); }
 function netSetHeatNotes(val) { _nr().heatNotes = val; }
 function netSetSignature(id) { _nr().signatureProgramId = id || null; renderNetIdentity(); renderNet(); }
+
+/* ═══ NET-ASSETS ⑪ — pre-established access (netrunner kit; section of the sheet) ═══
+   Backdoors / forged creds / taps / planted programs / favors. Each grants a reach or an entry
+   that is otherwise out of range — and is discoverable & burnable at the table. Table-first:
+   the app just tracks the access and its status; the GM resolves whether it still holds. */
+function renderNetAssets() {
+  var el = document.getElementById('net-assets-wrap'); if (!el) return;
+  if (!_isNetrunner()) { el.innerHTML = ''; el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  var nr = _nr();
+  var assets = nr.assets || [];
+  var rows = assets.length ? assets.map(function(a) {
+    var kind = _NET_ASSET_KINDS[a.kind] || { label: a.kind || 'Access', sigil: '◈' };
+    var burned = a.status === 'burned';
+    return '<div class="net-asset' + (burned ? ' burned' : '') + '">' +
+      '<span class="net-sigil" title="' + _esc(kind.label) + '">' + kind.sigil + '</span>' +
+      '<div class="net-asset-main">' +
+        '<div class="net-asset-line"><span class="net-asset-name">' + _esc(a.name || '(unnamed)') + '</span>' +
+          '<span class="net-asset-kind">' + _esc(kind.label) + '</span></div>' +
+        (a.target ? '<div class="net-asset-sub">into <b>' + _esc(a.target) + '</b></div>' : '') +
+        (a.grants ? '<div class="net-asset-sub">grants ' + _esc(a.grants) + '</div>' : '') +
+        (a.notes ? '<div class="net-asset-note">' + _esc(a.notes) + '</div>' : '') +
+      '</div>' +
+      '<button class="btn btn-sm net-asset-status' + (burned ? ' is-burned' : '') + '" ' +
+        'onclick="netToggleAssetStatus(\'' + a.id + '\')" title="Toggle active / burned">' + (burned ? 'BURNED' : 'ACTIVE') + '</button>' +
+      '<span class="ls-rm" onclick="netRemoveAsset(\'' + a.id + '\')" title="Remove">✕</span>' +
+    '</div>';
+  }).join('') : '<div class="net-empty">No pre-established access. A backdoor, forged cred or planted program buys you a way in that reach alone wouldn\'t.</div>';
+  el.innerHTML = '<div class="net-assets">' +
+    '<div class="net-col-head">Pre-established access ' +
+      '<button class="btn btn-sm" onclick="netAddAssetModal()">＋ Access</button></div>' +
+    rows +
+  '</div>';
+}
+function netAddAssetModal() {
+  var kindOpts = Object.keys(_NET_ASSET_KINDS).map(function(k){ return '<option value="' + k + '">' + _NET_ASSET_KINDS[k].label + '</option>'; }).join('');
+  _modalOpen('Add pre-established access',
+    '<label class="cs-modal-lbl">Kind</label><select id="m-na-kind" class="cs-modal-inp">' + kindOpts + '</select>' +
+    '<label class="cs-modal-lbl">Name / label</label><input id="m-na-name" class="cs-modal-inp" placeholder="e.g. Militech maintenance login">' +
+    '<label class="cs-modal-lbl">Opens (site / host)</label><input id="m-na-target" class="cs-modal-inp" placeholder="e.g. Arasaka Night City payroll fort">' +
+    '<label class="cs-modal-lbl">Grants</label><input id="m-na-grants" class="cs-modal-inp" placeholder="e.g. reach past the login / entry point at the core">' +
+    '<label class="cs-modal-lbl">Notes</label><input id="m-na-notes" class="cs-modal-inp" placeholder="how you got it, who could burn it…">' +
+    '<div class="cs-modal-actions"><button class="btn btn-sm" onclick="_modalClose()">Cancel</button>' +
+    '<button class="btn btn-sm btn-cy" onclick="netSaveAsset()">Add</button></div>');
+}
+function netSaveAsset() {
+  var name = ((document.getElementById('m-na-name')||{}).value||'').trim();
+  if (!name) { alert('Give the access a name.'); return; }
+  _nr().assets.push({ id:_bankUid(),
+    kind:((document.getElementById('m-na-kind')||{}).value||'backdoor'),
+    name:name,
+    target:((document.getElementById('m-na-target')||{}).value||'').trim(),
+    grants:((document.getElementById('m-na-grants')||{}).value||'').trim(),
+    notes:((document.getElementById('m-na-notes')||{}).value||'').trim(),
+    status:'active' });
+  _modalClose(); renderNetAssets(); _csPersistSafe();
+}
+function netToggleAssetStatus(id) {
+  var a = (_nr().assets||[]).filter(function(x){ return x.id===id; })[0]; if (!a) return;
+  a.status = a.status === 'burned' ? 'active' : 'burned';
+  renderNetAssets(); _csPersistSafe();
+}
+function netRemoveAsset(id) {
+  var nr = _nr(); nr.assets = (nr.assets||[]).filter(function(x){ return x.id!==id; });
+  renderNetAssets(); _csPersistSafe();
+}
 
 function renderVehicles() {
   var el = document.getElementById('veh-list');
@@ -6300,8 +6527,9 @@ function csExportTextPdf() {
   if (nr.icon && nr.icon.name) netLines.push('Icon: ' + nr.icon.name);
   if (nr.heat) netLines.push('Heat: ' + nr.heat);
   (nr.deckCustomOptions || []).forEach(function(o) { netLines.push('mod: ' + (o.name || '')); });
-  (nr.programs || []).forEach(function(p) { netLines.push((p.name || '') + (p.class ? ' [' + p.class + ']' : '') + (p.str ? ' STR ' + p.str : '') + (p.mu ? ' MU ' + p.mu : '') + (p.slotted ? ' *' : '')); });
+  (nr.programs || []).forEach(function(p) { netLines.push((p.name || '') + (p.class ? ' [' + p.class + ']' : '') + (p.demon ? ' [Demon]' : '') + (p.str ? ' STR ' + p.str : '') + (p.mu ? ' MU ' + p.mu : '') + (p.slotted ? ' *' : '')); });
   (nr.quickhacks || []).forEach(function(q) { netLines.push('qh: ' + (q.name || q.title || String(q))); });
+  (nr.assets || []).forEach(function(a) { var k = _NET_ASSET_KINDS[a.kind]; netLines.push('access: ' + (a.name || '') + ' [' + ((k && k.label) || a.kind || '') + ']' + (a.target ? ' → ' + a.target : '') + (a.status === 'burned' ? ' (burned)' : '')); });
 
   var finLines = [];
   finLines.push('Cash: ' + cash + ' eb');
@@ -6455,7 +6683,7 @@ function csSetOption(key, val) {
   if (!CS.settings) CS.settings = {};
   CS.settings[key] = !!val;
   if (key === 'showAllRoleSkills') renderSkills();
-  if (key === 'forceNetrunner') renderNetIdentity();
+  if (key === 'forceNetrunner') { renderNetIdentity(); renderNetAssets(); }
   if (key === 'markCustom') renderSheetLayout();
   if (key === 'onbAuthor' && window.CSOnboarding) window.CSOnboarding.refreshAuthor();
 }
@@ -7181,9 +7409,12 @@ function applyCS() {
   if (!CS.notStored) CS.notStored = [];
   if (!CS.hands)     CS.hands     = [null, null];
   if (!CS.vehicles)  CS.vehicles  = [];
-  if (!CS.netrunner) CS.netrunner = { mode:'vanilla', deckId:null, deckPhoto:'', deckCustomOptions:[], programs:[], quickhacks:[] };
+  if (!CS.netrunner) CS.netrunner = { mode:'vanilla', deckId:null, deckPhoto:'', deckCustomOptions:[], programs:[], quickhacks:[], assets:[] };
   if (!CS.netrunner.programs)      CS.netrunner.programs      = [];
   if (!CS.netrunner.quickhacks)    CS.netrunner.quickhacks    = [];
+  if (!Array.isArray(CS.netrunner.assets)) CS.netrunner.assets = [];
+  // Demons carry a list of sub-program ids (Grimoire ⑧) — normalize old programs
+  (CS.netrunner.programs || []).forEach(function(p){ if (p.demon && !Array.isArray(p.carries)) p.carries = []; });
   if (!CS.netrunner.deckCustomOptions) CS.netrunner.deckCustomOptions = [];
   if (CS.netrunner.deckPhoto  == null) CS.netrunner.deckPhoto  = '';
   if (!CS.netrunner.mode)          CS.netrunner.mode = 'vanilla';
@@ -7265,6 +7496,7 @@ function applyCS() {
   renderVehicles();
   renderNet();
   renderNetIdentity();
+  renderNetAssets();
   renderPress();
   renderComputer();
   renderLifestyle();
@@ -7370,6 +7602,7 @@ function init() {
       document.getElementById('cs-sa').value = CS.sa;
       renderSkills();
       renderNetIdentity();
+      renderNetAssets();
       renderPress();
     });
   }
