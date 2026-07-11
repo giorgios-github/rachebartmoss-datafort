@@ -1056,7 +1056,10 @@
   /* ═══════════════ renderSite (a single page) ═══════════════ */
   function renderSite(host, siteJson, ctx) {
     wireChipClicks();
-    ctx = ctx || {}; ctx.siteJson = siteJson; ctx.siteId = ctx.siteId || siteJson.id; ctx.page = ctx.page || homePage(siteJson); ctx.host = host;
+    ctx = ctx || {};
+    // A standalone datafort has no public surface — nothing to browse to.
+    if (siteJson && siteJson.deepOnly) { host.className = 'web-site web-deep-only'; host.removeAttribute('style'); host.innerHTML = '<div class="web-deep-only-box">◆ DATAFORT<div class="web-deep-only-s">No public surface. This system exists only in the DEEP — a netrunner jacks in from the atlas.</div></div>'; return; }
+    ctx.siteJson = siteJson; ctx.siteId = ctx.siteId || siteJson.id; ctx.page = ctx.page || homePage(siteJson); ctx.host = host;
     if (isPlayer()) { var _pj = playerJson(); ctx.power = playerPower(_pj); ctx.adblock = deviceHasPerk(_pj, 'adblock'); } else { ctx.power = 999; ctx.adblock = false; }
     host.className = 'web-site web-preset-' + ((siteJson.theme && siteJson.theme.preset) || 'plain') + (ctx.page && ctx.page.layout === 'app' ? ' web-page-app' : ''); host.setAttribute('style', themeCss(siteJson.theme)); host.innerHTML = '';
     var auth = siteJson.auth, eff = 999;
@@ -1418,6 +1421,16 @@
     for (var yy = 1; yy < GRID_H - 1; yy++) for (var xx = 1; xx < GRID_W - 1; xx++) { var kk = xx + ',' + yy; if (!used[kk]) { used[kk] = 1; return { x: xx, y: yy }; } }
     return _popGrid();
   }
+  // A free (district, subcell) across the 15×15 subgrids — spreads sites over
+  // districts (round-robin by seed) so "populate" doesn't pile them in one place.
+  function _popDistrictCell(usedCells, seed) {
+    for (var a = 0; a < NC_DISTRICTS.length; a++) {
+      var d = NC_DISTRICTS[(seed + a) % NC_DISTRICTS.length].id;
+      for (var t = 0; t < 400; t++) { var x = _gInt(0, SUBGRID_N - 1), y = _gInt(0, SUBGRID_N - 1), k = d + ':' + x + ',' + y; if (!usedCells[k]) { usedCells[k] = 1; return { district: d, x: x, y: y }; } }
+    }
+    for (var di = 0; di < NC_DISTRICTS.length; di++) { var dd = NC_DISTRICTS[di].id; for (var yy = 0; yy < SUBGRID_N; yy++) for (var xx = 0; xx < SUBGRID_N; xx++) { var kk = dd + ':' + xx + ',' + yy; if (!usedCells[kk]) { usedCells[kk] = 1; return { district: dd, x: xx, y: yy }; } } }
+    return { district: DEFAULT_DISTRICT, x: 0, y: 0 };
+  }
   function _popPlans(fac, c) {
     var blocks = ['header', 'text', 'image', 'link', 'board', 'compose'];
     return [
@@ -1577,15 +1590,16 @@
     var N = ({ S: [5, 1, 6], M: [9, 2, 12], L: [15, 3, 22] })[opts.size || 'M']; // [press outlets, chat apps, varied-block-site target]
     var level = POP_LIVE[opts.live] || POP_LIVE.lively;
     Store.index('site').then(function (rows) {
-      var byName = {}, blockCount = 0, used = {}, relocated = 0;
-      rows.forEach(function (r) { byName[(r.json.name || '').toLowerCase()] = r.json; if (r.json.props && r.json.props.genBlock) blockCount++; var g = r.json.grid; if (g && (g.x !== CENTER.x || g.y !== CENTER.y)) used[g.x + ',' + g.y] = 1; });
+      var byName = {}, blockCount = 0, used = {}, usedCells = {}, relocated = 0;
+      rows.forEach(function (r) { byName[(r.json.name || '').toLowerCase()] = r.json; if (r.json.props && r.json.props.genBlock) blockCount++; var g = r.json.grid; if (g && (g.x !== CENTER.x || g.y !== CENTER.y)) used[g.x + ',' + g.y] = 1; if (r.json.subcell) usedCells[siteDistrict(r.json) + ':' + r.json.subcell.x + ',' + r.json.subcell.y] = 1; });
       // Spread out any sites stacked on the default CENTER cell (e.g. the pre-seeded chat/press apps).
       rows.forEach(function (r) { var g = r.json.grid || CENTER; if (g.x === CENTER.x && g.y === CENTER.y) { r.json.grid = _popFreeCell(used); relocated++; try { Promise.resolve(Store.put({ type: 'site', id: r.json.id }, r.json)); } catch (e) {} } });
       var created = 0, hostRefs = { corpo: [], indie: [], under: [] }, pressOutlets = [], blockNeed = 0;
       function ensure(json, onNew) {
         var ex = byName[(json.name || '').toLowerCase()];
         if (ex) return Promise.resolve(ex);
-        json.grid = _popFreeCell(used); // every new site gets its own free cell — no overlaps
+        json.grid = _popFreeCell(used); // legacy free-grid coord (kept for any old view)
+        var dc = _popDistrictCell(usedCells, created); json.district = dc.district; json.subcell = { x: dc.x, y: dc.y }; // spread across district subgrids
         created++;
         return Promise.resolve(Store.create('site', json)).then(function (made) { byName[(json.name || '').toLowerCase()] = made.json; if (onNew) try { onNew(made.json); } catch (e) {} return made.json; });
       }
@@ -1650,25 +1664,26 @@
     host.className = 'tab-content ca-pane';
     host.innerHTML =
       '<div class="ca-topbar"><span class="ca-topbar-t">THE NET</span>' + gmClockHtml() + '</div>' +
-      '<div class="ca-body"><aside class="ca-rail"><div class="dt-side"><div class="dt-head">NET</div><div class="dt-node" data-web="sites"><span class="dt-l">Sites</span></div><div class="dt-node" data-web="browse"><span class="dt-l">Browser</span></div><div class="dt-node" data-web="hosts"><span class="dt-l">Hosts</span></div><div class="dt-node" data-web="sessions"><span class="dt-l">Logins</span></div><div class="dt-node" data-web="traffic"><span class="dt-l">Traffic</span></div>' +
+      '<div class="ca-body"><aside class="ca-rail"><div class="dt-side"><div class="dt-head">NET</div><div class="dt-node" data-web="sites"><span class="dt-l">Sites</span></div><div class="dt-node" data-web="browse"><span class="dt-l">Browser</span></div><div class="dt-node" data-web="atlas"><span class="dt-l">Cyberspace</span></div><div class="dt-node" data-web="hosts"><span class="dt-l">Hosts</span></div><div class="dt-node" data-web="sessions"><span class="dt-l">Logins</span></div><div class="dt-node" data-web="traffic"><span class="dt-l">Traffic</span></div>' +
       '</div></aside><div class="ca-main" id="web-gm-main"></div></div>';
-    host.querySelectorAll('[data-web]').forEach(function (b) { b.onclick = function () { var a = b.getAttribute('data-web'); if (a === 'sites') { var m = host.querySelector('#web-gm-main'); if (m) renderSitesView(m); } else if (a === 'browse') Shell.openTool('web-browse'); else if (a === 'hosts') Shell.openTool('web-hosts'); else if (a === 'sessions') renderSessions(); else if (a === 'traffic') renderTraffic(); }; });
+    host.querySelectorAll('[data-web]').forEach(function (b) { b.onclick = function () { var a = b.getAttribute('data-web'); if (a === 'sites') { var m = host.querySelector('#web-gm-main'); if (m) renderSitesView(m); } else if (a === 'browse') Shell.openTool('web-browse'); else if (a === 'atlas') { Shell.openTool('web-browse'); setTimeout(function () { navTo('/home/map'); }, 60); } else if (a === 'hosts') Shell.openTool('web-hosts'); else if (a === 'sessions') renderSessions(); else if (a === 'traffic') renderTraffic(); }; });
     var gmMain = host.querySelector('#web-gm-main'); if (gmMain) renderSitesView(gmMain);
     wireGmClock(host);
   }
   var _sitesView = 'grid';
   function renderSitesView(container) {
     container.innerHTML = '<div class="web-sv-head"><span class="dt-head" style="padding:0">SITES</span>' +
-      '<span class="web-sv-toggle"><button class="web-sv-b' + (_sitesView === 'grid' ? ' on' : '') + '" data-sv="grid">▦ Grid</button><button class="web-sv-b' + (_sitesView === 'map' ? ' on' : '') + '" data-sv="map">Map</button></span>' +
-      '<button class="web-sv-new" data-sv-new>+ new</button><button class="web-sv-new" data-sv-app>+ app</button><button class="web-sv-new" data-sv-gen>generate</button><button class="web-sv-new web-sv-pop" data-sv-pop>populate net</button></div>' +
+      '<span class="web-sv-toggle"><button class="web-sv-b on" data-sv="grid">▦ Grid</button><button class="web-sv-b" data-atlas>Cyberspace ↗</button></span>' +
+      '<button class="web-sv-new" data-sv-new>+ new</button><button class="web-sv-new" data-sv-app>+ app</button><button class="web-sv-new" data-sv-fort>+ fort</button><button class="web-sv-new" data-sv-gen>generate</button><button class="web-sv-new web-sv-pop" data-sv-pop>populate net</button></div>' +
       '<div class="web-sv-body" id="web-sv-body"></div>';
     container.querySelector('[data-sv-new]').onclick = newSite;
     container.querySelector('[data-sv-app]').onclick = newSiteApp;
+    container.querySelector('[data-sv-fort]').onclick = newAutonomousFort;
     container.querySelector('[data-sv-gen]').onclick = openSiteGenerator;
     container.querySelector('[data-sv-pop]').onclick = openPopulate;
     container.querySelectorAll('[data-sv]').forEach(function (b) { b.onclick = function () { _sitesView = b.getAttribute('data-sv'); renderSitesView(container); }; });
+    var atl = container.querySelector('[data-atlas]'); if (atl) atl.onclick = function () { Shell.openTool('web-browse'); setTimeout(function () { navTo('/home/map'); }, 60); };
     var body = container.querySelector('#web-sv-body');
-    if (_sitesView === 'map') return renderSitesMap(body);
     Store.index('site').then(function (rows) {
       body.innerHTML = rows.length ? '<div class="web-sv-grid">' + rows.map(function (r) { var s = r.json; return '<button class="web-sv-card" data-site="' + esc(s.id) + '"><span class="web-sv-card-n">' + esc(s.name || 'site') + (s.app ? ' <span class="web-sv-tag">app</span>' : '') + '</span><span class="web-sv-card-m">' + esc(s.kind || 'site') + ' · ' + esc(s.broadcast || 'citywide') + (isOnline(s) ? '' : ' · <span class="web-sv-off">offline</span>') + '</span></button>'; }).join('') + '</div>' : '<div class="app-empty" style="padding:24px">No sites yet — “+ new” or “generate”.</div>';
       body.querySelectorAll('[data-site]').forEach(function (b) { b.onclick = function () { Shell.openEntity('site', b.getAttribute('data-site'), null); }; });
@@ -1718,9 +1733,12 @@
     initTabs(); host.className = 'tab-content web-browser';
     host.innerHTML =
       '<div class="web-chrome"><div class="web-tabbar" id="web-tabbar"></div><div class="web-urlrow">' +
-        '<button class="web-nav" data-home>⌂</button><button class="web-nav" data-map>▦</button><div class="web-crumbs" id="web-crumbs"></div>' +
+        '<button class="web-nav" id="web-back" data-back title="Back">◄</button><button class="web-nav" id="web-fwd" data-fwd title="Forward">►</button>' +
+        '<button class="web-nav" data-home title="Home">⌂</button><button class="web-nav" data-map title="Cyberspace">▦</button><div class="web-crumbs" id="web-crumbs"></div>' +
         '<input class="web-url" id="web-url" spellcheck="false" autocomplete="off"><button class="web-nav" id="web-go">go</button><button class="web-nav" id="web-star" title="Bookmark">☆</button>' +
       '</div></div><div class="web-stage" id="web-stage"></div>';
+    host.querySelector('[data-back]').onclick = goBack;
+    host.querySelector('[data-fwd]').onclick = goForward;
     host.querySelector('[data-home]').onclick = function () { navTo('/home'); };
     host.querySelector('[data-map]').onclick = function () { navTo('/home/map'); };
     host.querySelector('#web-go').onclick = function () { navTo(host.querySelector('#web-url').value.trim()); };
@@ -1737,13 +1755,17 @@
     bar.querySelectorAll('[data-tabx]').forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); closeTab(b.getAttribute('data-tabx')); }; });
     var add = document.getElementById('web-tabadd'); if (add) add.onclick = function () { var nt = { id: uid('bt'), url: '/home', title: 'Home' }; _tabs.push(nt); _active = nt.id; paintChrome(); paintStage(); };
     var a = activeTab();
+    var bk = document.getElementById('web-back'); if (bk) bk.disabled = !(a.back && a.back.length);
+    var fw = document.getElementById('web-fwd'); if (fw) fw.disabled = !(a.fwd && a.fwd.length);
     var url = document.getElementById('web-url'); if (url) url.value = a.url;
     var cr = document.getElementById('web-crumbs'); if (cr) { cr.innerHTML = crumbs(a).map(function (c) { return '<a data-crumb="' + esc(c.url) + '">' + esc(c.label) + '</a>'; }).join('<i>›</i>'); cr.querySelectorAll('[data-crumb]').forEach(function (x) { x.onclick = function () { navTo(x.getAttribute('data-crumb')); }; }); }
   }
   function crumbs(tb) { if (tb.url === '/home') return [{ label: 'Home', url: '/home' }]; if (tb.url === '/home/map') return [{ label: 'Home', url: '/home' }, { label: 'Map', url: '/home/map' }]; return [{ label: 'Home', url: '/home' }, { label: tb.title || tb.url, url: tb.url }]; }
   function closeTab(id) { var i = _tabs.map(function (x) { return x.id; }).indexOf(id); if (i < 0) return; _tabs.splice(i, 1); if (!_tabs.length) _tabs.push({ id: uid('bt'), url: '/home', title: 'Home' }); if (_active === id) _active = _tabs[Math.max(0, i - 1)].id; paintChrome(); paintStage(); }
-  function navTo(url) { if (!url) return; if (url.indexOf('grid:') !== 0 && url.charAt(0) !== '/') url = 'grid://' + url; var a = activeTab(); a.url = url; if (url === '/home') a.title = 'Home'; else if (url === '/home/map') a.title = 'Map'; paintChrome(); paintStage(); }
-  function paintStage() { var stage = document.getElementById('web-stage'); if (!stage) return; var a = activeTab(); if (a.url === '/home') { stage.className = 'web-stage'; stage.removeAttribute('style'); renderBrowserHome(stage); } else if (a.url === '/home/map') { stage.className = 'web-stage'; stage.removeAttribute('style'); renderBrowserMap(stage); } else openAddress(a.url, stage); stage.scrollTop = 0; }
+  function navTo(url) { if (!url) return; if (url.indexOf('grid:') !== 0 && url.charAt(0) !== '/') url = 'grid://' + url; var a = activeTab(); if (a.url && a.url !== url) { a.back = a.back || []; a.back.push({ url: a.url, title: a.title }); if (a.back.length > 60) a.back.shift(); a.fwd = []; } a.url = url; if (url === '/home') a.title = 'Home'; else if (url === '/home/map') a.title = 'Map'; paintChrome(); paintStage(); }
+  function goBack() { var a = activeTab(); if (!a.back || !a.back.length) return; a.fwd = a.fwd || []; a.fwd.push({ url: a.url, title: a.title }); var p = a.back.pop(); a.url = p.url; a.title = p.title || p.url; paintChrome(); paintStage(); }
+  function goForward() { var a = activeTab(); if (!a.fwd || !a.fwd.length) return; a.back = a.back || []; a.back.push({ url: a.url, title: a.title }); var n = a.fwd.pop(); a.url = n.url; a.title = n.title || n.url; paintChrome(); paintStage(); }
+  function paintStage() { var stage = document.getElementById('web-stage'); if (!stage) return; var a = activeTab(); if (a.url === '/home') { stage.className = 'web-stage'; stage.removeAttribute('style'); renderBrowserHome(stage); } else if (a.url === '/home/map') { stage.className = 'web-stage'; stage.removeAttribute('style'); renderAtlas(stage); } else openAddress(a.url, stage); stage.scrollTop = 0; }
 
   /* /home — pinned · bookmarks (groups) · history (player→json.net, GM→meta.ui.web) */
   function webGet() { if (isPlayer()) { var j = playerJson(); return (j && j.net) || {}; } return App.uiGet('web', {}) || {}; }
@@ -1774,7 +1796,7 @@
       var gm = !isPlayer(), reach = gm ? 999 : effectiveReach(playerJson());
       var known = rows.filter(function (r) { return r.json.known && (gm || (Store.visibleToPlayers(r.json) && connectable(r.json, reach))); });
       var sec = stage.querySelector('#web-saved-grp'); if (!sec) return;
-      sec.innerHTML = known.length ? '<div class="web-bm-g">Saved</div>' + known.map(function (r) { return '<div class="web-bm" data-go="' + esc(siteUrl(r.json)) + '"><span class="web-bm-t">' + (r.json.app ? '▣ ' : '◆ ') + esc(r.json.name) + '</span></div>'; }).join('') : '';
+      sec.innerHTML = known.length ? '<div class="web-bm-g">Saved</div>' + known.map(function (r) { return '<div class="web-bm" data-go="' + esc(siteUrl(r.json)) + '"><span class="web-bm-t">◆ ' + esc(r.json.name) + '</span></div>'; }).join('') : '';
       sec.querySelectorAll('[data-go]').forEach(function (b) { b.onclick = function () { navTo(b.getAttribute('data-go')); }; });
     }).catch(function () {});
   }
@@ -1828,6 +1850,32 @@
     });
   }
 
+  // Placement label for a site: district · cell (subgrid). "(auto)" = derived, not yet placed.
+  function placeLabel(doc) { var dist = doc.district || DEFAULT_DISTRICT; var sc = subcellOf(doc); return dist + ' · ' + sc.x + ',' + sc.y + (doc.subcell ? '' : ' (auto)'); }
+  // Place a site in a district's 15×15 subgrid — choose district ▸ cell, one site per cell.
+  function openSubgridPlacer(doc, onPick) {
+    if (!window.UI) return;
+    Store.index('site').then(function (rows) {
+      var district = doc.district || DEFAULT_DISTRICT;
+      var sel = doc.subcell ? { x: doc.subcell.x, y: doc.subcell.y } : null;
+      function occ(dist) { var o = {}; rows.forEach(function (r) { if (r.json.id === doc.id) return; if (siteDistrict(r.json) !== dist) return; var sc = subcellOf(r.json); o[sc.x + ',' + sc.y] = r.json.name || 'site'; }); return o; }
+      UI.modal({ title: 'Place the site — district ▸ cell', size: 'wide',
+        body: '<label class="rt-field"><span class="rt-field-l">District (subgrid)</span><select class="rt-input" id="pl-dist">' + NC_DISTRICTS.map(function (n) { return '<option value="' + n.id + '"' + (district === n.id ? ' selected' : '') + '>' + n.id + ' · ' + esc(n.name) + '</option>'; }).join('') + '</select></label><div class="net-place-wrap"><div class="net-place" id="pl-grid"></div></div><div class="net-place-hint" id="pl-hint"></div>',
+        actions: [{ label: 'Cancel' }, { label: 'Place', kind: 'primary', onClick: function () { if (sel) onPick(district, sel.x, sel.y); } }],
+        onShow: function (box) {
+          function draw() {
+            var o = occ(district), html = '';
+            for (var y = 0; y < SUBGRID_N; y++) for (var x = 0; x < SUBGRID_N; x++) { var key = x + ',' + y, isSel = sel && sel.x === x && sel.y === y, isOcc = o[key] && !isSel; html += '<button class="net-place-c' + (isOcc ? ' net-place-occ' : '') + (isSel ? ' net-place-sel' : '') + '" data-x="' + x + '" data-y="' + y + '"' + (isOcc ? ' disabled title="' + esc(o[key]) + '"' : '') + '></button>'; }
+            var g = box.querySelector('#pl-grid'); g.style.gridTemplateColumns = 'repeat(' + SUBGRID_N + ',1fr)'; g.innerHTML = html;
+            box.querySelector('#pl-hint').textContent = sel ? ('Cell ' + sel.x + ',' + sel.y + ' — one site per cell.') : 'Pick an empty cell (occupied cells are dimmed).';
+            g.querySelectorAll('[data-x]').forEach(function (c2) { if (c2.disabled) return; c2.onclick = function () { sel = { x: +c2.getAttribute('data-x'), y: +c2.getAttribute('data-y') }; draw(); }; });
+          }
+          box.querySelector('#pl-dist').onchange = function (e) { district = e.target.value; sel = null; draw(); };
+          draw();
+        } });
+    });
+  }
+
   /* ═══════════════ EDITOR — 3 tabs (Info → Blocks → Design) + live preview ═══════════════ */
   function renderEditor(t, host) {
     var ref = { type: 'site', id: t.ref }; host.className = 'tab-content dt-fiche';
@@ -1845,15 +1893,15 @@
     body.innerHTML =
       '<div class="web-comp"><div class="web-comp-left">' +
         '<div class="web-comp-row"><input class="dtf-name" id="web-name" value="' + esc(doc.name || '') + '" placeholder="Site name"><button class="dt-btn" id="web-open">open ↗</button></div>' +
-        '<div class="web-edit-tabs"><button class="web-et" data-et="info">Info</button><button class="web-et" data-et="blocks">Blocks</button><button class="web-et" data-et="design">Design</button>' + (doc.app ? '' : '<button class="web-et" data-et="access">Access</button><button class="web-et" data-et="ads">Ads</button>') + '</div>' +
+        '<div class="web-edit-tabs"><button class="web-et" data-et="info">Info</button><button class="web-et" data-et="blocks">Blocks</button><button class="web-et" data-et="design">Design</button>' + (doc.app ? '' : '<button class="web-et" data-et="access">Access</button><button class="web-et" data-et="ads">Ads</button>') + '<button class="web-et" data-et="fort">Fort</button></div>' +
         '<div class="web-edit-body" id="web-edit-body"></div>' +
       '</div><div class="web-comp-right"><div class="dt-head">PREVIEW — WHAT A VISITOR SEES</div><div class="web-preview" id="web-preview"></div></div></div>';
     body.querySelector('#web-name').oninput = function (e) { doc.name = e.target.value; poke(); };
     body.querySelector('#web-open').onclick = function () { Shell.openTool('web-browse'); setTimeout(function () { navTo(pageUrl(doc, _page)); }, 60); };
     body.querySelectorAll('.web-et').forEach(function (b) { b.onclick = function () { setTab(b.getAttribute('data-et')); }; });
-    setTab('info'); preview();
+    setTab(_composerTab ? _composerTab : (isPlayer() ? 'blocks' : 'info')); _composerTab = null; preview();
 
-    function setTab(t2) { _tab = t2; body.querySelectorAll('.web-et').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-et') === t2); }); var c = body.querySelector('#web-edit-body'); if (!c) return; if (_tab === 'info') (isPlayer() ? paintPlayerMeta : paintMeta)(c); else if (_tab === 'blocks') paintBlocksTab(c); else if (_tab === 'access') paintAccess(c); else if (_tab === 'ads') paintAds(c); else paintStyle(c); }
+    function setTab(t2) { _tab = t2; body.querySelectorAll('.web-et').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-et') === t2); }); var comp = body.querySelector('.web-comp'); if (comp) comp.classList.toggle('web-comp-fort', t2 === 'fort'); var c = body.querySelector('#web-edit-body'); if (!c) return; if (_tab === 'info') (isPlayer() ? paintPlayerMeta : paintMeta)(c); else if (_tab === 'blocks') paintBlocksTab(c); else if (_tab === 'access') paintAccess(c); else if (_tab === 'ads') paintAds(c); else if (_tab === 'fort') renderFortBuilder(c, doc, ref, poke); else paintStyle(c); }
     function paintAds(c) {
       c.innerHTML = '<p class="dt-hint">Ads on your site come from <b>Ad slot</b> blocks. More slots = more revenue per visit, but they drag your traffic down — find the sweet spot. Sign a rate with an ad network.</p><div id="web-ads-body">…</div>';
       Store.index('site').then(function (all) {
@@ -1892,9 +1940,7 @@
       c.innerHTML = '<div class="web-metagrid">' +
         field('Kind', '<select id="wm-kind">' + ['site', 'bbs', 'media', 'corp', 'gov', 'shop', 'person', 'blackmarket', 'host'].map(function (k) { return '<option' + (k === (doc.kind || 'site') ? ' selected' : '') + '>' + k + '</option>'; }).join('') + '</select>') +
         field('Level (map icon)', '<select id="wm-level">' + Object.keys(LEVELS).map(function (l) { return '<option value="' + l + '"' + (l === (doc.level || 'lv1') ? ' selected' : '') + '>' + LEVEL_LABEL[l] + '</option>'; }).join('') + '</select>') +
-        field('Grid X (0–' + (GRID_W - 1) + ')', '<input type="number" id="wm-gx" min="0" max="' + (GRID_W - 1) + '" value="' + (doc.grid.x != null ? doc.grid.x : CENTER.x) + '">') +
-        field('Grid Y (0–' + (GRID_H - 1) + ')', '<input type="number" id="wm-gy" min="0" max="' + (GRID_H - 1) + '" value="' + (doc.grid.y != null ? doc.grid.y : CENTER.y) + '">') +
-        field('Placement', '<button class="dt-btn" id="wm-place">▦ open the city grid</button>') +
+        field('Placement', '<button class="dt-btn" id="wm-place">▦ place (district ▸ cell)</button> <span class="web-metaval" id="wm-cell">' + esc(placeLabel(doc)) + '</span>') +
         field('Broadcast', '<select id="wm-bc">' + BROADCAST.map(function (b) { return '<option' + (b === (doc.broadcast || 'citywide') ? ' selected' : '') + '>' + b + '</option>'; }).join('') + '</select>') +
         field('Host', '<button class="dt-btn" id="wm-host">' + esc(doc.hostId ? 'linked' : 'pick host…') + '</button>') +
         field('Subject', '<button class="dt-btn" id="wm-subject">' + esc(doc.subject ? (doc.subject.type + ' linked') : 'link a record…') + '</button>') +
@@ -1907,9 +1953,7 @@
         '</div><div id="web-hostcfg"></div>';
       c.querySelector('#wm-kind').onchange = function (e) { doc.kind = e.target.value; paintHostCfg(c); poke(); };
       c.querySelector('#wm-level').onchange = function (e) { doc.level = e.target.value; poke(); };
-      c.querySelector('#wm-gx').onchange = function (e) { doc.grid.x = Math.max(0, Math.min(GRID_W - 1, parseInt(e.target.value, 10) || 0)); poke(); };
-      c.querySelector('#wm-gy').onchange = function (e) { doc.grid.y = Math.max(0, Math.min(GRID_H - 1, parseInt(e.target.value, 10) || 0)); poke(); };
-      c.querySelector('#wm-place').onclick = function () { openGridPicker(doc, function (x, y) { doc.grid.x = x; doc.grid.y = y; poke(); var gx = c.querySelector('#wm-gx'); if (gx) gx.value = x; var gy = c.querySelector('#wm-gy'); if (gy) gy.value = y; }); };
+      c.querySelector('#wm-place').onclick = function () { openSubgridPlacer(doc, function (dist, x, y) { doc.district = dist; doc.subcell = { x: x, y: y }; poke(); var el = c.querySelector('#wm-cell'); if (el) el.textContent = placeLabel(doc); }); };
       c.querySelector('#wm-bc').onchange = function (e) { doc.broadcast = e.target.value; doc.record.broadcast = e.target.value; clampBroadcast(doc); poke(); };
       c.querySelector('#wm-server').oninput = function (e) { doc.record.serverAddress = e.target.value; poke(); };
       c.querySelector('#wm-listed').onchange = function (e) { doc.unlisted = !e.target.checked; poke(); };
@@ -1921,7 +1965,7 @@
     function paintPlayerMeta(c) {
       c.innerHTML = '<div class="web-metagrid">' +
         field('Site name', '<input id="pm-name" value="' + esc(doc.name || '') + '">') +
-        field('Placement', '<button class="dt-btn" id="pm-place">▦ place on the city grid</button> <span class="web-metaval" id="pm-cell">' + (doc.grid ? (doc.grid.x + ',' + doc.grid.y) : '—') + '</span>') +
+        field('Placement', '<button class="dt-btn" id="pm-place">▦ place (district ▸ cell)</button> <span class="web-metaval" id="pm-cell">' + esc(placeLabel(doc)) + '</span>') +
         field('Linked record', '<button class="dt-btn" id="pm-subject">' + esc(doc.subject ? (doc.subject.type + ' linked') : 'link your shop / org…') + '</button>') +
         field('Plan', '<span class="web-metaval">' + esc(doc.plan || '—') + '</span>') +
         field('Reach', '<span class="web-metaval">' + esc(doc.broadcast || '—') + '</span>') +
@@ -1930,7 +1974,7 @@
         field('Uploaded', '<span class="web-metaval">' + new Date((doc.record && doc.record.uploadDate) || Date.now()).toLocaleDateString() + '</span>') +
         '</div><p class="dt-hint">Your host sets your reach and address. You can place the site on the map and link a shop or org you own.</p>';
       c.querySelector('#pm-name').oninput = function (e) { doc.name = e.target.value; poke(); };
-      c.querySelector('#pm-place').onclick = function () { openGridPicker(doc, function (x, y) { doc.grid = doc.grid || {}; doc.grid.x = x; doc.grid.y = y; poke(); var cell = c.querySelector('#pm-cell'); if (cell) cell.textContent = x + ',' + y; }); };
+      c.querySelector('#pm-place').onclick = function () { openSubgridPlacer(doc, function (dist, x, y) { doc.district = dist; doc.subcell = { x: x, y: y }; poke(); var cell = c.querySelector('#pm-cell'); if (cell) cell.textContent = placeLabel(doc); }); };
       c.querySelector('#pm-subject').onclick = function () { pickSubjectRestricted(function (r) { doc.subject = r || null; if (r && window.Links && Links.add) Links.add({ type: 'site', id: doc.id }, r, 'site of', 'has site'); poke(); paintPlayerMeta(c); }); };
     }
     function paintHostCfg(c) {
@@ -2451,7 +2495,7 @@
 
   function setPresenceSite(siteId) { var c = camp(); if (c && c.setPresence) c.setPresence({ netSite: siteId, netHandle: myHandle() }); }
   var _runtime = false;
-  function ensureRuntime() { wireChipClicks(); if (_runtime) return; var s = br().sess; if (!s || !s.camp) return; _runtime = true; if (s.role === 'player' && s.camp.onOverview) { s.camp.onOverview(function () { settleDeliveries(); var v = document.getElementById('web-clock-v'); if (v) v.textContent = netClock() + 'h'; }); settleDeliveries(); } if (s.role === 'gm' && s.camp.onNetChange && s.camp.getNetPosts) { s.camp.onNetChange(function () { flushBoards(); }); } }
+  function ensureRuntime() { wireChipClicks(); if (_runtime) return; var s = br().sess; if (!s || !s.camp) return; _runtime = true; if (s.role === 'player' && s.camp.onOverview) { s.camp.onOverview(function () { settleDeliveries(); var v = document.getElementById('web-clock-v'); if (v) v.textContent = netClock() + 'h'; maybeOpenPlayerRun(); }); settleDeliveries(); maybeOpenPlayerRun(); } if (s.role === 'gm' && s.camp.onNetChange && s.camp.getNetPosts) { s.camp.onNetChange(function () { flushBoards(); }); } }
   var _flushT = null;
   function flushBoards() { clearTimeout(_flushT); _flushT = setTimeout(function () { Store.index('site').then(function (rows) { rows.forEach(function (r) { var changed = false; sitePages(r.json).forEach(function (pg) { var key = r.json.id + ':' + (pg.slug || 'main'); var posts = camp().getNetPosts(key) || []; if (!posts.length) return; if (posts.length !== (pg.board || []).length) { pg.board = posts.slice(); changed = true; } }); if (changed) Store.put(r.ref, r.json).catch(function () {}); }); }).catch(function () {}); }, 800); }
   // The default chat app (players ↔ players ↔ NPCs), seeded once per campaign by the GM.
@@ -2495,8 +2539,966 @@
     }).catch(function () {});
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════
+     NET INFRASTRUCTURE — v1 : LA BOUCLE DE RUN
+     Additive layer over the Surface browser. Table-first: the app never rolls a
+     die — the table types a result, the app applies it. No new DOC_TYPE: the
+     `datafort` facet lives ON the site entity; run state rides Yjs; the player
+     token rides the campaign overview. Contract: docs/net-interface-contract.md.
+     Canon: docs/net-canon.md (Axe 1 topology, Axe 2 fort, Axe 3/4 run/trace).
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  // Canonical Night City 2020 districts (MAIN §4-⑤). Our OWN 6×3 grid — NOT wired
+  // to nightcity.js (that integration is deferred). NEVER 2077 districts.
+  var NC_DISTRICTS = [
+    { id: 'A1', name: 'Little Italy', col: 0, row: 0 },
+    { id: 'A2', name: 'Northside District', col: 1, row: 0 },
+    { id: 'A3', name: 'City Center', col: 2, row: 0 },
+    { id: 'A4', name: 'Upper Eastside', col: 3, row: 0 },
+    { id: 'A5', name: 'Upper Marina', col: 4, row: 0 },
+    { id: 'A6', name: 'East Marina', col: 5, row: 0 },
+    { id: 'B1', name: 'Westhill Gardens', col: 0, row: 1 },
+    { id: 'B2', name: 'Corp. Center', col: 1, row: 1 },
+    { id: 'B3', name: 'City Center', col: 2, row: 1 },
+    { id: 'B4', name: 'Bank Block', col: 3, row: 1 },
+    { id: 'B5', name: 'Old Downtown', col: 4, row: 1 },
+    { id: 'B6', name: 'New Harbor Area', col: 5, row: 1 },
+    { id: 'C1', name: 'Night City Univ.', col: 0, row: 2 },
+    { id: 'C2', name: 'Lake Park', col: 1, row: 2 },
+    { id: 'C3', name: 'Eastpark & Japantown', col: 2, row: 2 },
+    { id: 'C4', name: 'Little China', col: 3, row: 2 },
+    { id: 'C5', name: 'Studio City', col: 4, row: 2 },
+    { id: 'C6', name: 'Charter Hill', col: 5, row: 2 },
+  ];
+  var DISTRICT_COLS = 6, DISTRICT_ROWS = 3, DEFAULT_DISTRICT = 'A3';
+  function districtById(id) { for (var i = 0; i < NC_DISTRICTS.length; i++) if (NC_DISTRICTS[i].id === id) return NC_DISTRICTS[i]; return null; }
+  function districtName(id) { var d = districtById(id); return d ? d.name : (id || '—'); }
+  function districtDist(a, b) { var A = districtById(a), B = districtById(b); if (!A || !B) return 99; return Math.max(Math.abs(A.col - B.col), Math.abs(A.row - B.row)); }
+  // Netwatch presence baseline per district (asymmetric, net-life-canon §climat):
+  // dense in corp/gov, thin in the zone. 0..3. GM overrides live (overview).
+  var DISTRICT_NETWATCH = { A3: 3, B2: 3, B3: 3, B4: 3, C6: 3, A4: 2, A5: 2, C1: 2, C3: 2, A1: 1, A2: 1, B1: 1, C2: 1, C5: 1, A6: 1, B5: 0, B6: 0, C4: 0 };
+
+  var FORT_TIERS = ['grey', '1', '2', '3', 'black'];
+  var TIER_LABEL = { grey: 'Grey', '1': 'Level 1', '2': 'Level 2', '3': 'Level 3', black: 'Black' };
+  var TIER_GLYPH = { grey: '▢', '1': '◈', '2': '◈', '3': '◆', black: '◆' };
+  // 6 file types (net-canon §Axe 2). Grey/Black Ops = the loot (↔ Store entities).
+  var FILE_TYPES = ['Inter-Office', 'Database', 'Business Records', 'Financial', 'Grey Ops', 'Black Ops'];
+
+  /* ── The fort model. A `datafort` facet stored ON the site (DATA owns the
+        shape, net-interface-contract §1). Difficulty is DERIVED, never stored. ── */
+  var NetModel = (function () {
+    function gatesFor(cpu) { var g = []; for (var i = 0; i < cpu; i++) g.push({ id: uid('gate'), str: 2 }); return g; }
+    function defSubgrid() { return { w: 12, h: 12, cells: [] }; }
+    function defFort(cpu) {
+      cpu = Math.max(1, Math.min(7, cpu || 1));
+      return { cpu: cpu, dataWallSTR: cpu, codeGates: gatesFor(cpu), ice: [], files: [], remotes: [], skills: [],
+        subgrid: defSubgrid(), security: 0, tier: 'grey', codesRotatedAt: 0, lastMaintained: 0, abandoned: false };
+    }
+    function ensure(site) {
+      if (!site.datafort) site.datafort = defFort(1);
+      var d = site.datafort;
+      if (d.cpu == null) d.cpu = 1;
+      if (!Array.isArray(d.codeGates)) d.codeGates = gatesFor(d.cpu);
+      if (!Array.isArray(d.ice)) d.ice = [];
+      if (!Array.isArray(d.files)) d.files = [];
+      if (!Array.isArray(d.remotes)) d.remotes = [];
+      if (!Array.isArray(d.skills)) d.skills = [];
+      if (!d.subgrid) d.subgrid = defSubgrid();
+      if (!d.tier) d.tier = 'grey';
+      return d;
+    }
+    // Derived from the tuple — canon net-canon §Axe 2. NEVER stored.
+    function intOf(d) { return 3 * (d.cpu || 1); }            // +3 INT / CPU
+    function memoryMU(d) { return 4 * (d.cpu || 1) * 10; }    // 4 mem/CPU × 10 MU
+    function wallSTR(d) { return Math.min(10, d.dataWallSTR != null ? d.dataWallSTR : (d.cpu || 1)); }
+    function fortActions(d) { return 1 + Math.floor((d.cpu || 1) / 2); } // 1 + ⌊CPU/2⌋
+    function isAI(d) { return intOf(d) >= 12; }
+    function gatesSTR(d) { return (d.codeGates || []).reduce(function (s, g) { return s + (g.str || 2); }, 0); }
+    function iceWeight(d) { return (d.ice || []).reduce(function (s, i) { return s + (i.str || 0) + (i.blackIce ? 4 : 0); }, 0); }
+    // A deterministic difficulty note (no die), derived from walls/gates/cpu/ice/tier.
+    function difficulty(d) {
+      if (!d) return 0;
+      var tierW = ({ grey: 0, '1': 2, '2': 5, '3': 9, black: 14 })[d.tier || 'grey'] || 0;
+      return wallSTR(d) * 2 + gatesSTR(d) + Math.floor(iceWeight(d)) + intOf(d) + tierW;
+    }
+    function difficultyLabel(n) { if (n < 12) return 'trivial'; if (n < 22) return 'soft'; if (n < 34) return 'hard'; if (n < 48) return 'brutal'; return 'suicide'; }
+    return { defFort: defFort, ensure: ensure, gatesFor: gatesFor, defSubgrid: defSubgrid,
+      intOf: intOf, memoryMU: memoryMU, wallSTR: wallSTR, fortActions: fortActions, isAI: isAI,
+      gatesSTR: gatesSTR, difficulty: difficulty, difficultyLabel: difficultyLabel };
+  })();
+  // Every site/app projects a DEEP presence — its datafort (spine: 1 site ⇄ 1 datafort).
+  // The facet is authored in the Fort tab; unauthored = a default Grey fort.
+  function hasFort(site) { return !!site; }
+  // A standalone datafort has no public façade (no design blocks) → shows only in DEEP.
+  function hasSurface(site) { return !!(site && !site.deepOnly); }
+  function fortTier(site) { return (site && site.datafort && site.datafort.tier) || 'grey'; }
+  function siteDistrict(site) { return (site && site.district) || DEFAULT_DISTRICT; }
+
+  /* ── Reference DB (adapter). v1 ships a minimal built-in ICE catalogue +
+        starter kit (net-canon §3.5 / §Axe 2); DATA supplies the full DB later. ── */
+  var NetRefs = {
+    ice: function () {
+      return [
+        { kind: 'Watchdog', class: 'Detection', str: 4, mu: 2 },
+        { kind: 'Bloodhound', class: 'Detection', str: 3, mu: 2, trace: true },
+        { kind: 'Pit Bull', class: 'Detection', str: 2, mu: 2, trace: true, mobile: true },
+        { kind: 'Hammer', class: 'Intrusion', str: 4, mu: 2 },
+        { kind: "Wizard's Book", class: 'Decryption', str: 6, mu: 3 },
+        { kind: 'Killer', class: 'Anti-IC', str: 4, mu: 2 },
+        { kind: 'Stun', class: 'Anti-Personnel', str: 4, mu: 3, blackIce: true },
+        { kind: 'Glue', class: 'Anti-Personnel', str: 4, mu: 3, blackIce: true, trace: true },
+        { kind: 'Zombie', class: 'Anti-Personnel', str: 5, mu: 6, blackIce: true },
+        { kind: 'Liche', class: 'Anti-Personnel', str: 5, mu: 6, blackIce: true },
+        { kind: 'Brainwipe', class: 'Anti-Personnel', str: 5, mu: 6, blackIce: true },
+        { kind: 'Hellhound', class: 'Anti-Personnel', str: 6, mu: 6, blackIce: true, mobile: true, trace: true }
+      ];
+    },
+    // Starter loadout when a runner has no authored programs (kit minimal, not the atelier).
+    starterKit: function () {
+      return [
+        { id: 'k-hammer', name: 'Hammer', kw: ['pierce'], class: 'Intrusion', str: 4, mu: 2, effect: 'Pierce a data wall (always alerts the system).' },
+        { id: 'k-cracker', name: 'Codecracker', kw: ['unlock'], class: 'Decryption', str: 3, mu: 1, effect: 'Break a code gate or a file lock.' },
+        { id: 'k-killer', name: 'Killer', kw: ['strike'], class: 'Anti-IC', str: 4, mu: 2, effect: 'Attack a hostile program until its STR hits 0.' },
+        { id: 'k-invis', name: 'Invisibility', kw: ['cloak'], class: 'Stealth', str: 3, mu: 1, effect: 'Stay unseen while a watcher’s Detection is below your STR.' },
+        { id: 'k-see', name: 'SeeYa', kw: ['seek'], class: 'Detection', str: 3, mu: 1, effect: 'Spot programs and ICE in range (a Sawtooth wave outs an AI).' },
+        { id: 'k-shield', name: 'Shield', kw: ['shield'], class: 'Protection', str: 3, mu: 1, effect: 'Absorb one attack against you.' },
+        { id: 'k-read', name: 'Databaser', kw: ['read'], class: 'Utility', str: 2, mu: 1, effect: 'Read the table of contents / a reached file.' }
+      ];
+    }
+  };
+  // Runner's loaded software: authored programs on the sheet, else the starter kit.
+  function runnerPrograms(sheetJson) { var p = sheetJson && sheetJson.net && sheetJson.net.programs; return (Array.isArray(p) && p.length) ? p : NetRefs.starterKit(); }
+  function deckSpeed(sheetJson) { var d = sheetJson && sheetJson.net && sheetJson.net.deck; var s = d && typeof d.speed === 'number' ? d.speed : (sheetJson && sheetJson.netrunner && sheetJson.netrunner.speed) || 0; return Math.max(0, s | 0); }
+
+  /* ── Subgrid helpers (the run terrain). Cells stored sparse; absent = 'empty'.
+        Kinds: wall | node | gate | ice | remote | core | empty. ── */
+  var SUBGRID_KINDS = ['wall', 'node', 'gate', 'ice', 'remote', 'core', 'file'];
+  var KIND_GLYPH = { wall: '█', node: '○', gate: '⌷', ice: '☠', remote: '⊡', core: '▲', file: '☰' };
+  function sgCells(sg) { return (sg && sg.cells) || []; }
+  function sgAt(sg, x, y) { var cs = sgCells(sg); for (var i = 0; i < cs.length; i++) if (cs[i].x === x && cs[i].y === y) return cs[i]; return null; }
+  function sgSet(sg, x, y, kind, ref) { sg.cells = sgCells(sg).filter(function (c) { return !(c.x === x && c.y === y); }); if (kind && kind !== 'empty') sg.cells.push({ x: x, y: y, kind: kind, ref: ref || null }); }
+  function sgNodeIndex(sg) { var m = {}, n = 0; sgCells(sg).forEach(function (c) { if (c.kind === 'node' || c.kind === 'core') { m[c.x + ',' + c.y] = (++n); } }); return m; }
+  // Number nodes/core first (1..K, row-major), then ICE (K+1..) — like the datafort ref.
+  function sgLabelIndex(sg) { var m = {}, n = 0, cells = sgCells(sg).slice().sort(function (a, b) { return (a.y - b.y) || (a.x - b.x); }); cells.forEach(function (c) { if (c.kind === 'node' || c.kind === 'core') m[c.x + ',' + c.y] = ++n; }); cells.forEach(function (c) { if (c.kind === 'ice') m[c.x + ',' + c.y] = ++n; }); return m; }
+  // Bold, iconic cell contents (datafort visual language): boxed numbers for nodes,
+  // ▲ CPU, ⊗ gate, ☰ file, ⊡ remote, ☠ (text-presentation) + number for ICE.
+  function cellInnerHtml(kind, num, opts) {
+    opts = opts || {};
+    if (kind === 'node') return '<span class="net-cell-box">' + (num || '') + '</span>';
+    if (kind === 'core') return '<span class="net-cell-cpu">▲</span>';
+    if (kind === 'gate') return '<span class="net-cell-gate">⊗</span>';
+    if (kind === 'file') return '<span class="net-cell-file">☰</span>';
+    if (kind === 'remote') return '<span class="net-cell-rem">⊡</span>';
+    if (kind === 'ice') return '<span class="net-cell-skull">☠︎</span>' + (opts.ident !== false && num ? '<span class="net-cell-num">' + num + '</span>' : '');
+    return '';
+  }
+
+  /* ── Player token (MEAT position → reach + trace target). v1: a browser-side
+        district per sheet, MJ-driven, live via the overview. The nightcity jeton
+        wiring is deferred (MAP's part). ── */
+  function netTokens() { var c = camp(); var o = (c && c.getOverview && c.getOverview()) || {}; return o.netTokens || {}; }
+  function setToken(sheetId, district) { var c = camp(); if (!c || !c.setOverview) return; var o = (c.getOverview && c.getOverview()) || {}; var t = Object.assign({}, o.netTokens || {}); if (district) t[sheetId] = district; else delete t[sheetId]; c.setOverview({ netTokens: t }); }
+  function myToken() { var s = br().sess; if (!s || s.role === 'gm') return null; return netTokens()[s.sheetId] || null; }
+  // The party's sheets. The canonical id is rec.id (the Yjs map key == the player's
+  // session sheetId) — NEVER rec.json.id.
+  function playerSheets() { var c = camp(); if (!c || !c.allSheets) return []; return (c.allSheets() || []).filter(function (r) { return r && r.id; }); }
+  function sheetLabelOf(rec) { var j = rec && rec.json; return (j && (j.handle || j.name)) || (rec && rec.name) || (rec && rec.id) || 'runner'; }
+  function sheetPhotoOf(rec) { if (window.Store && Store.photoOf) { var p = Store.photoOf(rec); if (p) return p; } var j = rec && rec.json; return (j && (j.photo || j.img || j.image || j.portrait)) || ''; }
+  // A player token = a filled circle: profile photo, else the first letter of the handle.
+  function tokenAvatar(sid) {
+    var c = camp(); var rec = c && c.getSheet && c.getSheet(sid); var nm = sheetLabelOf(rec), photo = sheetPhotoOf(rec);
+    if (photo) return '<span class="net-tok-av" style="background-image:url(' + esc(photo) + ')"></span>';
+    return '<span class="net-tok-av net-tok-av-l">' + esc((nm || '?').slice(0, 1).toUpperCase()) + '</span>';
+  }
+
+  // Reach graph (canon §1.5): broadcast covers everyone; else district radius from
+  // the token. Graded 3-state redaction: 'full' | 'redacted' (signal in range,
+  // unresolved) | 'hidden'. Fog is a GM option (Full / Hybrid=default / Fog).
+  function reachRadius(reach) { return (reach || 0) <= 0 ? -1 : (reach - 1); }
+  function reachDesc(reach) { reach = reach || 0; return reach <= 0 ? 'broadcast sites only' : reach === 1 ? 'its own district' : reach >= 4 ? 'the whole city' : (reachRadius(reach) + 1) + ' districts out'; }
+  function sheetReach(sid) { var c = camp(); var rec = c && c.getSheet && c.getSheet(sid); return effectiveReach(rec && rec.json); }
+  // Hovering a token greys the districts that runner can't reach (radius from its token).
+  function showTokenReach(wrap, sid) {
+    var td = netTokens()[sid]; if (!td) return; var rad = reachRadius(sheetReach(sid));
+    wrap.querySelectorAll('.net-dcell-city').forEach(function (c) { c.classList.toggle('net-dcell-unreach', districtDist(td, c.getAttribute('data-drill')) > rad); });
+  }
+  function clearTokenReach(wrap) { wrap.querySelectorAll('.net-dcell-unreach').forEach(function (c) { c.classList.remove('net-dcell-unreach'); }); }
+  // Reach GATES the map: a player may only enter districts within their physical reach
+  // radius (from the token). Broadcast sites stay reachable by grid:// address, not by drill.
+  function playerCanEnterDistrict(wrap, did) { if (!isPlayer()) return true; var t = myToken(); if (!t) return false; return districtDist(t, did) <= reachRadius(effectiveReach(playerJson())); }
+  function atlasFog() { return (App.uiGet('web.atlas', {}) || {}).fog || 'hybrid'; }
+  function siteReachState(site, token, reach) {
+    if (connectable(site, reach)) return 'full';
+    if (!token) return 'hidden';
+    var d = districtDist(token, siteDistrict(site)), r = reachRadius(reach);
+    if (d <= r) return 'full';
+    if (d <= r + 1) return 'redacted';
+    return 'hidden';
+  }
+  // What a given viewer sees of a node in the atlas, folding the fog option in.
+  function nodeVisibility(site, deep) {
+    if (!isPlayer()) return 'full';                                  // GM: everything
+    if (!(Store.visibleToPlayers(site) && isOnline(site))) return 'hidden';
+    var fog = atlasFog();
+    if (deep && reachOfDeck(playerJson()) <= 0) return 'redacted';   // no deck → DEEP is caviardé
+    if (fog === 'full') return 'full';
+    if (fog === 'fog') return site.known ? 'full' : 'hidden';        // only what's been surfaced
+    return siteReachState(site, myToken(), effectiveReach(playerJson())); // hybrid
+  }
+
+  /* ── CAST adapter — reveal-to-table, DEPTH/TRACE gauges, per-viewer reveal
+        flags, dispatch suggestion. v1 keeps the gauges INSIDE the run state (Yjs);
+        swap the internals for CAST clocks/castReveal once those land. ── */
+  var NetCast = {
+    reveal: function (view) { var b = br(); if (b && b.castReveal && view) b.castReveal(view); },
+    log: function (msg) { var b = br(); if (b && b.logSession) b.logSession(msg); },
+    // Dispatch (trace full): suggest the owner's force at the token's MEAT district.
+    dispatchSuggestion: function (site, token) {
+      var d = NetModel.ensure(site), tier = d.tier || 'grey';
+      var force = ({ grey: 'a lone sysop / private security', '1': 'corporate security patrol', '2': 'a corp response team', '3': 'a Netwatch strike team', black: 'a Netwatch / corp black-ops kill team' })[tier];
+      return { force: force, district: token || '—', tier: tier };
+    }
+  };
+
+  /* ═══════════════ ① CYBERSPACE — homepage-map + weather surcouche ═══════════════
+     The browser's spatial home: a district grid (our own 2020 A1..C6), two lenses
+     (SURFACE / DEEP — DEEP is netrunner-only), reach/fog masking, stackable overlays
+     (WEATHER/TRAFFIC/SEDIMENT — weather/sediment netrunner-only), a zoom rail, a
+     grid:// bar, a jack-in point and a sediment rail. GM sees all; a player is masked by reach. */
+  function atlasState() {
+    var s = App.uiGet('web.atlas', null);
+    if (!s) { s = { lens: 'surface', overlays: { weather: false, traffic: false, sediment: false }, fog: 'hybrid', zoom: 'city', district: '' }; App.uiSet('web.atlas', s); }
+    if (!s.overlays) s.overlays = { weather: false, traffic: false, sediment: false };
+    return s;
+  }
+  function saveAtlas(mut) { var s = atlasState(); mut(s); App.uiSet('web.atlas', s); }
+  var ZOOM_LEVELS = [['world', 'World'], ['region', 'Region'], ['city', 'City'], ['subgrid', 'Subgrid'], ['fort', 'Fort'], ['micronet', 'microNet']];
+  var ZOOM_HELP = {
+    world: 'World scale — deferred: v1 is Night City only (the multi-region graph is post-v1).',
+    region: 'Region scale — deferred: the Pacifica / region graph is post-v1.',
+    city: 'City — the live district grid.',
+    subgrid: 'Subgrid — a fort’s run terrain. Click a fort node first, then here.',
+    fort: 'Fort — the datafort inspector. Click a fort node first, then here.',
+    micronet: 'microNet — object hacking (v2, gated behind the item creator).'
+  };
+  var ZOOM_SUB = { world: '~1000 mi/cell', region: '"kingdom"', city: '~12 blocks/cell', subgrid: '10 m/cell', fort: 'RUN docks here', micronet: 'in-device · later' };
+  var _atlasOvWired = false, _atlasEntWired = false, _atlasFort = null, _dragToken = null;
+
+  function renderAtlas(stage) {
+    ensureRuntime(); wireHover();
+    stage.className = 'web-stage net-atlas-stage';
+    stage.removeAttribute('style');
+    var st = atlasState(), gm = !isPlayer();
+    // Dualism SURFACE / DEEP (no MEAT). DEEP is the jack-in — netrunner (deck) or GM only.
+    var canDeep = gm || reachOfDeck(playerJson()) > 0;
+    if (st.lens === 'meat' || (st.lens === 'deep' && !canDeep)) st.lens = 'surface';
+    if (!canDeep) { st.overlays.weather = false; st.overlays.sediment = false; }   // non-runners: no weather/sediment
+    var showSed = canDeep && st.zoom !== 'fort';   // the FORT layer replaces the sediment rail with fort info
+    var lenses = [['surface', 'SURFACE']]; if (canDeep) lenses.push(['deep', 'DEEP']);
+    var lensBtns = lenses.map(function (l) {
+      return '<button class="net-lens-b' + (st.lens === l[0] ? ' on' : '') + '" data-lens="' + l[0] + '"' + (l[0] === 'deep' ? hv('<b>DEEP</b><br>jack under the surface — the datafort layer') : '') + '>' + l[1] + '</button>';
+    }).join('');
+    var overlays = canDeep ? [['weather', 'WEATHER', '▧'], ['traffic', 'TRAFFIC', '≋'], ['sediment', 'SEDIMENT', '†']] : [['traffic', 'TRAFFIC', '≋']];
+    var ovBtns = overlays.map(function (o) {
+      return '<button class="net-ov-b' + (st.overlays[o[0]] ? ' on' : '') + '" data-ov="' + o[0] + '"><span class="net-ov-g">' + o[2] + '</span>' + o[1] + '</button>';
+    }).join('');
+    var fogSel = gm ? '<label class="net-fog">FOG <select class="net-sel" id="net-fog">' +
+      ['full', 'hybrid', 'fog'].map(function (f) { return '<option value="' + f + '"' + (st.fog === f ? ' selected' : '') + '>' + ({ full: 'Full (all)', hybrid: 'Hybrid', fog: 'Fog (known)' })[f] + '</option>'; }).join('') + '</select></label>' : '';
+    var jack = jackinHtml(gm);
+    stage.innerHTML =
+      '<div class="net-atlas">' +
+        '<div class="net-atlas-top">' +
+          '<span class="net-cs-logo">CYBERSPACE</span>' +
+          '<div class="net-lens" role="group">' + lensBtns + '</div>' +
+          '<div class="net-overlays">' + ovBtns + '</div>' +
+          '<input class="net-addr" id="net-addr" spellcheck="false" placeholder="grid://…">' +
+          jack + fogSel +
+        '</div>' +
+        '<div class="net-atlas-body' + (showSed ? '' : ' net-atlas-body-nosed') + '">' +
+          '<div class="net-zoom">' + ZOOM_LEVELS.map(function (z) { var dim = (z[0] === 'world' || z[0] === 'region' || z[0] === 'micronet'); return '<button class="net-zoom-b' + (z[0] === st.zoom ? ' on' : '') + (dim ? ' net-zoom-dim' : '') + '" data-zoom="' + z[0] + '"' + hv(esc(ZOOM_HELP[z[0]])) + '><span class="net-zoom-l">' + z[1] + '</span><span class="net-zoom-s">' + esc(ZOOM_SUB[z[0]]) + '</span></button>'; }).join('') + '</div>' +
+          '<div class="net-map-wrap" id="net-map-wrap"></div>' +
+          (showSed ? '<div class="net-sediment" id="net-sediment"></div>' : '') +
+        '</div>' +
+      '</div>';
+    // top-bar wiring
+    stage.querySelectorAll('[data-lens]').forEach(function (b) { b.onclick = function () { saveAtlas(function (s) { s.lens = b.getAttribute('data-lens'); }); renderAtlas(stage); }; });
+    stage.querySelectorAll('[data-ov]').forEach(function (b) { b.onclick = function () { var k = b.getAttribute('data-ov'); saveAtlas(function (s) { s.overlays[k] = !s.overlays[k]; }); renderAtlas(stage); }; });
+    stage.querySelectorAll('[data-zoom]').forEach(function (b) { b.onclick = function () { var z = b.getAttribute('data-zoom'); if (z === 'city') { saveAtlas(function (s) { s.zoom = 'city'; }); renderAtlas(stage); return; } if (z === 'subgrid') { if (!atlasState().district) { flashTool('Click a district first.'); return; } saveAtlas(function (s) { s.zoom = 'subgrid'; }); renderAtlas(stage); return; } if (z === 'fort') { if (!_atlasFort) { flashTool('Click a fort node first.'); return; } saveAtlas(function (s) { s.zoom = 'fort'; }); renderAtlas(stage); return; } flashTool(ZOOM_HELP[z] || 'Deferred this pass.'); }; });
+    var fog = stage.querySelector('#net-fog'); if (fog) fog.onchange = function () { saveAtlas(function (s) { s.fog = fog.value; }); renderAtlas(stage); };
+    var addr = stage.querySelector('#net-addr'); if (addr) addr.onkeydown = function (e) { if (e.key === 'Enter') navTo(e.target.value.trim()); };
+    wireJackin(stage);
+    paintAtlasMap(stage.querySelector('#net-map-wrap'), st);
+    paintSediment(stage.querySelector('#net-sediment'), st);
+  }
+
+  function jackinHtml(gm) {
+    if (gm) return '<button class="net-jack net-jack-gm" id="net-jack">◎ tokens</button>';
+    var t = myToken();
+    return '<span class="net-jack" title="Your jack-in point (physical position)">◎ ' + esc(t ? (t + ' · ' + districtName(t)) : 'no position') + '</span>';
+  }
+  function wireJackin(stage) {
+    var b = stage.querySelector('#net-jack'); if (!b || isPlayer()) return;
+    b.onclick = function () { openTokenManager(); };
+  }
+  function openTokenManager() {
+    if (!window.UI) return;
+    var sheets = playerSheets(), tok = netTokens();
+    var rows = sheets.length ? sheets.map(function (r) {
+      var id = r.id, cur = tok[id] || '';
+      var opts = '<option value="">— off-net —</option>' + NC_DISTRICTS.map(function (d) { return '<option value="' + d.id + '"' + (cur === d.id ? ' selected' : '') + '>' + d.id + ' · ' + esc(d.name) + '</option>'; }).join('');
+      return '<div class="net-tok-row"><span class="net-tok-av-wrap">' + tokenAvatar(id) + '</span><span class="net-tok-n">' + esc(sheetLabelOf(r)) + '</span><select class="net-sel" data-tok="' + esc(id) + '">' + opts + '</select></div>';
+    }).join('') : '<div class="app-empty">No player sheets in this campaign yet.</div>';
+    UI.modal({ title: 'Player positions (jack-in points)', body: '<p class="dt-hint">Where each runner physically sits — this bounds their reach and is the target of a full trace. Drag a token on the map, or set it here.</p>' + rows, actions: [{ label: 'Done', kind: 'primary' }],
+      onShow: function (box) { box.querySelectorAll('[data-tok]').forEach(function (s) { s.onchange = function () { setToken(s.getAttribute('data-tok'), s.value); }; }); } });
+  }
+
+  var SUBGRID_N = 15;   // a Night City district's subgrid = 15×15 square cells (canon City Grid ▸ Subgrid)
+  // A site sits in one subgrid cell. Explicit placement wins; else a stable cell from its id.
+  function subcellOf(site) { if (site.subcell && site.subcell.x != null) return { x: site.subcell.x, y: site.subcell.y }; var h = hashStr(site.id || site.name || ''); return { x: h % SUBGRID_N, y: Math.floor(h / SUBGRID_N) % SUBGRID_N }; }
+  function districtWeather(id) { var nwOv = (camp() && camp().getOverview && (camp().getOverview() || {}).netWeather) || {}; return (nwOv[id] != null) ? nwOv[id] : (DISTRICT_NETWATCH[id] || 0); }
+  function hatchSpan(angle, per) { return '<span class="net-wash" style="background-image:repeating-linear-gradient(' + angle + 'deg,var(--ink,#111) 0,var(--ink,#111) 1px,transparent 1px,transparent ' + per + 'px)"></span>'; }
+  function sheetHandle(sid) { var c = camp(); var rec = c && c.getSheet && c.getSheet(sid); var j = rec && rec.json; return (j && (j.handle || j.name)) || sid; }
+  function atlasStageOf(wrap) { return wrap && wrap.closest ? wrap.closest('.net-atlas-stage') : null; }
+  function reRenderAtlas(wrap) { var stg = atlasStageOf(wrap); if (stg) renderAtlas(stg); else paintAtlasMap(wrap, atlasState()); }
+  // Live sync for GM AND players: token moves / weather / sediment repaint the map;
+  // a site edit (name, tier, placement…) repaints the cards too.
+  function wireOverviewRefresh(wrap) {
+    var c = camp();
+    if (c && c.onOverview && !_atlasOvWired) { _atlasOvWired = true; c.onOverview(function () { if (atlasState().zoom === 'fort') return; var s2 = document.getElementById('net-map-wrap'); if (s2) paintAtlasMap(s2, atlasState()); }); }
+    if (App && App.on && !_atlasEntWired) { _atlasEntWired = true; App.on('entity:saved', function (e) { if (e && e.type && e.type !== 'site') return; if (atlasState().zoom === 'fort') return; var s2 = document.getElementById('net-map-wrap'); if (s2) paintAtlasMap(s2, atlasState()); }); }
+  }
+
+  /* ── Hover-card: a small window next to the cursor. Any element with a data-hv
+        attribute (HTML content) pops it on hover — districts, sites, fort cells,
+        weather. Wired once, globally delegated. ── */
+  var _hoverEl = null, _hoverWired = false;
+  function hv(html) { return ' data-hv="' + String(html).replace(/"/g, '&quot;') + '"'; }
+  function wireHover() {
+    if (_hoverWired) return; _hoverWired = true;
+    document.addEventListener('mousemove', function (e) {
+      var t = e.target && e.target.closest ? e.target.closest('[data-hv]') : null;
+      if (!t) { if (_hoverEl) _hoverEl.style.display = 'none'; return; }
+      if (!_hoverEl) { _hoverEl = eln('div', 'net-hovercard'); document.body.appendChild(_hoverEl); }
+      _hoverEl.innerHTML = t.getAttribute('data-hv'); _hoverEl.style.display = 'block';
+      var w = _hoverEl.offsetWidth, h = _hoverEl.offsetHeight, pad = 16;
+      var left = e.clientX + pad, top = e.clientY + pad;
+      if (left + w > window.innerWidth - 6) left = e.clientX - w - pad;
+      if (top + h > window.innerHeight - 6) top = e.clientY - h - pad;
+      _hoverEl.style.left = Math.max(4, left) + 'px'; _hoverEl.style.top = Math.max(4, top) + 'px';
+    }, true);
+  }
+
+  /* ── Pan/zoom viewport: a clipped window over a bigger inner grid. Drag the
+        background to pan, wheel to zoom. Pointer-capture → no leaked listeners. ── */
+  function mountPanZoom(viewport, inner, opts) {
+    opts = opts || {};
+    var st = { scale: opts.scale || 1, tx: opts.tx || 0, ty: opts.ty || 0 };
+    inner.style.transformOrigin = '0 0';
+    function apply() { inner.style.transform = 'translate(' + st.tx + 'px,' + st.ty + 'px) scale(' + st.scale + ')'; }
+    var minS = opts.minScale || 0.35, maxS = opts.maxScale || 3.5;
+    function zoomAt(cx, cy, f) { var ns = Math.max(minS, Math.min(maxS, st.scale * f)); var k = ns / st.scale; st.tx = cx - (cx - st.tx) * k; st.ty = cy - (cy - st.ty) * k; st.scale = ns; apply(); }
+    var panning = false, sx = 0, sy = 0, otx = 0, oty = 0;
+    viewport.addEventListener('pointerdown', function (e) { if (e.button !== 0) return; if (e.target.closest && e.target.closest('button,[data-cell],[data-site],[data-fort],.net-token,input,select')) return; panning = true; sx = e.clientX; sy = e.clientY; otx = st.tx; oty = st.ty; viewport.classList.add('net-panning'); try { viewport.setPointerCapture(e.pointerId); } catch (err) {} });
+    viewport.addEventListener('pointermove', function (e) { if (!panning) return; st.tx = otx + (e.clientX - sx); st.ty = oty + (e.clientY - sy); apply(); });
+    function endPan(e) { if (!panning) return; panning = false; viewport.classList.remove('net-panning'); try { viewport.releasePointerCapture(e.pointerId); } catch (err) {} }
+    viewport.addEventListener('pointerup', endPan); viewport.addEventListener('pointercancel', endPan);
+    viewport.addEventListener('wheel', function (e) { e.preventDefault(); var r = viewport.getBoundingClientRect(); zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.12 : 1 / 1.12); }, { passive: false });
+    function center() { var iw = inner.offsetWidth || inner.scrollWidth || 0, ih = inner.offsetHeight || inner.scrollHeight || 0, vr = viewport.getBoundingClientRect(); st.tx = Math.round((vr.width - iw * st.scale) / 2); st.ty = Math.round((vr.height - ih * st.scale) / 2); apply(); }
+    apply(); if (opts.center) center();
+    return { zoomBy: function (f) { var r = viewport.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, f); }, center: center, reset: function () { st.scale = opts.scale || 1; if (opts.center) center(); else { st.tx = opts.tx || 0; st.ty = opts.ty || 0; apply(); } }, state: st };
+  }
+
+  // Two geographic scales: CITY (the 6×3 districts) and SUBGRID (a district's 15×15,
+  // one site per cell). Drill in by clicking a district; back out from the subgrid head.
+  function paintAtlasMap(wrap, st) {
+    if (!wrap) return;
+    if (st.zoom === 'fort' && _atlasFort) paintFort(wrap, st);
+    else if (st.zoom === 'subgrid' && st.district) paintSubgrid(wrap, st);
+    else paintCity(wrap, st);
+  }
+  // FORT zoom layer (GM) — the datafort screen inside the cyberspace: the grid in the
+  // middle, the fort's info/controls on the right. Reuses the fort builder.
+  function paintFort(wrap, st) {
+    wrap.className = 'net-map-wrap net-map-wrap-fort';
+    Store.resolve({ type: 'site', id: _atlasFort }).then(function (hit) {
+      if (!hit) { saveAtlas(function (s) { s.zoom = s.district ? 'subgrid' : 'city'; }); reRenderAtlas(wrap); return; }
+      renderFortBuilder(wrap, hit.json, hit.ref, null, function () { saveAtlas(function (s) { s.zoom = s.district ? 'subgrid' : 'city'; }); reRenderAtlas(wrap); });
+      wireOverviewRefresh(wrap);
+    }).catch(function () {});
+  }
+
+  function paintCity(wrap, st) {
+    Store.index('site').then(function (rows) {
+      var deep = st.lens === 'deep', meat = st.lens === 'meat';
+      var countByDist = {}, redByDist = {}, anyVis = false;
+      NC_DISTRICTS.forEach(function (d) { countByDist[d.id] = 0; });
+      rows.forEach(function (r) { var s = r.json; if (!deep && !hasSurface(s)) return; var vis = nodeVisibility(s, deep); if (vis === 'hidden') return; if (vis === 'redacted') redByDist[siteDistrict(s)] = (redByDist[siteDistrict(s)] || 0) + 1; else { countByDist[siteDistrict(s)] = (countByDist[siteDistrict(s)] || 0) + 1; anyVis = true; } });
+      var tok = netTokens(), tokensByDist = {}; Object.keys(tok).forEach(function (sid) { var dd = tok[sid]; (tokensByDist[dd] = tokensByDist[dd] || []).push(sid); });
+      var ovW = st.overlays.weather, ovT = st.overlays.traffic, trafByDist = {}, maxTraf = 1;
+      if (ovT) { rows.forEach(function (r) { var dd = siteDistrict(r.json); trafByDist[dd] = (trafByDist[dd] || 0) + computeTraffic(r.json, rows); }); Object.keys(trafByDist).forEach(function (k) { if (trafByDist[k] > maxTraf) maxTraf = trafByDist[k]; }); }
+      var pToken = myToken(), pReach = isPlayer() ? effectiveReach(playerJson()) : 999, pRad = reachRadius(pReach);
+      var cells = NC_DISTRICTS.map(function (d) {
+        var n = countByDist[d.id] || 0, red = redByDist[d.id] || 0, nw = districtWeather(d.id), washes = '';
+        var oor = isPlayer() && (!pToken || districtDist(pToken, d.id) > pRad);   // reach gates the map, sites or not
+        if (oor) washes += hatchSpan(45, 6);                 // redacted — out of reach (dense hatch)
+        else { if (ovW && nw > 0) washes += hatchSpan(45, 24 - nw * 5); if (ovT) { var tr = (trafByDist[d.id] || 0) / maxTraf; if (tr > 0.02) washes += hatchSpan(135, Math.max(9, Math.round(26 - tr * 15))); } }
+        var toks = (tokensByDist[d.id] || []).map(function (sid) { var rch = sheetReach(sid); return '<span class="net-token" draggable="' + (isPlayer() ? 'false' : 'true') + '" data-token="' + esc(sid) + '"' + hv('<b>' + esc(sheetHandle(sid)) + '</b><br>jacked in at ' + d.id + '<br>reach ' + rch + ' — ' + reachDesc(rch) + (isPlayer() ? '' : '<br>drag to move<br><span class="net-hv-dim">hover: greys what’s out of reach</span>')) + '>' + tokenAvatar(sid) + '<span class="net-tok-nm">' + esc(sheetHandle(sid)) + '</span></span>'; }).join('');
+        var weatherPip = ovW ? '<span class="net-dcell-nw">' + (nw ? '●'.repeat(nw) : '○') + '</span>' : '';
+        var label = deep ? 'fort' : 'site';
+        var count = oor ? '' : (n ? '<span class="net-dcell-count">' + n + ' ' + label + (n > 1 ? 's' : '') + '</span>' : (red ? '<span class="net-dcell-count net-dcell-redc">▨ signal</span>' : '<span class="net-dcell-count net-dcell-0">·</span>'));
+        var dhv = '<b>' + d.id + ' · ' + esc(d.name) + '</b><br>' + (oor ? 'out of reach — redacted' : (n ? n + ' ' + label + (n > 1 ? 's' : '') + ' in reach' : 'no ' + label + 's in reach')) + '<br>Netwatch ' + (nw ? '●'.repeat(nw) + ' (' + nw + '/3)' : 'none') + (oor ? '' : '<br>click to enter the subgrid');
+        return '<div class="net-dcell net-dcell-city' + (oor ? ' net-dcell-oor' : '') + '" data-drill="' + d.id + '" style="grid-column:' + (d.col + 1) + ';grid-row:' + (d.row + 1) + '"' + hv(dhv) + '>' +
+          washes +
+          '<span class="net-dcell-hd"><span class="net-dcell-id">' + d.id + '</span>' + weatherPip + '</span>' +
+          '<span class="net-dcell-name">' + esc(d.name) + '</span>' + count +
+          '<span class="net-dcell-toks">' + toks + '</span>' +
+        '</div>';
+      }).join('');
+      wrap.className = 'net-map-wrap';
+      wrap.innerHTML = '<div class="net-map" style="grid-template-columns:repeat(' + DISTRICT_COLS + ',1fr);grid-template-rows:repeat(' + DISTRICT_ROWS + ',1fr)">' + cells + '</div>' +
+        (isPlayer() && !anyVis ? '<div class="net-map-note">Nothing in reach. A better rig — or a closer jack-in point — reveals more of the Net.</div>' : '') +
+        (deep && isPlayer() && reachOfDeck(playerJson()) <= 0 ? '<div class="net-map-note">DEEP is dark without a deck. Jack in with a cyberdeck to see the infrastructure layer.</div>' : '');
+      wrap._distHasSites = {}; NC_DISTRICTS.forEach(function (d) { if ((countByDist[d.id] || 0) > 0 || (redByDist[d.id] || 0) > 0) wrap._distHasSites[d.id] = 1; });
+      wrap.querySelectorAll('.net-dcell-city').forEach(function (cell) {
+        cell.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('.net-token')) return; var did = cell.getAttribute('data-drill'); if (!playerCanEnterDistrict(wrap, did)) { flashTool('Out of reach — a closer jack-in or a better rig gets you there.'); return; } saveAtlas(function (s) { s.district = did; s.zoom = 'subgrid'; }); reRenderAtlas(wrap); });
+        if (!isPlayer()) {
+          cell.addEventListener('dragover', function (e) { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'; cell.classList.add('net-dcell-drop'); });
+          cell.addEventListener('dragleave', function () { cell.classList.remove('net-dcell-drop'); });
+          cell.addEventListener('drop', function (e) { e.preventDefault(); cell.classList.remove('net-dcell-drop'); var sid = _dragToken || (e.dataTransfer && e.dataTransfer.getData('text/plain')); if (sid) setToken(sid, cell.getAttribute('data-drill')); _dragToken = null; });
+        }
+      });
+      if (!isPlayer()) wrap.querySelectorAll('[data-token]').forEach(function (t) {
+        var sid = t.getAttribute('data-token');
+        t.addEventListener('mouseenter', function () { showTokenReach(wrap, sid); });   // GM tool: inspect a runner's reach
+        t.addEventListener('mouseleave', function () { clearTokenReach(wrap); });
+        t.addEventListener('dragstart', function (e) { e.stopPropagation(); clearTokenReach(wrap); _dragToken = sid; if (e.dataTransfer) { e.dataTransfer.setData('text/plain', sid); e.dataTransfer.effectAllowed = 'move'; } });
+        t.addEventListener('dragend', function () { _dragToken = null; document.querySelectorAll('.net-dcell-drop').forEach(function (c) { c.classList.remove('net-dcell-drop'); }); });
+      });
+      wireOverviewRefresh(wrap);
+    }).catch(function () { wrap.innerHTML = '<div class="web-empty" style="padding:24px">Could not load the atlas.</div>'; });
+  }
+
+  // A district's 15×15 as a real map: a clipped viewport over the full grid, pan
+  // (drag) + zoom (wheel / buttons). Shows only a portion at a time.
+  function paintSubgrid(wrap, st) {
+    Store.index('site').then(function (rows) {
+      var deep = st.lens === 'deep', meat = st.lens === 'meat', district = st.district, gm = !isPlayer();
+      var placed = {}, count = 0;
+      rows.forEach(function (r) { var s = r.json; if (siteDistrict(s) !== district) return; if (!deep && !hasSurface(s)) return; var vis = nodeVisibility(s, deep); if (vis === 'hidden') return; var sc = subcellOf(s); placed[sc.x + ',' + sc.y] = { json: s, vis: vis, fort: deep }; count++; });
+      var ovW = st.overlays.weather, ovT = st.overlays.traffic, nw = districtWeather(district), traf = 0;
+      if (ovT) rows.forEach(function (r) { if (siteDistrict(r.json) === district) traf += computeTraffic(r.json, rows); });
+      var cells = '';
+      for (var y = 0; y < SUBGRID_N; y++) for (var x = 0; x < SUBGRID_N; x++) { var node = placed[x + ',' + y]; cells += node ? subgridCell(node, deep) : ('<div class="net-sg-c net-sg-empty" data-empty="' + x + ',' + y + '"' + hv('cell ' + x + ',' + y + (gm ? '<br>right-click → add a fort' : '')) + '></div>'); }
+      var readout = (ovW ? '<span class="net-sg-ro"' + hv('Netwatch presence ' + nw + '/3 — ' + district) + '>Netwatch ' + (nw ? '●'.repeat(nw) : '○') + '</span>' : '') + (ovT ? '<span class="net-sg-ro"' + hv('traffic volume in ' + district) + '>traffic ~' + traf + '</span>' : '');
+      wrap.className = 'net-map-wrap net-map-wrap-sg';
+      wrap.innerHTML =
+        '<div class="net-sg-head"><button class="net-mini" data-back>◄ City</button><span class="net-sg-t">' + district + ' · ' + esc(districtName(district)) + '</span><span class="net-sg-n">' + count + ' ' + (deep ? 'fort' : 'site') + (count === 1 ? '' : 's') + '</span>' + readout + '<span class="net-sg-sp"></span>' + (gm ? '<button class="net-mini" data-addfort>＋ fort</button>' : '') + '<span class="net-zoomctl"><button class="net-mini" data-zo="-">−</button><button class="net-mini" data-zo="fit">fit</button><button class="net-mini" data-zo="+">＋</button></span></div>' +
+        '<div class="net-sg-view" id="net-sg-view"><div class="net-sg-inner" id="net-sg-inner"><div class="net-grid-field" style="--gf-cx:106px;--gf-cy:70px;--gf-px:318px;--gf-py:210px"><div class="net-map net-subgrid" style="grid-template-columns:repeat(' + SUBGRID_N + ',1fr)">' + cells + '</div></div></div></div>' +
+        (isPlayer() && !count ? '<div class="net-map-note">Nothing in reach in this district. Pan and zoom to explore.</div>' : '');
+      wrap.querySelector('[data-back]').onclick = function () { saveAtlas(function (s) { s.zoom = 'city'; }); reRenderAtlas(wrap); };
+      wrap.querySelectorAll('[data-site]').forEach(function (b) { b.onclick = function () { var r = byId(rows, b.getAttribute('data-site')); if (r) navTo(siteUrl(r.json)); }; });
+      wrap.querySelectorAll('[data-fort]').forEach(function (b) { b.onclick = function () { var id = b.getAttribute('data-fort'); _atlasFort = id; if (isPlayer()) { flashTool('Jack-in is a run — your GM opens it.'); var r = byId(rows, id); if (r) navTo(siteUrl(r.json)); } else { saveAtlas(function (s) { s.zoom = 'fort'; }); reRenderAtlas(wrap); } }; });
+      if (gm) {
+        var af = wrap.querySelector('[data-addfort]'); if (af) af.onclick = function () { var fc = freeSubcell(rows, district); addFortAt(district, fc.x, fc.y); };
+        wrap.querySelectorAll('[data-empty]').forEach(function (c) { c.addEventListener('contextmenu', function (e) { e.preventDefault(); var p = c.getAttribute('data-empty').split(','); addFortAt(district, +p[0], +p[1]); }); });
+      }
+      var view = wrap.querySelector('#net-sg-view'), inner = wrap.querySelector('#net-sg-inner');
+      var pz = mountPanZoom(view, inner, { scale: 1, center: true, minScale: 0.55 });
+      wrap.querySelector('[data-zo="+"]').onclick = function () { pz.zoomBy(1.25); };
+      wrap.querySelector('[data-zo="-"]').onclick = function () { pz.zoomBy(1 / 1.25); };
+      wrap.querySelector('[data-zo="fit"]').onclick = function () { pz.reset(); };
+      wireOverviewRefresh(wrap);
+    }).catch(function () { wrap.innerHTML = '<div class="web-empty" style="padding:24px">Could not load the subgrid.</div>'; });
+  }
+  // A site as a card: glyph + name + label — DEEP shows the datafort tier, SURFACE
+  // shows kind · broadcast (like the atlas reference).
+  function subgridCell(node, deep) {
+    var s = node.json, name = esc(s.name || 'site');
+    if (node.vis === 'redacted') return '<div class="net-sg-c net-sg-hatch"' + hv('<b>▨ redacted</b><br>a signal is in range but out of reach') + '></div>';
+    if (deep) {
+      var tier = fortTier(s), g = tier === 'grey' ? '○' : tier === '1' ? '□' : '■';
+      var lab = TIER_LABEL[tier] + (tier === 'black' ? ' — lethal' : '');
+      var info = '<b>' + name + '</b><br>' + TIER_LABEL[tier] + ' datafort' + (isPlayer() ? '' : ' · difficulty ' + NetModel.difficulty(NetModel.ensure(s))) + '<br>' + esc(s.kind || 'site');
+      return '<button class="net-sg-c net-sg-card net-sg-fort' + (tier === 'black' ? ' net-sg-black' : '') + '" data-fort="' + esc(s.id) + '"' + hv(info) + '><span class="net-sg-g">' + g + '</span><span class="net-sg-nm">' + name + '</span><span class="net-sg-lb">' + esc(lab) + '</span></button>';
+    }
+    var kind = esc(s.kind || 'site'), bc = esc(s.broadcast || 'citywide'), off = !isOnline(s);
+    var i2 = '<b>' + name + '</b><br>' + kind + ' · ' + bc + (off ? '<br><span class="net-hv-dim">offline</span>' : '');
+    return '<button class="net-sg-c net-sg-card' + (off ? ' net-sg-off' : '') + '" data-site="' + esc(s.id) + '"' + hv(i2) + '><span class="net-sg-g">◆</span><span class="net-sg-nm">' + name + '</span><span class="net-sg-lb">' + (off ? 'offline' : kind + ' · ' + bc) + '</span></button>';
+  }
+  function freeSubcell(rows, district) { var used = {}; rows.forEach(function (r) { if (siteDistrict(r.json) !== district) return; var sc = subcellOf(r.json); used[sc.x + ',' + sc.y] = 1; }); for (var y = 0; y < SUBGRID_N; y++) for (var x = 0; x < SUBGRID_N; x++) if (!used[x + ',' + y]) return { x: x, y: y }; return { x: 0, y: 0 }; }
+  function addFortAt(district, x, y) {
+    App.prompt('New datafort', 'Name', 'New datafort', function (name) {
+      if (name == null) return;
+      var site = blankSite((name || '').trim() || 'New datafort'); site.kind = 'host'; site.deepOnly = true; site.district = district; site.subcell = { x: x, y: y };
+      var d = NetModel.defFort(1); site.datafort = d;
+      Store.create('site', site).then(function (made) { App.emit('entity:saved', { type: 'site' }); _atlasFort = made.json.id; openFortEditor(made.json.id); }).catch(function (e) { if (window.UI) UI.modal({ title: 'Could not create the fort', body: '<p>' + esc(String((e && e.message) || e)) + '</p>', actions: [{ label: 'OK', kind: 'primary' }] }); });
+    });
+  }
+  function byId(rows, id) { for (var i = 0; i < rows.length; i++) if (rows[i].json.id === id) return rows[i]; return null; }
+
+  // Right rail — SEDIMENT: the Net's memory made spatial (scars of past events).
+  // v1 reads CAST events from the overview (stub); empty until CAST feeds it.
+  function netEvents() { var c = camp(); var o = (c && c.getOverview && c.getOverview()) || {}; var ev = o.netEvents || []; return isPlayer() ? ev.filter(function (e) { return e.public || (e.visibleTo || []).indexOf((br().sess || {}).sheetId) >= 0; }) : ev; }
+  function paintSediment(rail, st) {
+    if (!rail) return;
+    var evs = netEvents();
+    rail.innerHTML = '<div class="net-rail-h">SEDIMENT</div>' +
+      (evs.length ? evs.slice(-40).reverse().map(function (e) {
+        return '<button class="net-sed-row" data-sed="' + esc(e.id || '') + '"><span class="net-sed-g">' + esc(sedGlyph(e.type)) + '</span><span class="net-sed-b"><span class="net-sed-t">' + esc(e.subject || e.type || 'event') + '</span><span class="net-sed-m">' + esc((e.region || '') + (e.when != null ? ' · ' + e.when + 'h' : '')) + '</span></span></button>';
+      }).join('') : '<div class="net-rail-empty">Quiet. Breaches, defacements, planted daemons and patrol trails will settle here as the Net remembers.</div>');
+    rail.querySelectorAll('[data-sed]').forEach(function (b) { b.onclick = function () { /* → CHRONIQUE entry (v2) */ }; });
+  }
+  function sedGlyph(type) { return ({ breach: '†', daemon: '‡', deface: '▚', anb: '⚑', patrol: '⋯', netwar: '⚔', abandoned: '⌫' })[type] || '·'; }
+
+  /* ═══════════════ ② FORT SIDEBAR — MJ inspector ═══════════════
+     Opens over the atlas on a fort-node click. MJ only (an author's view — the
+     player never sees the file ledger). Live-edits the datafort facet; difficulty
+     recomputes on every change (derived, never stored). */
+  // The FORT zoom layer (renderFortBuilder in the cyberspace) replaces the old drawer.
+  // Any residual caller is redirected to it.
+  function openFortSidebar(siteId) {
+    if (isPlayer()) return;
+    _atlasFort = siteId;
+    var stg = document.querySelector('.net-atlas-stage');
+    if (stg) { saveAtlas(function (s) { s.zoom = 'fort'; }); renderAtlas(stg); } else openFortEditor(siteId);
+  }
+  function fpStat(label, val) { return '<div class="net-fp-stat"><span class="net-fp-sl">' + esc(label) + '</span><span class="net-fp-sv">' + esc(String(val)) + '</span></div>'; }
+  function fpStep(label, val, key) { return '<div class="net-fp-stat"><span class="net-fp-sl">' + esc(label) + '</span><span class="net-fp-sv net-fp-step"><button class="net-fp-b" data-step="' + key + '" data-dir="-1">−</button>' + esc(String(val)) + '<button class="net-fp-b" data-step="' + key + '" data-dir="1">+</button></span></div>'; }
+  function subgridVignette(sg) { var w = (sg && sg.w) || 8, h = (sg && sg.h) || 8, out = ''; for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) { var c = sgAt(sg, x, y); out += '<span class="net-vg-c' + (c ? ' net-vg-' + c.kind : '') + '"></span>'; } return '<div class="net-vg" style="grid-template-columns:repeat(' + w + ',1fr)">' + out + '</div>'; }
+
+  // Compact pickers (reuse the app's modal + picker classes).
+  function pickStoreEntity(cb) {
+    if (!window.UI) { cb(null); return; }
+    var types = [['npc', 'NPC'], ['item', 'Item'], ['document', 'Doc'], ['org', 'Org'], ['location', 'Location'], ['shop', 'Shop']];
+    UI.modal({ title: 'Link a record (loot ↔ Store)', body: '<label class="rt-field"><span class="rt-field-l">Type</span><select class="rt-input" id="le-type">' + types.map(function (t) { return '<option value="' + t[0] + '">' + t[1] + '</option>'; }).join('') + '</select></label><input class="rt-input" id="le-q" placeholder="search…" style="margin-top:8px"><div id="le-res" class="lk-picker-res" style="margin-top:8px;max-height:240px;overflow:auto"></div>', actions: [{ label: 'Cancel' }],
+      onShow: function (box) {
+        function load() { var ty = box.querySelector('#le-type').value, q = (box.querySelector('#le-q').value || '').toLowerCase(); Store.index(ty).then(function (rows) { var list = rows.filter(function (r) { return !q || (Store.displayName(r) || '').toLowerCase().indexOf(q) >= 0; }).slice(0, 60); box.querySelector('#le-res').innerHTML = list.length ? list.map(function (r) { return '<button class="lk-picker-row" data-id="' + esc(r.json.id) + '" data-nm="' + esc(Store.displayName(r) || r.json.id) + '">' + esc(Store.displayName(r) || r.json.id) + '</button>'; }).join('') : '<div class="app-empty">none</div>'; box.querySelectorAll('[data-id]').forEach(function (b) { b.onclick = function () { UI.close(); cb({ type: ty, id: b.getAttribute('data-id'), name: b.getAttribute('data-nm') }); }; }); }).catch(function () {}); }
+        box.querySelector('#le-type').onchange = load; box.querySelector('#le-q').oninput = App.debounce(load, 180); load();
+      } });
+  }
+  function pickIce(cb) {
+    if (!window.UI) { cb(null); return; }
+    var cat = NetRefs.ice();
+    UI.modal({ title: 'Load ICE (catalogue)', body: '<div class="net-icepick">' + cat.map(function (i, idx) { return '<button class="net-icepick-b" data-i="' + idx + '"><span class="net-ip-k">' + (i.blackIce ? '† ' : '') + esc(i.kind) + '</span><span class="net-ip-m">' + esc(i.class) + ' · STR ' + i.str + ' · ' + i.mu + 'MU' + (i.mobile ? ' · ⟳ mobile' : '') + (i.trace ? ' · trace' : '') + '</span></button>'; }).join('') + '</div>', actions: [{ label: 'Cancel' }],
+      onShow: function (box) { box.querySelectorAll('[data-i]').forEach(function (b) { b.onclick = function () { UI.close(); var i = cat[+b.getAttribute('data-i')]; cb(Object.assign({ id: uid('ice') }, i, { pos: null })); }; }); } });
+  }
+
+  /* ═══════════════ ③ FORT EDITOR — the Fort tab, diegetic ═══════════════
+     Two entries: from a site's Fort tab, or autonomous — but first you procure a
+     server (hardware tier + eb + district). The subgrid painter is the run terrain
+     (jointive, no gutters). MJ + player (Fast
+     Fortress of their own site) use the same editor. */
+  // The fort editor is a TAB inside the site editor (the app shell stays visible),
+  // not a full-screen overlay. Opening it selects that tab.
+  var _composerTab = null;
+  function openFortEditor(siteId) { _composerTab = 'fort'; if (window.Shell && Shell.openEntity) Shell.openEntity('site', siteId, null); }
+  // Autonomous entry — procure a server, then open the fort tab on a fresh fort-site.
+  function newAutonomousFort() {
+    procureServer(null, function (cfg) {
+      var site = blankSite(cfg.name || 'New datafort'); site.kind = 'host'; site.deepOnly = true; site.district = cfg.district || DEFAULT_DISTRICT;
+      var d = NetModel.defFort(cfg.cpu || 1); d.tier = cfg.tier || 'grey'; if (cfg.wall) d.dataWallSTR = Math.max(1, Math.min(10, cfg.wall)); if (cfg.gates != null) { while (d.codeGates.length < cfg.gates) d.codeGates.push({ id: uid('gate'), str: 2 }); if (d.codeGates.length > cfg.gates) d.codeGates = d.codeGates.slice(0, cfg.gates); } site.datafort = d;
+      Store.create('site', site).then(function (made) { App.emit('entity:saved', { type: 'site' }); openFortEditor(made.json.id); }).catch(function (e) { if (window.UI) UI.modal({ title: 'Could not create the fort', body: '<p>' + esc(String((e && e.message) || e)) + '</p>', actions: [{ label: 'OK', kind: 'primary' }] }); });
+    });
+  }
+  // Hardware chassis (net-canon §Axe 2 — CPU→INT, tier is the public security label).
+  var SERVER_TIERS = [
+    { name: 'Personal computer (rented rack)', cpu: 1, tier: 'grey', cost: 3000 },
+    { name: 'Terminal cluster', cpu: 2, tier: 'grey', cost: 9000 },
+    { name: 'Mini-Frame', cpu: 3, tier: '1', cost: 30000 },
+    { name: 'Business minicomp', cpu: 4, tier: '1', cost: 55000 },
+    { name: 'Corporate mainframe', cpu: 5, tier: '2', cost: 90000 },
+    { name: 'Hardened mainframe', cpu: 6, tier: '2', cost: 160000 },
+    { name: 'Black-tier fortress core', cpu: 7, tier: '3', cost: 250000 }
+  ];
+  var ACQUIRE = [['rent', 'Rent', 'monthly bill · on the record'], ['buy', 'Buy', 'yours outright · a big hit'], ['steal', 'Steal', 'free but hot · Netwatch flag']];
+  function procureServer(site, cb) {
+    if (!window.UI) { cb({}); return; }
+    var d = site && site.datafort;
+    UI.modal({ title: 'Procure a server', size: 'wide',
+      body: '<p class="dt-hint">Pick a chassis (sets CPU→INT and the public security tier), how you acquire it, and which district it sits in. Fine-tune CPU / walls / gates afterwards in the editor.</p>' +
+        (site ? '' : '<label class="rt-field"><span class="rt-field-l">Name</span><input class="rt-input" id="ps-name" placeholder="Datafort name"></label>') +
+        '<div class="net-ed-h">Chassis</div><div class="net-srv">' + SERVER_TIERS.map(function (t, i) { return '<button class="net-srv-b" data-srv="' + i + '"><b>' + esc(t.name) + '</b><span>' + t.cpu + ' CPU · INT ' + (t.cpu * 3) + ' · ' + (t.cpu * 40) + ' MU · tier ' + TIER_LABEL[t.tier] + '</span><span class="net-srv-c">' + t.cost + ' eb</span></button>'; }).join('') + '</div>' +
+        '<div class="net-ed-h" style="margin-top:8px">Acquire</div><div class="net-srv-acq">' + ACQUIRE.map(function (a, i) { return '<label class="net-srv-acqb"><input type="radio" name="ps-acq" value="' + a[0] + '"' + (i === 0 ? ' checked' : '') + '><b>' + a[1] + '</b> <span>' + esc(a[2]) + '</span></label>'; }).join('') + '</div>' +
+        '<label class="rt-field" style="margin-top:8px"><span class="rt-field-l">District (where it sits)</span><select class="rt-input" id="ps-dist"><option value="">— place later —</option>' + NC_DISTRICTS.map(function (n) { return '<option value="' + n.id + '"' + ((site && site.district) === n.id ? ' selected' : '') + '>' + n.id + ' · ' + esc(n.name) + '</option>'; }).join('') + '</select></label>' +
+        '<div class="net-ed-h" style="margin-top:8px">Or custom (GM sets the stats)</div><div class="net-srv-cust">' +
+          '<label>CPU <input type="number" class="rt-input" id="ps-cpu" min="1" max="7" value="' + ((d && d.cpu) || 1) + '"></label>' +
+          '<label>Wall STR <input type="number" class="rt-input" id="ps-wall" min="1" max="10" value="' + ((d && d.dataWallSTR) || 1) + '"></label>' +
+          '<label>Gates <input type="number" class="rt-input" id="ps-gates" min="0" max="7" value="' + ((d && (d.codeGates || []).length) || 1) + '"></label>' +
+          '<label>Tier <select class="rt-input" id="ps-tier">' + FORT_TIERS.map(function (t) { return '<option value="' + t + '"' + ((d && d.tier) === t ? ' selected' : '') + '>' + TIER_LABEL[t] + '</option>'; }).join('') + '</select></label>' +
+          '<button class="dt-btn" data-custom>Use custom ▸</button>' +
+        '</div>',
+      actions: [{ label: 'Cancel' }],
+      onShow: function (box) {
+        function district() { return box.querySelector('#ps-dist').value; }
+        function nameVal() { var nm = box.querySelector('#ps-name'); return nm ? nm.value : ''; }
+        function acq() { return (box.querySelector('input[name=ps-acq]:checked') || {}).value || 'rent'; }
+        box.querySelectorAll('[data-srv]').forEach(function (b) { b.onclick = function () { var t = SERVER_TIERS[+b.getAttribute('data-srv')]; UI.close(); cb({ cpu: t.cpu, tier: t.tier, cost: t.cost, district: district(), name: nameVal(), method: acq() }); }; });
+        box.querySelector('[data-custom]').onclick = function () { var cpu = Math.max(1, Math.min(7, parseInt(box.querySelector('#ps-cpu').value, 10) || 1)); var wall = Math.max(1, Math.min(10, parseInt(box.querySelector('#ps-wall').value, 10) || 1)); var gates = Math.max(0, Math.min(7, parseInt(box.querySelector('#ps-gates').value, 10) || 0)); UI.close(); cb({ cpu: cpu, wall: wall, gates: gates, tier: box.querySelector('#ps-tier').value, district: district(), name: nameVal(), method: acq(), custom: true }); };
+      } });
+  }
+  function iceOf(d, id) { var a = (d.ice || []).filter(function (i) { return i.id === id; }); return a[0]; }
+
+  // A host's datafort holds a File for each site it hosts (their data lives on the server).
+  function ensureHostFiles(site) {
+    if (site.kind !== 'host') return Promise.resolve(false);
+    var d = NetModel.ensure(site);
+    return Store.index('site').then(function (rows) {
+      var changed = false, live = {};
+      rows.forEach(function (r) { var s = r.json; if (s.id === site.id || s.hostId !== site.id) return; live[s.id] = 1; if (!(d.files || []).some(function (f) { return f.storeRef && f.storeRef.type === 'site' && f.storeRef.id === s.id; })) { d.files.push({ id: uid('file'), type: 'Inter-Office', mu: 1, storeRef: { type: 'site', id: s.id }, name: s.name, hosted: true }); changed = true; } });
+      // drop hosted-file entries for sites no longer hosted here
+      var before = (d.files || []).length; d.files = (d.files || []).filter(function (f) { return !(f.hosted && f.storeRef && !live[f.storeRef.id]); }); if (d.files.length !== before) changed = true;
+      return changed;
+    }).catch(function () { return false; });
+  }
+  // The fort builder, rendered INTO a container (the site editor's Fort tab).
+  function renderFortBuilder(c, site, ref, poke, onBack) {
+    var d = NetModel.ensure(site);
+    var tool = 'wall', sel = null, saveT = null, pz = null;
+    function save() { clearTimeout(saveT); saveT = setTimeout(function () { Store.put(ref, site).then(function () { App.emit('entity:saved', { type: 'site' }); }).catch(function () {}); }, 300); }
+    function setCpu(n) { n = Math.max(1, Math.min(7, n)); d.cpu = n; var g = d.codeGates || []; while (g.length < n) g.push({ id: uid('gate'), str: 2 }); if (g.length > n) g = g.slice(0, n); d.codeGates = g; if (d.dataWallSTR > 10) d.dataWallSTR = 10; }
+    var TOOLS = [['wall', '█ Wall'], ['node', '▢ Node'], ['gate', '⊗ Gate'], ['ice', '☠ ICE'], ['file', '☰ File'], ['remote', '⊡ Remote'], ['core', '▲ CPU'], ['empty', '· Erase']];
+    function comps() {
+      return '<div class="net-ed-h" style="margin-top:12px">Files <span class="net-fp-n">' + (d.files || []).length + '</span><button class="net-mini" data-add-file>+</button></div>' +
+        ((d.files || []).length ? d.files.map(function (f, i) { return '<div class="net-fp-file"><span>' + esc(f.type || 'file') + '</span><span class="net-fp-fa">' + (f.storeRef ? '<span class="net-fp-loot">↔ ' + esc(f.name || 'loot') + '</span>' : '<button class="net-mini" data-link-file="' + i + '">link</button>') + '<button class="net-mini" data-rm-file="' + i + '">✕</button></span></div>'; }).join('') : '<div class="net-fp-empty">No files.</div>') +
+        '<div class="net-ed-h" style="margin-top:10px">ICE <span class="net-fp-n">' + (d.ice || []).length + '</span><button class="net-mini" data-add-ice>+</button></div>' +
+        ((d.ice || []).length ? d.ice.map(function (ic, i) { return '<div class="net-fp-ice">' + (ic.blackIce ? '† ' : '') + esc(ic.kind || 'ICE') + ' <span class="net-fp-str">STR ' + (ic.str || 0) + '</span>' + (ic.mobile ? ' ⟳' : '') + (ic.pos ? '' : ' <span class="net-fp-diffl">·unplaced</span>') + '<button class="net-mini net-fp-icerm" data-rm-ice="' + i + '">✕</button></div>'; }).join('') : '<div class="net-fp-empty">No ICE.</div>') +
+        '<div class="net-ed-h" style="margin-top:10px">Remotes <span class="net-fp-n">' + (d.remotes || []).length + '</span><button class="net-mini" data-add-remote>+</button></div>' +
+        ((d.remotes || []).length ? d.remotes.map(function (rm, i) { return '<div class="net-fp-file"><span>' + esc(rm.kind || 'remote') + '</span><button class="net-mini" data-rm-remote="' + i + '">✕</button></div>'; }).join('') : '<div class="net-fp-empty">No remotes.</div>');
+    }
+    function paint() {
+      var diff = NetModel.difficulty(d), sg = d.subgrid, w = sg.w || 12, h = sg.h || 12, int = NetModel.intOf(d);
+      c.innerHTML =
+        '<div class="net-ed net-ed-tab">' +
+          '<div class="net-ed-top">' + (onBack ? '<button class="net-mini" data-fb-back>◄</button>' : '') + '<span class="net-ed-t">DATAFORT · ' + esc(site.name || 'fort') + '</span>' +
+            '<select class="net-sel" data-tier>' + FORT_TIERS.map(function (t) { return '<option value="' + t + '"' + (d.tier === t ? ' selected' : '') + '>' + TIER_LABEL[t] + '</option>'; }).join('') + '</select>' +
+            '<span class="net-ed-diff">INT ' + int + (int >= 12 ? ' · AI' : '') + ' · MU ' + NetModel.memoryMU(d) + ' · ' + NetModel.fortActions(d) + ' act/rd · diff <b>' + diff + '</b> (' + NetModel.difficultyLabel(diff) + ')</span>' +
+            '<span class="net-ed-sp"></span><button class="dt-btn" data-server>Server ▸</button><button class="dt-btn" data-sketch>Auto-sketch</button><button class="dt-btn" data-run>Run test ▸</button></div>' +
+          '<div class="net-ed-body">' +
+            '<div class="net-ed-pal">' +
+              '<div class="net-ed-h">Paint</div>' + TOOLS.map(function (t) { return '<button class="net-ed-tool' + (tool === t[0] ? ' on' : '') + '" data-tool="' + t[0] + '">' + t[1] + '</button>'; }).join('') +
+              '<div class="net-ed-h" style="margin-top:10px">Hardware</div>' +
+                '<div class="net-ed-hw">' + fpStep('CPU', d.cpu + '/7', 'cpu') + fpStep('Wall', NetModel.wallSTR(d), 'wall') + '</div>' +
+                '<div class="net-ed-gates">Gates ' + (d.codeGates || []).length + ' · Σ' + NetModel.gatesSTR(d) + ' <button class="net-mini" data-gate="str">STR+</button></div>' +
+              '<div class="net-ed-h" style="margin-top:10px">Grid</div><div class="net-ed-size"><button class="net-mini" data-size="-">−</button><span>' + w + '×' + h + '</span><button class="net-mini" data-size="+">+</button></div>' +
+              '<div class="net-ed-hint">Drag a cell to paint · drag the background to pan · wheel to zoom.</div>' +
+            '</div>' +
+            '<div class="net-ed-gridwrap"><div class="net-zoomctl net-ed-zoomctl"><button class="net-mini" data-zo="-">−</button><button class="net-mini" data-zo="fit">fit</button><button class="net-mini" data-zo="+">＋</button></div>' +
+              '<div class="net-ed-view" id="net-ed-view"><div class="net-ed-inner" id="net-ed-inner"><div class="net-grid-field" style="--gf-cx:66px;--gf-cy:66px;--gf-px:198px;--gf-py:198px"><div class="net-rg net-rg-edit net-rg-big" id="net-ed-grid" style="grid-template-columns:repeat(' + w + ',1fr)"></div></div></div></div></div>' +
+            '<div class="net-ed-insp"><div id="net-ed-cellinsp"></div><div id="net-ed-comp"></div></div>' +
+          '</div>' +
+        '</div>';
+      paintGrid(); paintInsp();
+      c.querySelector('#net-ed-comp').innerHTML = comps(); wireComps();
+      var fbBack = c.querySelector('[data-fb-back]'); if (fbBack && onBack) fbBack.onclick = onBack;
+      c.querySelector('[data-tier]').onchange = function (e) { d.tier = e.target.value; save(); paint(); };
+      c.querySelector('[data-server]').onclick = function () { procureServer(site, function (cfg) { if (cfg.cpu) { setCpu(cfg.cpu); if (cfg.tier) d.tier = cfg.tier; } if (cfg.wall) d.dataWallSTR = Math.max(1, Math.min(10, cfg.wall)); if (cfg.gates != null) { var g = d.codeGates || []; while (g.length < cfg.gates) g.push({ id: uid('gate'), str: 2 }); if (g.length > cfg.gates) g = g.slice(0, cfg.gates); d.codeGates = g; } if (cfg.district) site.district = cfg.district; save(); paint(); }); };
+      c.querySelector('[data-sketch]').onclick = function () { if (!(d.subgrid.cells || []).length || confirmSketch()) { autoSketch(d); save(); paint(); } };
+      c.querySelector('[data-run]').onclick = function () { openRun(site.id); };
+      c.querySelectorAll('[data-tool]').forEach(function (b) { b.onclick = function () { tool = b.getAttribute('data-tool'); c.querySelectorAll('[data-tool]').forEach(function (x) { x.classList.toggle('on', x === b); }); }; });
+      c.querySelectorAll('[data-step]').forEach(function (b) { b.onclick = function () { var k = b.getAttribute('data-step'), dir = +b.getAttribute('data-dir'); if (k === 'cpu') setCpu(d.cpu + dir); else if (k === 'wall') d.dataWallSTR = Math.max(1, Math.min(10, NetModel.wallSTR(d) + dir)); save(); paint(); }; });
+      c.querySelector('[data-gate="str"]').onclick = function () { (d.codeGates || []).forEach(function (g) { g.str = Math.min(10, (g.str || 2) + 1); }); save(); paint(); };
+      c.querySelectorAll('[data-size]').forEach(function (b) { b.onclick = function () { var dir = b.getAttribute('data-size') === '+' ? 1 : -1; d.subgrid.w = Math.max(8, Math.min(20, (d.subgrid.w || 12) + dir)); d.subgrid.h = Math.max(8, Math.min(20, (d.subgrid.h || 12) + dir)); save(); paint(); }; });
+      var view = c.querySelector('#net-ed-view'), inner = c.querySelector('#net-ed-inner'); pz = mountPanZoom(view, inner, { scale: 1, center: true });
+      c.querySelector('[data-zo="+"]').onclick = function () { pz.zoomBy(1.25); };
+      c.querySelector('[data-zo="-"]').onclick = function () { pz.zoomBy(1 / 1.25); };
+      c.querySelector('[data-zo="fit"]').onclick = function () { pz.reset(); };
+    }
+    function confirmSketch() { return !window.confirm || window.confirm('Replace the current layout with a fresh sketch?'); }
+    function wireComps() {
+      c.querySelector('[data-add-file]').onclick = function () { App.prompt('Add file', 'File type', FILE_TYPES[0], function (ty) { if (ty == null) return; d.files.push({ id: uid('file'), type: ty || 'Database', mu: 1 }); save(); paint(); }); };
+      c.querySelectorAll('[data-link-file]').forEach(function (b) { b.onclick = function () { var i = +b.getAttribute('data-link-file'); pickStoreEntity(function (r) { if (r) { d.files[i].storeRef = { type: r.type, id: r.id }; d.files[i].name = r.name; save(); paint(); } }); }; });
+      c.querySelectorAll('[data-rm-file]').forEach(function (b) { b.onclick = function () { d.files.splice(+b.getAttribute('data-rm-file'), 1); save(); paint(); }; });
+      c.querySelector('[data-add-ice]').onclick = function () { pickIce(function (ic) { if (ic) { d.ice.push(ic); save(); paint(); } }); };
+      c.querySelectorAll('[data-rm-ice]').forEach(function (b) { b.onclick = function () { var ic = d.ice.splice(+b.getAttribute('data-rm-ice'), 1)[0]; if (ic && ic.pos) sgSet(d.subgrid, ic.pos.x, ic.pos.y, 'empty'); save(); paint(); }; });
+      c.querySelector('[data-add-remote]').onclick = function () { App.prompt('Add remote', 'Kind (camera / door / vehicle…)', 'camera', function (k) { if (k == null) return; d.remotes.push({ id: uid('rem'), kind: k || 'remote', meatRef: null }); save(); paint(); }); };
+      c.querySelectorAll('[data-rm-remote]').forEach(function (b) { b.onclick = function () { d.remotes.splice(+b.getAttribute('data-rm-remote'), 1); save(); paint(); }; });
+    }
+    function paintGrid() {
+      var grid = c.querySelector('#net-ed-grid'); if (!grid) return;
+      var sg = d.subgrid, w = sg.w || 12, h = sg.h || 12, idx = sgLabelIndex(sg), html = '';
+      for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) { var cc = sgAt(sg, x, y), key = x + ',' + y; var cls = 'net-rg-c' + (cc ? ' net-rg-' + cc.kind + (cc.kind === 'ice' && iceOf(d, cc.ref) && iceOf(d, cc.ref).blackIce ? ' net-rg-black' : '') : ''); var inner = cc ? cellInnerHtml(cc.kind, idx[key], {}) : ''; var hvx = cc ? cellHv(cc) : ''; html += '<button class="' + cls + (sel === key ? ' net-rg-sel' : '') + '" data-cell="' + key + '"' + hvx + '>' + inner + '</button>'; }
+      grid.innerHTML = html;
+      var painting = false;
+      function apply(key) { var p = key.split(','), x = +p[0], y = +p[1]; if (tool === 'ice') { if (sgAt(sg, x, y) && sgAt(sg, x, y).kind === 'ice') return; pickIce(function (ic) { if (!ic) return; ic.pos = { x: x, y: y }; d.ice.push(ic); sgSet(sg, x, y, 'ice', ic.id); save(); paint(); }); return; } if (tool === 'file') { if (sgAt(sg, x, y) && sgAt(sg, x, y).kind === 'file') return; App.prompt('File', 'Type (Grey Ops / Black Ops / Database…)', FILE_TYPES[4], function (ty) { if (ty == null) return; var f = { id: uid('file'), type: ty || 'Database', mu: 1, pos: { x: x, y: y } }; d.files.push(f); sgSet(sg, x, y, 'file', f.id); save(); paint(); }); return; } if (tool === 'remote') { App.prompt('Remote', 'Kind (camera / door / vehicle…)', 'camera', function (k) { if (k == null) return; var rm = { id: uid('rem'), kind: k || 'remote', meatRef: null, pos: { x: x, y: y } }; d.remotes.push(rm); sgSet(sg, x, y, 'remote', rm.id); save(); paint(); }); return; } sgSet(sg, x, y, tool === 'empty' ? 'empty' : tool); sel = key; save(); paintGrid(); paintInsp(); }
+      grid.querySelectorAll('[data-cell]').forEach(function (cell) {
+        cell.addEventListener('mousedown', function (e) { e.preventDefault(); painting = true; apply(cell.getAttribute('data-cell')); });
+        cell.addEventListener('mouseenter', function () { if (painting && tool !== 'ice' && tool !== 'remote' && tool !== 'file') apply(cell.getAttribute('data-cell')); });
+        cell.addEventListener('click', function () { sel = cell.getAttribute('data-cell'); paintInsp(); paintGrid(); });
+      });
+      document.addEventListener('mouseup', function () { painting = false; }, { once: true });
+    }
+    function cellHv(cc) { if (cc.kind === 'ice') { var ic = iceOf(d, cc.ref); return hv(ic ? ('<b>☠ ' + esc(ic.kind) + (ic.blackIce ? ' — Black ICE' : '') + '</b><br>STR ' + ic.str + ' · ' + esc(ic.class) + (ic.mobile ? '<br>⟳ mobile — patrols' : '')) : 'ICE'); } if (cc.kind === 'file') { var f = (d.files || []).filter(function (z) { return z.id === cc.ref; })[0]; return hv('<b>☰ ' + esc((f && f.type) || 'File') + '</b>' + (f && f.storeRef ? '<br>↔ loot linked' : '')); } if (cc.kind === 'core') return hv('<b>▲ CPU / core</b><br>the system’s brain'); if (cc.kind === 'gate') return hv('<b>⊗ Code gate</b><br>a password wall'); if (cc.kind === 'wall') return hv('<b>█ Data wall</b>'); if (cc.kind === 'remote') return hv('<b>⊡ Remote</b><br>a device the fort controls'); if (cc.kind === 'node') return hv('<b>▢ Node</b>'); return ''; }
+    function paintInsp() {
+      var box = c.querySelector('#net-ed-cellinsp'); if (!box) return;
+      if (!sel) { box.innerHTML = '<div class="net-ed-h">Cell</div><div class="net-fp-empty">Click a cell to inspect. Difficulty updates live from the whole build.</div>'; return; }
+      var p = sel.split(','), x = +p[0], y = +p[1], cc = sgAt(d.subgrid, x, y);
+      var body = '<div class="net-ed-h">Cell ' + x + ',' + y + '</div>';
+      if (!cc) body += '<div class="net-fp-empty">Empty.</div>';
+      else if (cc.kind === 'ice') { var ic = iceOf(d, cc.ref); body += ic ? '<div class="net-fp-ice">☠ ' + esc(ic.kind) + (ic.blackIce ? ' — Black ICE' : '') + ' <span class="net-fp-str">STR ' + ic.str + '</span>' + (ic.mobile ? ' ⟳' : '') + '</div><button class="net-mini" data-clear>remove ICE</button>' : ''; }
+      else if (cc.kind === 'file') { var f = (d.files || []).filter(function (z) { return z.id === cc.ref; })[0]; body += '<div class="net-fp-file"><span>☰ ' + esc((f && f.type) || 'File') + '</span>' + (f && f.storeRef ? '<span class="net-fp-loot">↔ ' + esc(f.name || 'loot') + '</span>' : (f ? '<button class="net-mini" data-linkf>link Store</button>' : '')) + '</div><button class="net-mini" data-clear>remove file</button>'; }
+      else body += '<div class="net-fp-loc">' + esc(cc.kind) + '</div><button class="net-mini" data-clear>erase</button>';
+      box.innerHTML = body;
+      var lf = box.querySelector('[data-linkf]'); if (lf) lf.onclick = function () { var f = (d.files || []).filter(function (z) { return z.id === cc.ref; })[0]; if (f) pickStoreEntity(function (r) { if (r) { f.storeRef = { type: r.type, id: r.id }; f.name = r.name; save(); paint(); } }); };
+      var cl = box.querySelector('[data-clear]'); if (cl) cl.onclick = function () { if (cc && cc.kind === 'ice') d.ice = d.ice.filter(function (z) { return z.id !== cc.ref; }); if (cc && cc.kind === 'file') d.files = d.files.filter(function (z) { return z.id !== cc.ref; }); if (cc && cc.kind === 'remote') d.remotes = d.remotes.filter(function (z) { return z.id !== cc.ref; }); sgSet(d.subgrid, x, y, 'empty'); save(); paint(); };
+    }
+    paint();
+    ensureHostFiles(site).then(function (ch) { if (ch) { save(); paint(); } });   // hosted sites → files on the host's datafort
+  }
+  // A structured starting footprint: outer shell, an inner vault around the core,
+  // an entrance + vault gate, work nodes, and a couple of guard ICE.
+  function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+  // A dense, coherent datafort — a central blob of merged chambers (kept off the map
+  // edges), a wall shell with code-gate passages, clustered numbered nodes, a central
+  // CPU, ICE at the gates / around the core / on patrol, plus files and remotes.
+  function autoSketch(d) {
+    var sg = d.subgrid, W = sg.w || 12, H = sg.h || 12; sg.cells = [];
+    var cpu = Math.max(1, Math.min(7, d.cpu || 1)), cat = NetRefs.ice();
+    function pickIce(kind) { for (var i = 0; i < cat.length; i++) if (cat[i].kind === kind) return cat[i]; return cat[0]; }
+    var R = function (a, b) { return a + Math.floor(Math.random() * (b - a + 1)); };
+    // components: keep authored ones (reset their positions), else generate a loadout
+    if (!(d.ice || []).length) { d.ice = []; var iceKinds = ['Watchdog', 'Bloodhound', 'Killer', 'Hellhound', 'Liche', 'Brainwipe', 'Glue', 'Stun', 'Zombie']; var nIce = Math.min(iceKinds.length, 3 + cpu); for (var q = 0; q < nIce; q++) d.ice.push(Object.assign({ id: uid('ice') }, pickIce(iceKinds[q]), { pos: null })); }
+    else d.ice.forEach(function (i) { i.pos = null; });
+    if (!(d.files || []).some(function (f) { return !f.hosted; })) { var ft = ['Black Ops', 'Grey Ops', 'Database', 'Financial', 'Business Records', 'Inter-Office']; var nF = 3 + Math.floor(cpu / 2); for (var fq = 0; fq < nF; fq++) d.files.push({ id: uid('file'), type: ft[fq % ft.length], mu: 1, pos: null }); }
+    else d.files.forEach(function (f) { f.pos = null; });
+    if (!(d.remotes || []).length) d.remotes = [{ id: uid('rem'), kind: 'terminal', pos: null }, { id: uid('rem'), kind: 'camera', pos: null }];
+    else d.remotes.forEach(function (r) { r.pos = null; });
+
+    var margin = 2, cx = Math.floor(W / 2), cy = Math.floor(H / 2), interior = {};
+    function room(rx, ry, rw, rh) { for (var y = ry; y < ry + rh; y++) for (var x = rx; x < rx + rw; x++) if (x >= margin && x <= W - 1 - margin && y >= margin && y <= H - 1 - margin) interior[x + ',' + y] = 1; }
+    room(cx - 2, cy - 2, 4, 4);
+    var nRooms = 2 + Math.floor(cpu / 2) + R(0, 1);
+    for (var rr = 0; rr < nRooms; rr++) { var rw = R(3, 5), rh = R(3, 5), dir = R(0, 3); room(cx - 1 + (dir === 0 ? -rw : dir === 1 ? 2 : R(-2, 1)), cy - 1 + (dir === 2 ? -rh : dir === 3 ? 2 : R(-2, 1)), rw, rh); }
+    var intCells = Object.keys(interior).map(function (k) { var p = k.split(','); return { x: +p[0], y: +p[1] }; }).sort(function (a, b) { return (a.y - b.y) || (a.x - b.x); });
+    if (!intCells.length) { room(cx - 2, cy - 2, 4, 4); intCells = Object.keys(interior).map(function (k) { var p = k.split(','); return { x: +p[0], y: +p[1] }; }); }
+    // wall shell = cells touching the interior but not inside it
+    var wallSet = {}, DIRS8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+    Object.keys(interior).forEach(function (k) { var p = k.split(','), x = +p[0], y = +p[1]; DIRS8.forEach(function (dd) { var nx = x + dd[0], ny = y + dd[1], nk = nx + ',' + ny; if (!interior[nk] && nx >= 0 && nx < W && ny >= 0 && ny < H) wallSet[nk] = 1; }); });
+    Object.keys(wallSet).forEach(function (k) { var p = k.split(','); sgSet(sg, +p[0], +p[1], 'wall'); });
+    // gates: wall cells that are a real passage (interior on one side, open on the other)
+    var wallCells = shuffle(Object.keys(wallSet).map(function (k) { var p = k.split(','); return { x: +p[0], y: +p[1] }; }));
+    var wantGates = Math.max(2, (d.codeGates || []).length || cpu), gates = 0, DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    wallCells.forEach(function (w) { if (gates >= wantGates) return; for (var i = 0; i < 4; i++) { var inK = (w.x + DIRS4[i][0]) + ',' + (w.y + DIRS4[i][1]), outK = (w.x - DIRS4[i][0]) + ',' + (w.y - DIRS4[i][1]); if (interior[inK] && !interior[outK] && !wallSet[outK]) { sgSet(sg, w.x, w.y, 'gate'); gates++; break; } } });
+    // core near the centroid
+    var core = intCells[Math.floor(intCells.length / 2)]; sgSet(sg, core.x, core.y, 'core');
+    function freeInt() { return intCells.filter(function (c) { return !sgAt(sg, c.x, c.y); }); }
+    // nodes (clustered, dense)
+    var pool = shuffle(freeInt()), nNodes = Math.min(pool.length, 3 + cpu * 2);
+    for (var n = 0; n < nNodes; n++) sgSet(sg, pool[n].x, pool[n].y, 'node');
+    // files scattered inside
+    d.files.forEach(function (f) { var fr = freeInt(); if (!fr.length) return; var c = fr[R(0, fr.length - 1)]; f.pos = { x: c.x, y: c.y }; sgSet(sg, c.x, c.y, 'file', f.id); });
+    // ICE: gates → their interior side, then around the core, then anywhere free
+    var spots = [];
+    sgCells(sg).filter(function (c) { return c.kind === 'gate'; }).forEach(function (g) { DIRS4.forEach(function (dd) { var x = g.x + dd[0], y = g.y + dd[1]; if (interior[x + ',' + y] && !sgAt(sg, x, y)) spots.push({ x: x, y: y }); }); });
+    DIRS4.forEach(function (dd) { var x = core.x + dd[0], y = core.y + dd[1]; if (interior[x + ',' + y] && !sgAt(sg, x, y)) spots.push({ x: x, y: y }); });
+    spots = spots.concat(shuffle(freeInt()));
+    d.ice.forEach(function (ic, idx) { var s = spots[idx]; if (!s || sgAt(sg, s.x, s.y)) { var fr = freeInt(); s = fr[0]; } if (s && !sgAt(sg, s.x, s.y)) { ic.pos = { x: s.x, y: s.y }; sgSet(sg, s.x, s.y, 'ice', ic.id); } });
+    // remotes on the interior edge (near the shell — the connection points)
+    var edge = shuffle(freeInt().filter(function (c) { return DIRS4.some(function (dd) { return wallSet[(c.x + dd[0]) + ',' + (c.y + dd[1])]; }); }));
+    d.remotes.forEach(function (rm, idx) { var c = edge[idx] || freeInt()[0]; if (c && !sgAt(sg, c.x, c.y)) { rm.pos = { x: c.x, y: c.y }; sgSet(sg, c.x, c.y, 'remote', rm.id); } });
+  }
+
+  /* ═══════════════ THE RUN — ⑤ player board / ⑦ SYSOP / ⑥ cast ═══════════════
+     One shared state in Yjs (the overview): three views of the same round. The
+     app decrements the action budget and applies TYPED results — no dice. */
+  function getRun() { var c = camp(); return (c && c.getOverview && (c.getOverview() || {}).netRun) || null; }
+  function setRun(patch) { var c = camp(); if (!c || !c.setOverview) return; var cur = getRun() || {}; c.setOverview({ netRun: Object.assign({}, cur, patch) }); }
+  function getDecl() { var c = camp(); return (c && c.getOverview && (c.getOverview() || {}).netRunDecl) || null; }
+  function setDecl(dcl) { var c = camp(); if (!c || !c.setOverview) return; c.setOverview({ netRunDecl: dcl }); }
+  function runBeat(run, text) { var beats = (run.beats || []).concat([{ ts: netClock(), text: text }]).slice(-30); return beats; }
+  function mySheetId() { return (br().sess || {}).sheetId; }
+
+  // GM: start a run against a fort — pick the runner sheet, seed the shared state.
+  function openRun(siteId) {
+    if (isPlayer()) { openRunBoard(); return; }
+    Store.resolve({ type: 'site', id: siteId }).then(function (hit) {
+      if (!hit) return; var site = hit.json, d = NetModel.ensure(site);
+      var sheets = playerSheets();
+      if (!window.UI) { return; }
+      var body = '<p class="dt-hint">Jack a runner into <b>' + esc(site.name) + '</b>. This opens the SYSOP console (you) and the run board (them). Table-first — you type every result.</p>' +
+        '<label class="rt-field"><span class="rt-field-l">Runner</span><select class="rt-input" id="run-who">' + (sheets.length ? sheets.map(function (r) { return '<option value="' + esc(r.json.id) + '">' + esc(Store.displayName ? Store.displayName(r) : r.json.id) + '</option>'; }).join('') : '<option value="">(no player sheets)</option>') + '</select></label>';
+      UI.modal({ title: 'Start a run', body: body, actions: [{ label: 'Cancel' }, { label: 'Jack in ▸', kind: 'primary', onClick: function (box) { var who = box.querySelector('#run-who').value; startRun(site, d, who); } }] });
+    }).catch(function () {});
+  }
+  function startRun(site, d, runnerSheetId) {
+    var c = camp(); var rec = runnerSheetId && c && c.getSheet && c.getSheet(runnerSheetId); var sheet = rec && rec.json;
+    var runnerActions = 1 + (sheet ? deckSpeed(sheet) : 0);
+    var traceMax = Math.min(12, 4 + (d.codeGates || []).length + (d.ice || []).filter(function (i) { return i.trace; }).length);
+    var run = {
+      id: uid('run'), hostId: site.id, hostName: site.name, runnerSheetId: runnerSheetId || '', runnerName: sheet ? (sheet.handle || sheet.name || 'runner') : 'runner',
+      round: 1, actionsLeft: { runner: runnerActions, fort: NetModel.fortActions(d) },
+      runnerPos: null, depth: { v: 0, max: 6 }, trace: { v: 0, max: traceMax },
+      reveal: {}, scanned: {}, beats: [{ ts: netClock(), text: 'Run opened against ' + (site.name || 'fort') + '.' }], status: 'active', dispatch: null
+    };
+    setRun(run); setDecl(null);
+    if (br().logSession) br().logSession('▸ Netrun opened: ' + run.runnerName + ' → ' + (site.name || 'fort'));
+    openSysop();
+  }
+  function endRun(status) { var run = getRun(); if (!run) return; setRun({ status: status || 'jacked-out' }); if (br().logSession) br().logSession('■ Netrun ' + (status || 'ended') + ' (' + (run.hostName || 'fort') + ')'); }
+
+  function runOverlay(cls) { var ov = eln('div', 'net-run-overlay ' + (cls || '')); document.body.appendChild(ov); return ov; }
+  function gaugeHtml(label, g, cls) { var v = (g && g.v) || 0, max = (g && g.max) || 6, pct = Math.min(100, Math.round(v / max * 100)); return '<div class="net-gauge ' + (cls || '') + '"><div class="net-gauge-l">' + esc(label) + ' <b>' + v + '/' + max + '</b></div><div class="net-gauge-bar"><span style="width:' + pct + '%"></span></div></div>'; }
+  function initiativeList(run, d) {
+    var c = camp(), meat = [], combatActive = c && c.combatMeta && c.combatMeta() && c.combatMeta().active;
+    if (combatActive && c.allCombatants) meat = (c.allCombatants() || []).map(function (cb) { return { kind: 'meat', label: cb.name || 'combatant', init: cb.init || 0 }; });
+    var runnerInit = 0; if (run.runnerSheetId && c && c.getSheet) { var s = c.getSheet(run.runnerSheetId); s = s && s.json; runnerInit = ((s && s.stats && (s.stats.REF || s.stats.ref)) || 0) + deckSpeed(s); }
+    var fortInit = NetModel.intOf(d);
+    var out = meat.slice();
+    for (var i = 0; i < (run.actionsLeft.runner || 0); i++) out.push({ kind: 'deck', label: run.runnerName + ' — action ' + (i + 1), init: runnerInit });
+    for (var j = 0; j < (run.actionsLeft.fort || 0); j++) out.push({ kind: 'ice', label: (d.tier === 'black' ? 'BLACK ' : '') + 'fort — action ' + (j + 1), init: fortInit });
+    out.sort(function (a, b) { return b.init - a.init; });
+    return out;
+  }
+
+  /* ⑦ SYSOP — the GM's console (the fort fully unmasked + tools + resolve). */
+  var _sysopOv = null;
+  function openSysop() {
+    if (_sysopOv) { _sysopOv.remove(); _sysopOv = null; }
+    var ov = runOverlay('net-sysop'); _sysopOv = ov; wireHover();
+    var selCell = null, moveIce = null, unsub = null;
+    function done() { if (unsub) { try { unsub(); } catch (e) {} } ov.remove(); _sysopOv = null; }
+    function rerender() {
+      var run = getRun(); if (!run) { done(); return; }
+      Store.resolve({ type: 'site', id: run.hostId }).then(function (hit) {
+        var d = hit ? NetModel.ensure(hit.json) : NetModel.defFort(1);
+        var decl = getDecl();
+        var init = initiativeList(run, d);
+        var prevOut = (ov.querySelector('#sy-out') || {}).value || '';
+        ov.innerHTML =
+          '<div class="net-run net-run-gm">' +
+            '<div class="net-run-top"><span class="net-run-t">SYSOP — ' + esc(run.hostName || 'fort') + '</span>' +
+              '<span class="net-run-rd">round ' + run.round + '</span>' +
+              '<span class="net-run-sp"></span>' +
+              '<button class="dt-btn" data-cast>Cast ⑥</button><button class="dt-btn" data-next>Next round ▸</button><button class="dt-btn" data-end>End run</button><button class="net-fp-x" data-close>✕</button></div>' +
+            '<div class="net-run-body">' +
+              '<div class="net-run-left"><div class="net-run-h">Initiative (unified)</div><ol class="net-init">' + init.map(function (e) { return '<li class="net-init-' + e.kind + '">' + esc(e.label) + ' <span class="net-init-i">' + e.init + '</span></li>'; }).join('') + '</ol>' +
+                '<div class="net-run-h">Toolbox</div><div class="net-tools">' +
+                  '<button class="net-mini" data-tool="scan">Reveal cell</button><button class="net-mini" data-tool="revice">Reveal ICE</button><button class="net-mini" data-tool="moveice">Move mobile ICE</button>' +
+                  '<button class="net-mini" data-tool="depth">＋Depth</button><button class="net-mini" data-tool="trace">＋Trace</button><button class="net-mini" data-tool="anb">Raise ANB</button><button class="net-mini net-danger" data-tool="dump">Dump runner</button>' +
+                '</div>' +
+                (run.trace.v >= run.trace.max ? '<button class="dt-btn net-dispatch" data-dispatch>⚑ Trace full — dispatch</button>' : '') +
+                (run.dispatch ? '<div class="net-dispatch-note">Dispatch: ' + esc(run.dispatch.force) + ' → ' + esc(run.dispatch.district) + '</div>' : '') +
+              '</div>' +
+              '<div class="net-run-mid"><div class="net-run-h">' + (moveIce ? 'Click the ICE’s new cell' : (selCell ? 'Cell ' + selCell : 'The fort (unmasked)')) + '</div>' + runGridHtml(run, d, false) + '</div>' +
+              '<div class="net-run-right">' +
+                gaugeHtml('DEPTH', run.depth, 'net-g-depth') + gaugeHtml('TRACE → body', run.trace, 'net-g-trace') +
+                '<div class="net-run-h">Resolve</div>' +
+                (decl ? '<div class="net-decl"><div class="net-decl-t">' + esc(declSentence(decl)) + '</div><input class="net-in" id="sy-out" placeholder="type the result…"><div class="net-decl-acts"><button class="net-mini" data-resolve>Resolve ▸</button><button class="net-mini" data-dismiss>dismiss</button></div></div>' : '<div class="net-fp-empty">No pending declaration. The runner declares from their board.</div>') +
+                '<div class="net-run-h">Beats</div><div class="net-beats">' + (run.beats || []).slice(-8).reverse().map(function (b) { return '<div class="net-beat">' + esc(b.text) + '</div>'; }).join('') + '</div>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+        // wiring
+        ov.querySelector('[data-close]').onclick = done;
+        ov.querySelector('[data-end]').onclick = function () { endRun('jacked-out'); done(); };
+        ov.querySelector('[data-cast]').onclick = function () { castRun(run, d); };
+        ov.querySelector('[data-next]').onclick = function () { nextRound(run, d); };
+        var disp = ov.querySelector('[data-dispatch]'); if (disp) disp.onclick = function () { doDispatch(run, d); };
+        ov.querySelectorAll('[data-tool]').forEach(function (b) { b.onclick = function () { var t = b.getAttribute('data-tool'); sysopTool(t); }; });
+        ov.querySelectorAll('[data-cell]').forEach(function (cell) { cell.onclick = function () { var key = cell.getAttribute('data-cell'); if (moveIce) { doMoveIce(run, d, moveIce, key); moveIce = null; } else { selCell = key; rerender(); } }; });
+        var rs = ov.querySelector('[data-resolve]'); if (rs) rs.onclick = function () { var out = ov.querySelector('#sy-out').value.trim(); resolveDecl(run, d, decl, out); };
+        var dm = ov.querySelector('[data-dismiss]'); if (dm) dm.onclick = function () { setDecl(null); };
+        var oi = ov.querySelector('#sy-out'); if (oi && prevOut) oi.value = prevOut;
+        function sysopTool(t) {
+          if (t === 'depth') { setRun({ depth: { v: Math.min(run.depth.max, run.depth.v + 1), max: run.depth.max }, beats: runBeat(run, 'Depth deepens.') }); return; }
+          if (t === 'trace') { var nv = Math.min(run.trace.max, run.trace.v + 1); setRun({ trace: { v: nv, max: run.trace.max }, beats: runBeat(run, 'Trace advances (' + nv + '/' + run.trace.max + ').') }); return; }
+          if (t === 'anb') { setRun({ beats: runBeat(run, '⚑ An All-Net Bulletin goes out.') }); raiseNetEvent('anb', run.hostName, siteRegionOf(d)); return; }
+          if (t === 'dump') { endRun('dumped'); setRun({ beats: runBeat(run, 'The runner is DUMPED.') }); return; }
+          if (!selCell) { flashTool('select a cell first'); return; }
+          var p = selCell.split(','), x = +p[0], y = +p[1], c = sgAt(d.subgrid, x, y);
+          if (t === 'scan') { var sc = Object.assign({}, run.scanned); sc[selCell] = true; setRun({ scanned: sc, beats: runBeat(run, 'Cell ' + selCell + ' scanned.') }); return; }
+          if (t === 'revice') { if (c && c.kind === 'ice') { var rv = Object.assign({}, run.reveal); rv[c.ref] = true; var ic = iceOf(d, c.ref); setRun({ reveal: rv, beats: runBeat(run, (ic ? ic.kind : 'ICE') + ' reveals itself.') }); } else flashTool('no ICE on that cell'); return; }
+          if (t === 'moveice') { if (c && c.kind === 'ice' && iceOf(d, c.ref) && iceOf(d, c.ref).mobile) { moveIce = c.ref; rerender(); } else flashTool('pick a mobile ICE (⟳)'); return; }
+        }
+      }).catch(function () {});
+    }
+    unsub = camp() && camp().onOverview ? camp().onOverview(function () { rerender(); }) : null;
+    rerender();
+  }
+  var _flashT2 = null;
+  function flashTool(msg) { var old = document.getElementById('net-flash'); if (old) old.remove(); var el = eln('div', 'net-flash'); el.id = 'net-flash'; el.textContent = msg; document.body.appendChild(el); clearTimeout(_flashT2); _flashT2 = setTimeout(function () { el.remove(); }, 1500); }
+  function nextRound(run, d) { var c = camp(); var runnerActions = 1; if (run.runnerSheetId && c && c.getSheet) { var s = c.getSheet(run.runnerSheetId); runnerActions = 1 + deckSpeed(s && s.json); } setRun({ round: run.round + 1, actionsLeft: { runner: runnerActions, fort: NetModel.fortActions(d) }, beats: runBeat(run, 'Round ' + (run.round + 1) + '.') }); if (c && c.combatMeta && c.combatMeta() && c.combatMeta().active && c.setCombatMeta) { var m = c.combatMeta(); c.setCombatMeta(Object.assign({}, m, { round: (m.round || 1) + 1 })); } }
+  function doMoveIce(run, d, iceId, key) { var ic = iceOf(d, iceId); if (!ic) return; var p = key.split(','), x = +p[0], y = +p[1]; if (ic.pos) sgSet(d.subgrid, ic.pos.x, ic.pos.y, 'empty'); ic.pos = { x: x, y: y }; sgSet(d.subgrid, x, y, 'ice', ic.id); Store.resolve({ type: 'site', id: run.hostId }).then(function (h) { if (h) { h.json.datafort = d; Store.put(h.ref, h.json).catch(function () {}); } }); setRun({ beats: runBeat(run, ic.kind + ' prowls to ' + key + '.') }); }
+  function resolveDecl(run, d, decl, out) { var runnerLeft = Math.max(0, (run.actionsLeft.runner || 1) - 1); var patch = { actionsLeft: { runner: runnerLeft, fort: run.actionsLeft.fort }, beats: runBeat(run, declSentence(decl) + (out ? ' → ' + out : ' → resolved.')) }; if (decl && decl.verb === 'move' && decl.cell) { var p = decl.cell.split(','); patch.runnerPos = { x: +p[0], y: +p[1] }; var sc = Object.assign({}, run.scanned); sc[decl.cell] = true; patch.scanned = sc; } setRun(patch); setDecl(null); }
+  function doDispatch(run, d) { var token = (run.runnerSheetId && netTokens()[run.runnerSheetId]) || '—'; var sug = NetCast.dispatchSuggestion({ datafort: d, tier: d.tier }, token); setRun({ dispatch: sug, beats: runBeat(run, 'DISPATCH suggested: ' + sug.force + ' → ' + sug.district) }); if (br().logSession) br().logSession('⚑ Dispatch: ' + sug.force + ' at ' + sug.district + ' — GM adjudicates.'); if (window.UI) UI.modal({ title: 'Dispatch — trace full', body: '<p>The fort’s owner sends <b>' + esc(sug.force) + '</b> to the runner’s physical position (<b>' + esc(sug.district) + '</b>).</p><p class="dt-hint">You adjudicate and narrate the scene — open combat in the combat section when they arrive.</p>', actions: [{ label: 'OK', kind: 'primary' }] }); }
+  function siteRegionOf(d) { return ''; }
+  function raiseNetEvent(type, subject, region) { var c = camp(); if (!c || !c.setOverview) return; var o = c.getOverview() || {}; var ev = (o.netEvents || []).concat([{ id: uid('nev'), type: type, subject: subject, region: region, when: netClock(), public: true }]).slice(-80); c.setOverview({ netEvents: ev }); }
+
+  /* ⑤ RUN board — the player's working view (masked by reveal/scan). */
+  var _runBoardOv = null, _runBoardSel = null, _runBoardProg = null;
+  function openRunBoard() {
+    if (_runBoardOv) return;
+    var ov = runOverlay('net-board'); _runBoardOv = ov; wireHover(); var unsub = null;
+    function done() { if (unsub) { try { unsub(); } catch (e) {} } ov.remove(); _runBoardOv = null; _runBoardSel = null; _runBoardProg = null; }
+    function rerender() {
+      var run = getRun();
+      if (!run || run.status !== 'active' || run.runnerSheetId !== mySheetId()) { done(); return; }
+      Store.resolve({ type: 'site', id: run.hostId }).then(function (hit) {
+        var d = hit ? NetModel.ensure(hit.json) : NetModel.defFort(1);
+        var sheet = (camp() && camp().getSheet && camp().getSheet(run.runnerSheetId) || {}).json || {};
+        var progs = runnerPrograms(sheet), decl = getDecl();
+        ov.innerHTML =
+          '<div class="net-run net-run-pl">' +
+            '<div class="net-run-top"><span class="net-run-t">RUN — ' + esc(run.hostName || 'target') + '</span><span class="net-run-rd">round ' + run.round + ' · ' + (run.actionsLeft.runner || 0) + ' action(s)</span><span class="net-run-sp"></span><button class="net-fp-x" data-close title="Jack out view">✕</button></div>' +
+            '<div class="net-run-body">' +
+              '<div class="net-run-left"><div class="net-run-h">Software</div>' + progs.map(function (p, i) { return '<button class="net-prog' + (_runBoardProg === i ? ' on' : '') + '" data-prog="' + i + '" title="' + esc(p.effect || '') + '"><span class="net-prog-n">' + esc(p.name) + '</span><span class="net-prog-m">' + esc((p.kw || []).join(' ')) + ' · STR ' + (p.str || 0) + ' · ' + (p.mu || 0) + 'MU</span></button>'; }).join('') + '</div>' +
+              '<div class="net-run-mid"><div class="net-run-h">' + (_runBoardSel ? 'Cell ' + _runBoardSel : 'The grid — scan reveals it') + '</div>' + runGridHtml(run, d, true) + '</div>' +
+              '<div class="net-run-right">' + gaugeHtml('DEPTH', run.depth, 'net-g-depth') + gaugeHtml('TRACE → body', run.trace, 'net-g-trace') +
+                '<div class="net-run-h">Declare</div>' + (decl ? '<div class="net-decl"><div class="net-decl-t">' + esc(declSentence(decl)) + '</div><div class="net-fp-diffl">waiting for the sysop…</div></div>' : declPad()) +
+                '<div class="net-run-h">Beats</div><div class="net-beats">' + (run.beats || []).slice(-8).reverse().map(function (b) { return '<div class="net-beat">' + esc(b.text) + '</div>'; }).join('') + '</div>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+        ov.querySelector('[data-close]').onclick = done;
+        ov.querySelectorAll('[data-prog]').forEach(function (b) { b.onclick = function () { _runBoardProg = +b.getAttribute('data-prog'); rerender(); }; });
+        ov.querySelectorAll('[data-cell]').forEach(function (cell) { cell.onclick = function () { _runBoardSel = cell.getAttribute('data-cell'); rerender(); }; });
+        var mv = ov.querySelector('[data-decl-move]'); if (mv) mv.onclick = function () { if (!_runBoardSel) return flashTool('pick a cell'); setDecl({ by: run.runnerSheetId, verb: 'move', cell: _runBoardSel, ts: Date.now() }); };
+        var dp = ov.querySelector('[data-decl-deploy]'); if (dp) dp.onclick = function () { if (_runBoardProg == null) return flashTool('pick a program'); if (!_runBoardSel) return flashTool('pick a target cell'); var p = progs[_runBoardProg]; setDecl({ by: run.runnerSheetId, verb: 'deploy', program: p.name, kw: p.kw, cell: _runBoardSel, ts: Date.now() }); };
+        var rd = ov.querySelector('[data-decl-read]'); if (rd) rd.onclick = function () { if (!_runBoardSel) return flashTool('pick a cell'); setDecl({ by: run.runnerSheetId, verb: 'read', cell: _runBoardSel, ts: Date.now() }); };
+        var jo = ov.querySelector('[data-decl-jackout]'); if (jo) jo.onclick = function () { setDecl({ by: run.runnerSheetId, verb: 'jackout', ts: Date.now() }); };
+        function declPad() { return '<div class="net-declpad"><button class="net-mini" data-decl-deploy>Deploy program → cell</button><button class="net-mini" data-decl-move>Move to cell (5)</button><button class="net-mini" data-decl-read>Read file</button><button class="net-mini" data-decl-jackout>Jack out</button></div>'; }
+      }).catch(function () {});
+    }
+    unsub = camp() && camp().onOverview ? camp().onOverview(function () { rerender(); }) : null;
+    rerender();
+  }
+  function declSentence(decl) { if (!decl) return ''; var who = ''; if (decl.verb === 'deploy') return 'Deploy ' + (decl.program || 'program') + ' on ' + (decl.cell || '?'); if (decl.verb === 'move') return 'Move to ' + (decl.cell || '?'); if (decl.verb === 'read') return 'Read the file at ' + (decl.cell || '?'); if (decl.verb === 'jackout') return 'Attempt to jack out'; return decl.verb || 'action'; }
+
+  /* ⑥ CAST — a stripped view pushed to the shared screen (two gauges + last beat). */
+  function castRun(run, d) {
+    var last = (run.beats || []).slice(-1)[0];
+    var txt = (run.hostName || 'FORT').toUpperCase() + ' — ' + (run.runnerName || 'runner') + '\n\nDEPTH ' + run.depth.v + '/' + run.depth.max + '   ·   TRACE ' + run.trace.v + '/' + run.trace.max + '\n\n' + (last ? '“' + last.text + '”' : '');
+    NetCast.reveal({ kind: 'event', title: 'NETRUN', blocks: [{ type: 'text', body: txt }] });
+    if (br().logSession) br().logSession('⑥ Cast the run to the table.');
+  }
+
+  // The player's board auto-opens when the GM jacks them in (called from ensureRuntime).
+  function maybeOpenPlayerRun() {
+    if (!isPlayer()) return; var run = getRun();
+    if (run && run.status === 'active' && run.runnerSheetId === mySheetId()) { if (!_runBoardOv) openRunBoard(); }
+    else if (_runBoardOv && (!run || run.status !== 'active')) { /* board self-closes on rerender */ }
+  }
+
+  // Shared run-grid renderer. masked=true → player fog: unscanned cells are dim,
+  // ICE identity hidden until revealed. (Flat dim wash, not a gradient — charter.)
+  function runGridHtml(run, d, masked) {
+    var sg = d.subgrid, w = sg.w || 12, h = sg.h || 12, idx = sgLabelIndex(sg), scanned = run.scanned || {}, reveal = run.reveal || {}, pos = run.runnerPos, cells = '';
+    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
+      var c = sgAt(sg, x, y), key = x + ',' + y, isPos = pos && pos.x === x && pos.y === y, seen = !masked || scanned[key], cls = 'net-rg-c', inner = '', hvx = '';
+      if (!seen) { cls += ' net-rg-fog'; hvx = hv('unscanned — the sysop reveals it'); }
+      else if (c) {
+        var ident = true;
+        if (c.kind === 'ice') { ident = !masked || reveal[c.ref]; var ic = iceOf(d, c.ref); cls += ' net-rg-ice' + (ident && ic && ic.blackIce ? ' net-rg-black' : ''); inner = cellInnerHtml('ice', idx[key], { ident: ident }); hvx = hv(ident && ic ? ('<b>☠ ' + esc(ic.kind) + (ic.blackIce ? ' — Black ICE' : '') + ' · S' + ic.str + '</b><br>' + esc(ic.class) + (ic.mobile ? '<br>⟳ mobile — patrols, gives chase' : '')) : '<b>☠ ICE</b><br>unidentified'); }
+        else { cls += ' net-rg-' + c.kind; inner = cellInnerHtml(c.kind, idx[key], {}); hvx = hv(c.kind === 'core' ? '<b>▲ CPU / core</b><br>Black Ops — the prize' : c.kind === 'node' ? '<b>▢ Node ' + (idx[key] || '') + '</b>' : c.kind === 'gate' ? '<b>⊗ Code gate</b>' : c.kind === 'file' ? '<b>☰ File</b>' : c.kind === 'wall' ? '<b>█ Data wall</b>' : c.kind === 'remote' ? '<b>⊡ Remote</b>' : ''); }
+      }
+      if (isPos) { cls += ' net-rg-pos'; inner += '<span class="net-rg-run">◉</span>'; }
+      cells += '<button class="' + cls + '" data-cell="' + key + '"' + hvx + '>' + inner + '</button>';
+    }
+    return '<div class="net-grid-field" style="--gf-cx:32px;--gf-cy:32px;--gf-px:96px;--gf-py:96px"><div class="net-rg" style="grid-template-columns:repeat(' + w + ',1fr)">' + cells + '</div></div>';
+  }
+
   window.WebSection = {
     renderHome: renderHome, renderEditor: renderEditor, renderBrowser: renderBrowser, renderHosts: renderHosts,
     renderSite: renderSite, renderSiteResolved: renderSiteResolved, blockRegistry: blockRegistry, themeCss: themeCss, blankSite: blankSite,
+    renderAtlas: renderAtlas, openFortEditor: openFortEditor, newAutonomousFort: newAutonomousFort,
   };
 })();
