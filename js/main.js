@@ -4783,12 +4783,14 @@ var _netDragId = null;
 
 function _nr() {
   if (!CS.netrunner) CS.netrunner = { mode:'vanilla', deckId:null, deckPhoto:'', deckCustomOptions:[], programs:[], quickhacks:[], assets:[] };
-  // Shared sheet-side normalizer (net-interface-contract §2/§5) — the single source of truth.
-  // Adds cs.netrunner.deck + .access + .programs. DORMANT until net-model.js lands on main + is
-  // script-tagged in cs.html; falls back to the local defaults below so cs.html still boots today.
-  if (window.NetModel && NetModel.ensureNetrunner) NetModel.ensureNetrunner(CS);
+  // Shared sheet-side normalizer (net-interface-contract §2/§5) = single source of truth: adds
+  // cs.netrunner.deck + .access + .programs, then seeds the starter loadout. Scoped to netrunners
+  // so non-runners aren't handed a default deck + kit (the deck/programs UI shows for everyone).
+  if (_isNetrunner() && window.NetModel && NetModel.ensureNetrunner) {
+    NetModel.ensureNetrunner(CS);
+    _netSeedPreset(CS.netrunner);
+  }
   if (!Array.isArray(CS.netrunner.assets)) CS.netrunner.assets = [];   // ROLES-only field (net-assets ⑪)
-  _netSeedPreset(CS.netrunner);
   return CS.netrunner;
 }
 /* Seed the v1 starter loadout so the grimoire doesn't start empty (net-progress-audit §ROLES).
