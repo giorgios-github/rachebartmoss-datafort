@@ -4834,6 +4834,7 @@ function _loadedList() {
    computation until net-model.js lands + is script-tagged (keeps today's behavior identical). */
 function _deckStats() {
   var nr = _nr(); var rec = _activeDeckRecord();
+  if (!rec && !(nr.deck && typeof nr.deck === 'object')) return { memoryMU: 0, loadedMu: 0, freeMu: 0 };  // no deck at all
   if (window.NetModel && NetModel.deckStats) {
     var st = NetModel.deckStats({ deck: nr.deck, deckId: nr.deckId, interface: nr.interface, programs: _loadedList() }, rec);
     var bonus = 0; (nr.deckCustomOptions || []).forEach(function(o){ if (o.mods && o.mods.mu) bonus += o.mods.mu; });  // ROLES-only hardware-option MU
@@ -4858,8 +4859,7 @@ function _progSigil(p) {
 /* Clear, table-facing effect line — description of what the program DOES (never a formula). */
 function _progEffect(p) { return (p && (p.effect || p.description || p.notes)) || ''; }
 /* A program carried by any Demon (so it is nested, not listed/slotted on its own).
-   COORDINATION: `carries` is a ROLES field NOT yet in net-interface-contract §3 — pending DATA
-   ratification (net-progress-audit §ROLES, item 4). Kept minimal so it can be renamed on ratification. */
+   `carries` is ratified in net-interface-contract §3 (2026-07-12, ROLES form). */
 function _progCarrier(id) {
   return (_nr().programs || []).filter(function(d){ return d.demon && (d.carries||[]).indexOf(id) >= 0; })[0] || null;
 }
@@ -5697,8 +5697,11 @@ var imgCol = '<div class="net-img-wrap">' +
 
 /* ── Actions ── */
 function netToggleMode(m) { _nr().mode = m; renderNet(); }
-function netSetDeck(name) { var nr = _nr(); nr.deckId = name; nr.deckCustomOptions = []; renderNet(); }
-function netClearDeck() { var nr = _nr(); nr.deckId = null; nr.deckPhoto = ''; nr.deckCustomOptions = []; renderNet(); }
+// Pick a chassis: keep legacy nr.deckId AND make nr.deck a POINTER-ONLY object {deckId}
+// (contract §2 unification) so deckStats resolves the chassis' real MU/Speed/DataWall from the
+// catalog row — a baked object would shadow them (net-model ensureNetrunner note).
+function netSetDeck(name) { var nr = _nr(); nr.deckId = name; nr.deck = { deckId: name }; nr.deckCustomOptions = []; renderNet(); _csPersistSafe(); }
+function netClearDeck() { var nr = _nr(); nr.deckId = null; nr.deck = null; nr.deckPhoto = ''; nr.deckCustomOptions = []; renderNet(); _csPersistSafe(); }
 function netClearDeckPhoto() { _nr().deckPhoto = ''; renderNet(); }
 function netLoadDeckPhoto(e) {
   var f = e.target.files[0]; if (!f) return;
