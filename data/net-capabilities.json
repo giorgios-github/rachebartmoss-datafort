@@ -1,0 +1,22 @@
+[
+  {"keyword":"pierce",     "category":"ATTACK",     "effect":"Breaches a data wall.","params":"<wall>","anchor":"Intrusion (Hammer / Jackhammer / Worm)","source":{"doc":"net-handoff-MAIN","sec":"5"}},
+  {"keyword":"unlock",     "category":"ATTACK",     "effect":"Cracks a code gate or file lock.","params":"<gate|file>","anchor":"Decryption (Codecracker / Wizard's Book / Raffles)","source":{"doc":"net-handoff-MAIN","sec":"5"}},
+  {"keyword":"strike",     "category":"ATTACK",     "effect":"Attacks a hostile program (de-rez).","params":"<prog>","anchor":"Anti-IC (Killer / Manticore / Hydra / Dragon)","source":{"doc":"net-handoff-MAIN","sec":"5"}},
+  {"keyword":"fry",        "category":"ATTACK",     "effect":"Power surge: real HARDWARE damage (deck / CPU).","params":"<target>","anchor":"Firestarter, Poison Flatline","source":{"doc":"net-handoff-MAIN","sec":"5"}},
+  {"keyword":"corrupt",    "category":"ATTACK",     "effect":"Degrades INT / wipes memory (system OR mind).","params":"scope","anchor":"Krash / Viral / Liche / Zombie / Brainwipe","source":{"doc":"net-handoff-MAIN","sec":"5"}},
+  {"keyword":"biofeedback","category":"ATTACK",     "effect":"Sends the damage into the runner's NERVOUS SYSTEM (Black ICE). Null through a keyboard.","params":"type: stun|dmg|mind","anchor":"Anti-Personnel (Stun / Hellbolt / Sword / Brainwipe)","source":{"doc":"net-handoff-MAIN","sec":"5"}},
+  {"keyword":"cloak",      "category":"STEALTH",    "effect":"Invisible while Detection < threshold.","params":"[thr]","anchor":"Invisibility / Stealth","source":{"doc":"net-handoff-MAIN","sec":"5"}},
+  {"keyword":"spoof",      "category":"STEALTH",    "effect":"Declares itself to the sysop as a DIFFERENT program.","params":"<prog>","anchor":"Disguise (Chameleon / Cloak)","source":{"doc":"net-handoff-MAIN","sec":"5"}},
+  {"keyword":"persist",    "category":"SLEEP",      "effect":"Installs DORMANT on the target CPU.","params":"—","anchor":"Daemon","source":{"doc":"net-handoff-MAIN","sec":"5"}},
+  {"keyword":"wake_on",    "category":"SLEEP",      "effect":"Fires on a condition — wired to CAST triggers.","params":"cond: file-read|ICE-active|delay","anchor":"Daemon","source":{"doc":"net-handoff-MAIN","sec":"5"}},
+  {"keyword":"seek",       "category":"PREDATION",  "effect":"Detects a target (may be partial: 'something is here').","params":"range","anchor":"Detection (Watchdog / Bloodhound / SeeYa / Speedtrap)","source":{"doc":"net-handoff-MAIN","sec":"5"}},
+  {"keyword":"trace_meat", "category":"PREDATION",  "effect":"Runs the link back to the runner's PHYSICAL position.","params":"—","anchor":"Bloodhound / Hellhound / Pit Bull","source":{"doc":"net-handoff-MAIN","sec":"5"}},
+  {"keyword":"roam",       "category":"PREDATION",  "effect":"Mobile: patrols / pursues N cases per turn.","params":"[range]","anchor":"Hellhound (mobile)","source":{"doc":"net-handoff-MAIN","sec":"5"}},
+  {"keyword":"replicate",  "category":"PROPAGATION","effect":"Copies itself to neighbouring nodes / systems (viral).","params":"[tgt]","anchor":"Worm / Viral 15 / Replicator","source":{"doc":"net-handoff-MAIN","sec":"5"}},
+  {"keyword":"inherit",    "category":"PROPAGATION","effect":"On a target's death, absorbs its functions.","params":"—","anchor":"Doppelganger","source":{"doc":"net-handoff-MAIN","sec":"5"}},
+  {"keyword":"carry",      "category":"STRUCTURE",  "effect":"Container: carries and deploys other programs (a Demon).","params":"{ <subs> } slots","anchor":"Imp / Afreet / Succubus / Balron","source":{"doc":"net-handoff-MAIN","sec":"5"}},
+  {"keyword":"read",       "category":"STRUCTURE",  "effect":"Reads the table of contents / a reached file.","params":"<file>","anchor":"Utility","source":{"doc":"net-handoff-MAIN","sec":"5"}},
+  {"keyword":"write",      "category":"STRUCTURE",  "effect":"Edits a reached file (the point of the run: rewrite the surface).","params":"<file>","anchor":"Utility","source":{"doc":"net-handoff-MAIN","sec":"5"}},
+  {"keyword":"shield",     "category":"STRUCTURE",  "effect":"Protects the runner from an attack.","params":"[pts]","anchor":"Protection (Shield / Armor / Reflector / Flak)","source":{"doc":"net-handoff-MAIN","sec":"5"}},
+  {"keyword":"seize",      "category":"STRUCTURE",  "effect":"Takes control of a remote (camera / door / vehicle).","params":"<remote>","anchor":"Controller (Viddy Master / Hotwire / Genie / Open Sesame)","source":{"doc":"net-handoff-MAIN","sec":"5"}}
+]
