@@ -1734,7 +1734,7 @@
   Object.keys(CFG).forEach(function (k) { window.Desktop.registerApp(makeApp(CFG[k])); });
   window.Desktop.registerApp({
     id: 'regie', name: 'Control Room', glyph: '▲', vendor: 'Network 54', category: 'media',
-    os: ['*'], seed: false, desc: 'GM control room for the media layer: monitor outlets, boost or bury stories, run the narrative war, lean on journalists, settle the cycle.',
+    os: ['*'], seed: false, gmOnly: true, desc: 'GM control room for the media layer: monitor outlets, boost or bury stories, run the narrative war, lean on journalists, settle the cycle.',
     win: { w: 960, h: 660, minW: 640, minH: 440 }, singleton: true,
     onOpen: function (win, sdk) { try { regieApp(win, sdk); } catch (e) { win.body.innerHTML = '<div class="rg-root"><div class="dm-empty">Control Room error: ' + esc(String(e && e.message || e)) + '</div></div>'; } }
   });
