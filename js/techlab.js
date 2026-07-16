@@ -29,6 +29,7 @@ let view = { mode: 'section', density: 2, epistemic: 'resolved', dims: true };
 let tool = { kind: 'select', sub: null };
 let sel = null;                                      // {type:'port'|'gut'|'feat', i}
 let sketch = [];                                     // outline draft (mm)
+let rectStart = null;                                // chassis drag origin (mm)
 let hover = null;
 let drag = null;                                     // {type,i,dx,dy}
 let saveT = 0;
@@ -75,6 +76,10 @@ function gridSvg() {
 }
 function overlaySvg() {
   let s = '';
+  if (rectStart && hover) {
+    const [x1, y1] = mmToPx(rectStart[0], rectStart[1]), [x2, y2] = mmToPx(hover[0], hover[1]);
+    s += `<rect x="${Math.min(x1, x2)}" y="${Math.min(y1, y2)}" width="${Math.abs(x2 - x1)}" height="${Math.abs(y2 - y1)}" fill="rgba(17,17,17,.04)" stroke="#111" stroke-width="1.6" stroke-dasharray="5 4"/>`;
+  }
   if (sketch.length) {
     const pts = (hover ? sketch.concat([hover]) : sketch).map(p => mmToPx(p[0], p[1]));
     s += `<polyline points="${pts.map(p => p.join(',')).join(' ')}" fill="rgba(17,17,17,.04)" stroke="#111" stroke-width="1.6" stroke-dasharray="5 4"/>`;
@@ -144,7 +149,9 @@ function hitTest(x, y) {
 // ── pointer ──
 stage.addEventListener('mousedown', e => {
   const [x, y] = mmFromEvent(e);
-  if (tool.kind !== 'select' || view.mode === 'exploded') return;
+  if (view.mode === 'exploded') return;
+  if (tool.kind === 'rect') { rectStart = [x, y]; return; }
+  if (tool.kind !== 'select') return;
   const h = hitTest(x, y);
   sel = h;
   if (h) {
@@ -157,6 +164,7 @@ stage.addEventListener('mousedown', e => {
 stage.addEventListener('mousemove', e => {
   const [x, y] = mmFromEvent(e);
   hover = [x, y];
+  if (rectStart) { render(); return; }
   if (drag) {
     if (drag.type === 'gut') { const g = part.guts[drag.i]; g.at = [Math.round((x + drag.dx) * 2) / 2, Math.round((y + drag.dy) * 2) / 2]; }
     else if (drag.type === 'port') { const P = G.perimeter(part.outline); part.ports[drag.i].t = G.closestS(part.outline, x, y) / P; }
@@ -168,6 +176,21 @@ stage.addEventListener('mousemove', e => {
     render(); return;
   }
   if (sketch.length) render();
+});
+stage.addEventListener('mouseup', e => {
+  if (tool.kind === 'rect' && rectStart) {
+    const [x, y] = mmFromEvent(e);
+    const w = Math.abs(x - rectStart[0]), h = Math.abs(y - rectStart[1]);
+    if (w >= 8 && h >= 6) {
+      // corner treatment DERIVES: size → tier → radius; HANDMADE → chamfer, else fillet
+      const x0 = Math.min(x, rectStart[0]), y0 = Math.min(y, rectStart[1]);
+      const fil = R.filletFor(R.tierOf(Math.max(w, h)), part.origin);
+      const r = Math.min(fil.r, w / 4 - 0.1, h / 4 - 0.1);
+      part.outline = G.translate(fil.kind === 'chamfer' ? G.chamferRect(w, h, r) : G.roundedRect(w, h, r), x0, y0);
+      rectStart = null; setTool('select'); render(); return;
+    }
+    rectStart = null; render();
+  }
 });
 window.addEventListener('mouseup', () => { if (drag) { drag = null; render(); } });
 stage.addEventListener('click', e => {
@@ -198,7 +221,7 @@ stage.addEventListener('dblclick', e => { e.preventDefault(); if (tool.kind === 
 window.addEventListener('keydown', e => {
   const ae = document.activeElement;
   if (ae && /INPUT|SELECT|TEXTAREA/.test(ae.tagName)) return;
-  if (e.key === 'Escape') { sketch = []; sel = null; setTool('select'); return; }
+  if (e.key === 'Escape') { sketch = []; rectStart = null; sel = null; setTool('select'); return; }
   if (e.key === 'Enter' && tool.kind === 'outline' && sketch.length >= 3) return commitSketch();
   if ((e.key === 'Delete' || e.key === 'Backspace') && sel) {
     if (sel.type === 'port') part.ports.splice(sel.i, 1);
@@ -229,6 +252,7 @@ function hint() {
   const h = $('tk-hint');
   const msgs = {
     select: 'click = select · drag = move (guts, controls; ports slide the edge) · Del = remove',
+    rect: 'drag = chassis — corner treatment derives from size + origin',
     outline: 'click = vertex · click 1st / Enter = close · Esc = cancel',
     port: `click the edge → drop a ${tool.sub || ''} port (snaps to a flat seat)`,
     gut: `click inside → seat a ${tool.sub || ''}`,
@@ -243,6 +267,7 @@ function renderTools() {
   t.append(el('div', { class: 'tk-sect' }, 'tool'));
   t.append(btn('select / move', tool.kind === 'select', () => setTool('select')));
   t.append(el('div', { class: 'tk-sect' }, 'shell'));
+  t.append(btn('▭ drag chassis', tool.kind === 'rect', () => { rectStart = null; setTool('rect'); }));
   t.append(btn('draw outline', tool.kind === 'outline', () => { sketch = []; setTool('outline'); }));
   t.append(btn('▭ rounded box', false, () => stockOutline('rrect')));
   t.append(btn('◇ chamfer box', false, () => stockOutline('chamfer')));
