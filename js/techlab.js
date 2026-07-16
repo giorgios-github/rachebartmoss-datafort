@@ -4,7 +4,7 @@
 import * as G from './tech/geom.js';
 import * as R from './tech/rules.js';
 import * as M from './tech/model.js';
-import { renderModule, standalone, placePorts, placePerimFeats } from './tech/module.js';
+import { renderModule, standalone, placePorts, placePerimFeats, binThumb } from './tech/module.js';
 import { defsBlock } from './tech/law.js';
 
 const $ = id => document.getElementById(id);
@@ -248,12 +248,20 @@ function renderTools() {
   t.append(btn('◇ chamfer box', false, () => stockOutline('chamfer')));
   t.append(btn('⬭ pill', false, () => stockOutline('pill')));
   t.append(btn('~ organic', false, () => stockOutline('blob')));
-  t.append(el('div', { class: 'tk-sect' }, 'ports'));
-  for (const k of M.PORT_KINDS) t.append(btn(`⊕ ${k}`, tool.kind === 'port' && tool.sub === k, () => setTool('port', k)));
-  t.append(el('div', { class: 'tk-sect' }, 'controls'));
-  for (const k of M.FEAT_KINDS) t.append(btn(`${R.FEAT[k].perim ? '⌖' : '▣'} ${k}`, tool.kind === 'feat' && tool.sub === k, () => setTool('feat', k)));
-  t.append(el('div', { class: 'tk-sect' }, 'guts'));
-  for (const k of M.GUT_KINDS) t.append(btn(`▤ ${k}`, tool.kind === 'gut' && tool.sub === k, () => setTool('gut', k)));
+  // parts BINS — trays you grab drawn parts from, not word-lists
+  const bin = (title, cat, kinds, toolKind) => {
+    t.append(el('div', { class: 'tk-sect' }, title));
+    const tray = el('div', { class: 'tk-bin' });
+    for (const k of kinds) {
+      const cell = el('button', { class: 'tk-cell' + (tool.kind === toolKind && tool.sub === k ? ' on' : ''), title: k, onclick: () => setTool(toolKind, k) });
+      cell.innerHTML = binThumb(cat, k, 42) + `<span>${k}</span>`;
+      tray.append(cell);
+    }
+    t.append(tray);
+  };
+  bin('bin · ports', 'port', M.PORT_KINDS, 'port');
+  bin('bin · controls', 'feat', M.FEAT_KINDS, 'feat');
+  bin('bin · guts', 'gut', M.GUT_KINDS, 'gut');
 }
 
 // ── header (view controls + exports) ──

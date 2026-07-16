@@ -418,6 +418,9 @@ export function renderModule(part, view = {}) {
     }
     return null;
   };
+  // loom routing — drafting convention, not spaghetti: one axis run + one 45° bend
+  // (PCB-trace manner), bend side alternating per lead, solder pad at the organ,
+  // pin at the port/control, lacing clips COUNTED along the longest leg.
   const drawWires = () => {
     if (dens < 2) return '';
     const out = [];
@@ -425,9 +428,27 @@ export function renderModule(part, view = {}) {
       const A = wirePoint(w2[0]), B = wirePoint(w2[1]);
       if (!A || !B) return;
       const [x1, y1] = mapP(A[0], A[1]), [x2, y2] = mapP(B[0], B[1]);
-      const sag = 4 + 5 * G.hash(G.shash(part.id) + 23, wi);
-      out.push(`<path d="M${N(x1)},${N(y1)} Q${N((x1 + x2) / 2)},${N((y1 + y2) / 2 - sag)} ${N(x2)},${N(y2)}" fill="none" stroke="#111" stroke-width="${R.W.mid}"/>`);
-      out.push(circ(x1, y1, 1.4, 0, '#111') + circ(x2, y2, 1.4, 0, '#111'));
+      const dx = x2 - x1, dy = y2 - y1;
+      const dd = Math.min(Math.abs(dx), Math.abs(dy));
+      const sx = Math.sign(dx) || 1, sy = Math.sign(dy) || 1;
+      let m1;
+      if (wi % 2 === 0) m1 = [x1 + sx * dd, y1 + sy * dd];                       // diagonal first
+      else if (Math.abs(dx) >= Math.abs(dy)) m1 = [x2 - sx * dd, y1];            // run first
+      else m1 = [x1, y2 - sy * dd];
+      out.push(`<path d="M${N(x1)},${N(y1)} L${N(m1[0])},${N(m1[1])} L${N(x2)},${N(y2)}" fill="none" stroke="#111" stroke-width="${R.W.mid}"/>`);
+      out.push(rect(x1 - 1.7, y1 - 1.7, 3.4, 3.4, 0.9, '#fff'));                 // solder pad
+      out.push(circ(x2, y2, 1.5, 0.9, '#fff') + circ(x2, y2, 0.6, 0, '#111'));   // pin
+      if (dens >= 3) {
+        const long = Math.hypot(m1[0] - x1, m1[1] - y1) > Math.hypot(x2 - m1[0], y2 - m1[1])
+          ? [x1, y1, m1[0], m1[1]] : [m1[0], m1[1], x2, y2];
+        const L2 = Math.hypot(long[2] - long[0], long[3] - long[1]);
+        const nC = Math.floor(L2 / (14 * k));                                     // clip pitch 14 mm — COUNTED
+        const ux = (long[2] - long[0]) / (L2 || 1), uy = (long[3] - long[1]) / (L2 || 1);
+        for (let c = 1; c <= nC; c++) {
+          const cx2 = long[0] + ux * (L2 * c / (nC + 1)), cy2 = long[1] + uy * (L2 * c / (nC + 1));
+          out.push(line(cx2 - uy * 2.4, cy2 + ux * 2.4, cx2 + uy * 2.4, cy2 - ux * 2.4, 1));
+        }
+      }
     });
     return out.join('');
   };
@@ -527,4 +548,36 @@ export function renderModule(part, view = {}) {
 
 export function standalone(fig) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${N(fig.w)}" height="${N(fig.h)}" viewBox="0 0 ${N(fig.w)} ${N(fig.h)}" font-family="monospace"><rect width="100%" height="100%" fill="#fff"/>${defsBlock()}${fig.svg}</svg>`;
+}
+
+// ---- bin thumbnails: the palette is a parts TRAY — each cell shows the actual
+// drawn part, not a word. Same glyph code as the drawing (one source of truth).
+export function binThumb(cat, kind, sizePx = 40) {
+  let wMm, hMm;
+  if (cat === 'gut') { const d = R.GUT[kind] || R.GUT.board; wMm = d.w; hMm = d.h; }
+  else if (cat === 'port') { wMm = 17; hMm = 15; }
+  else {
+    const f = R.FEAT[kind] || R.FEAT.button;
+    if (kind === 'screen') { wMm = 16; hMm = 10; }
+    else if (kind === 'keypad') { wMm = 3 * R.FEAT.keypad.pitch + 2; hMm = 4 * R.FEAT.keypad.pitch + 2; }
+    else if (kind === 'antenna') { wMm = 13; hMm = 22; }
+    else if (kind === 'rail') { wMm = R.FEAT.rail.w + 2; hMm = 8; }
+    else { wMm = 2 * (f.r || 4) + 4; hMm = wMm; }
+  }
+  const pad = 4;
+  const k2 = (sizePx - 2 * pad) / Math.max(wMm, hMm);
+  const ox = (sizePx - wMm * k2) / 2, oy = (sizePx - hMm * k2) / 2;
+  const mapP = (x, y) => [ox + x * k2, oy + y * k2];
+  const fake = { id: 'bin' };
+  const S = [];
+  if (cat === 'gut') S.push(gutGlyph({ k: kind, at: [0, 0], w: wMm, h: hMm }, fake, mapP, k2, kind === 'module' ? 1 : 2, false));
+  else if (cat === 'port') {
+    const spec = R.PORT[kind] || R.PORT.data;
+    S.push(`<g transform="translate(${N(ox)},${N(sizePx / 2)})">${portGlyph({ k: kind, keep: spec.keep }, k2, 1)}</g>`);
+  } else if (kind === 'antenna') S.push(antennaGlyph({ k: kind, i: 0, x: wMm / 2, y: hMm - 1.5, nx: 0, ny: -1, len: 9 }, fake, mapP, k2, 2));
+  else if (kind === 'rail') S.push(railGlyph({ k: kind, x: wMm / 2, y: 1.5, nx: 0, ny: -1 }, mapP, k2, 2));
+  else if (kind === 'screen') { const [fx, fy] = mapP(0, 0); S.push(faceFeatGlyph({ k: kind, w: 16, h: 10 }, fx, fy, k2, 2, false)); }
+  else if (kind === 'keypad') { const [fx, fy] = mapP(1, 1); S.push(faceFeatGlyph({ k: kind, rows: 4, cols: 3 }, fx, fy, k2, 2, false)); }
+  else { const [fx, fy] = mapP(wMm / 2, hMm / 2); S.push(faceFeatGlyph({ k: kind }, fx, fy, k2, 2, false)); }
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${sizePx}" height="${sizePx}" viewBox="0 0 ${sizePx} ${sizePx}">${defsBlock()}${S.join('')}</svg>`;
 }
