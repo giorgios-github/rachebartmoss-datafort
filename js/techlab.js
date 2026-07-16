@@ -322,9 +322,13 @@ function renderSide() {
   const thumb = renderModule(part, { mode: 'exterior', lod: 'thumb', density: 2, fitPx: 250 });
   const B = M.budgets(part);
   const fiche = el('div', { class: 'tk-fiche' });
+  const lore = [];
+  part.guts.forEach(g => { if (g.donor) lore.push(`${g.k} — ${g.donor}`); if (g.push) lore.push(`${g.k} pushed +${g.push} past rating`); });
+  (part.events || []).slice(0, 3).forEach(e2 => lore.push(e2));
   fiche.innerHTML = `<svg viewBox="0 0 ${thumb.w} ${thumb.h}" style="background:#fff">${defsBlock()}${thumb.svg}</svg>` +
     `<div class="tk-fiche-cap"><b>${escph(part.label)}</b> · ${part.origin}${part.sealed ? ' · SEALED' : ''}<br>` +
-    `T${B.tier} · wall ${B.wall} · ${escph(thumb.meta.mat)}<br>${escph(part.id)}</div>`;
+    `T${B.tier} · wall ${B.wall} · ${escph(thumb.meta.mat)}<br>${escph(part.id)}` +
+    (lore.length ? `<br><i style="color:#555">${lore.map(escph).join('<br>')}</i>` : '') + `</div>`;
   s.append(fiche);
 
   // identity
@@ -339,12 +343,27 @@ function renderSide() {
   s.append(sealedRow);
   s.append(field('heat', el('input', { type: 'number', min: '0', max: '9', value: part.heat, oninput: e => { part.heat = Math.max(0, +e.target.value || 0); render(); } })));
   s.append(field('screws', el('input', { type: 'number', min: '0', max: '12', value: part.fmax || 0, title: '0 = rule decides', oninput: e => { part.fmax = Math.max(0, +e.target.value || 0); render(); } })));
+  const ev = el('textarea', { class: 'tk-json', rows: '2', placeholder: 'history — one event per line ("survived the Arasaka raid EMP")', spellcheck: 'false' });
+  ev.value = (part.events || []).join('\n');
+  ev.addEventListener('input', () => { part.events = ev.value.split('\n').map(x => x.trim()).filter(Boolean); autosave(); });
+  s.append(ev);
 
   // budgets
   const chips = el('div', { class: 'tk-budgets' });
   chips.append(chip(`${B.massG} g`), chip(`space ${B.spacePct}%`, B.spacePct > 100),
     chip(`pwr ${B.draw}/${B.supply}`, !B.powerOk), chip(`vents ${thumb.meta.vents}/${B.ventNeed}`, B.ventNeed > thumb.meta.vents), chip(`DC ${B.dc}`));
+  if (B.push) chips.append(chip(`instability +${B.instability}`, B.instability >= 3));
   s.append(chips);
+
+  // selected part — the transgression + lineage controls
+  if (sel?.type === 'gut' && part.guts[sel.i]) {
+    const g = part.guts[sel.i];
+    s.append(el('h3', { class: 'tk-h' }, `selected · ${g.k}`));
+    const pushSel = el('select', { onchange: e => { const v = +e.target.value; if (v) g.push = v; else delete g.push; render(); }, style: 'font-family:var(--mono);font-size:12px;background:var(--bg);color:var(--text);border:1px solid var(--border);padding:2px' });
+    for (const v of [0, 1, 2, 3]) pushSel.append(el('option', { value: String(v), ...(v === (g.push || 0) ? { selected: '' } : {}) }, v ? `+${v} overdrive` : 'stock'));
+    s.append(field('push', pushSel));
+    s.append(field('donor', el('input', { type: 'text', value: g.donor || '', placeholder: 'pulled from…', oninput: e => { const v = e.target.value.trim(); if (v) g.donor = v; else delete g.donor; autosave(); } })));
+  }
 
   // contents
   s.append(el('h3', { class: 'tk-h' }, `contents · ${B.nParts} parts`));
@@ -389,7 +408,7 @@ function renderSide() {
 
   // the record — one line of data IS the object
   s.append(el('h3', { class: 'tk-h' }, 'record (one line)'));
-  const ta = el('textarea', { class: 'tk-json', rows: '4', spellcheck: 'false' });
+  const ta = el('textarea', { class: 'tk-json tk-record', rows: '4', spellcheck: 'false' });
   ta.value = M.toJSON(part);
   s.append(ta);
   const jb = el('div', { style: 'display:flex;gap:4px;margin-top:4px' });

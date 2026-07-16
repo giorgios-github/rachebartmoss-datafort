@@ -9,7 +9,7 @@
 import * as G from './geom.js';
 import * as R from './rules.js';
 import { defsBlock } from './law.js';
-import { autoWires } from './model.js';
+import { autoWires, effHeat } from './model.js';
 
 const N = G.fmt;
 const line = (x1, y1, x2, y2, w, dash) => `<line x1="${N(x1)}" y1="${N(y1)}" x2="${N(x2)}" y2="${N(y2)}" stroke="#111" stroke-width="${w}"${dash ? ` stroke-dasharray="${dash}"` : ''}/>`;
@@ -308,6 +308,23 @@ function gutGlyph(g, part, mapP, k, dens, ghost) {
     out.push(rect(x - 1.4 * k, y + h / 2 - 1.2 * k, 1.4 * k, 2.4 * k, R.W.mid, '#fff'));      // its own port stub
     if (dens >= 2) out.push(txt(x + w / 2, y + h + 9, (g.label || 'SEALED').toUpperCase(), 8, 'middle'));
   }
+  // PUSHED past the rated envelope — the transgression is drawn, never badged:
+  // hot-wire bypass jumper over the governor pads + reinforcement straps (COUNTED
+  // = overdrive level) + the maker's rating stencil struck through.
+  if (g.push) {
+    const jx1 = x + w - 2.2 * k, jx0 = x + w - 5.4 * k, jy = y - 0.8 * k;
+    out.push(circ(jx0, jy, 0.8, 0.8, '#fff') + circ(jx1, jy, 0.8, 0.8, '#fff'));
+    out.push(`<path d="M${N(jx0)},${N(jy)} Q${N((jx0 + jx1) / 2)},${N(jy - 3.5 * k)} ${N(jx1)},${N(jy)}" fill="none" stroke="#111" stroke-width="1"/>`);
+    for (let j = 0; j < g.push; j++) {
+      const sxp = x + w * (0.18 + 0.16 * j);
+      out.push(rect(sxp, y - 1.2, 2.2 * k, h + 2.4, 0.8, 'url(#h45)'));
+    }
+    if (dens >= 2 && w > 22 * k / 2) {
+      const tx0 = x + w * 0.66, ty0 = y + h + 8;
+      out.push(txt(tx0, ty0, 'RATED', 7, 'middle'));
+      out.push(line(tx0 - 11, ty0 - 2.5, tx0 + 11, ty0 - 2.5, 1));                            // struck through
+    }
+  }
   return out.join('');
 }
 function gutCenterMm(g) { return [g.at[0] + g.w / 2, g.at[1] + g.h / 2]; }
@@ -349,7 +366,7 @@ export function renderModule(part, view = {}) {
   const cavRect = G.inscribedRect(inner, -2);
   const hat = R.hatchFor(part.origin), hatB = R.hatchOpp(hat);
   const vent = R.ventFor(tier);
-  const needV = R.ventCount(part.heat);
+  const needV = R.ventCount(effHeat(part));            // pushed parts run hot — the vents answer for it
   const perRow = Math.max(0, Math.floor((zone.w - 4) / vent.pitch));
   const nV = Math.min(needV, perRow * 2);
   const wires = autoWires(part);

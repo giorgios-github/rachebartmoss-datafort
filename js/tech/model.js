@@ -55,11 +55,22 @@ export function normalize(p) {
   });
   p.guts = (p.guts || []).map(x => {
     const d = R.GUT[x.k] || R.GUT.board;
-    return { k: x.k in R.GUT ? x.k : 'board', at: x.at || [0, 0], w: x.w || d.w, h: x.h || d.h, ...(x.label ? { label: x.label } : {}) };
+    return {
+      k: x.k in R.GUT ? x.k : 'board', at: x.at || [0, 0], w: x.w || d.w, h: x.h || d.h,
+      ...(x.label ? { label: x.label } : {}),
+      ...(x.push ? { push: Math.max(0, Math.min(3, x.push | 0)) } : {}),   // OVERDRIVE: 0..3 beyond the rated envelope
+      ...(x.donor ? { donor: String(x.donor) } : {}),                      // LINEAGE: where this part lived before
+    };
   });
+  p.events = Array.isArray(p.events) ? p.events.filter(s => typeof s === 'string' && s) : [];  // the object's history
   if (!Array.isArray(p.wires)) p.wires = null;
   return p;
 }
+
+// ---- transgression: pushing parts past their envelope. Gains rates, buys
+// instability, and generates heat the vents must answer for.
+export function pushSum(p) { return p.guts.reduce((s, g) => s + (g.push || 0), 0); }
+export function effHeat(p) { return (p.heat || 0) + 0.7 * pushSum(p); }
 
 // ---- internal logic: which lead goes where. Explicit part.wires wins; otherwise
 // derive a sane loom — cell feeds board, ports land on their natural organ,
@@ -100,14 +111,16 @@ export function budgets(p) {
   let gutsG = 0, supply = 0, draw = 0;
   for (const g of p.guts) {
     gutsG += g.w * g.h * (GUT_RHO[g.k] || 3) * depth / 10 / 1000;
-    if (g.k === 'cell') supply += g.w * g.h * SUPPLY_PER_CELL_MM2;
-    else if (DRAW[g.k]) draw += DRAW[g.k];
+    const boost = 1 + 0.35 * (g.push || 0);                               // pushed = more juice, more thirst
+    if (g.k === 'cell') supply += g.w * g.h * SUPPLY_PER_CELL_MM2 * boost;
+    else if (DRAW[g.k]) draw += DRAW[g.k] * (1 + 0.3 * (g.push || 0));
   }
   for (const f of p.feats) draw += DRAW[f.k] || 0;
   const inner = G.offsetInward(p.outline, wall);
   const cavArea = Math.max(1, G.polyArea(inner));
   const used = p.guts.reduce((s, g) => s + g.w * g.h, 0);
-  const ventNeed = R.ventCount(p.heat);
+  const push = pushSum(p);
+  const ventNeed = R.ventCount(effHeat(p));
   const nParts = p.guts.length + p.ports.length + p.feats.length;
   return {
     tier, wall, depth,
@@ -117,7 +130,9 @@ export function budgets(p) {
     draw: Math.round(draw * 10) / 10,
     powerOk: supply <= 0 ? draw <= 0 : draw <= supply,
     ventNeed,
-    dc: 8 + 2 * nParts + (p.sealed ? 4 : 0),
+    push,
+    instability: push,                                                     // v1: instability = total overdrive
+    dc: 8 + 2 * nParts + (p.sealed ? 4 : 0) + 2 * push,
     nParts,
   };
 }
@@ -135,7 +150,8 @@ export function toJSON(p) {
   if (p.heat) o.heat = p.heat;
   if (p.ports.length) o.ports = p.ports.map(x => ({ k: x.k, t: Math.round(x.t * 1000) / 1000 }));
   if (p.feats.length) o.feats = p.feats.map(f => { const c = { k: f.k }; if (f.at) c.at = [r1(f.at[0]), r1(f.at[1])]; if (f.t != null) c.t = Math.round(f.t * 1000) / 1000; if (f.len) c.len = r1(f.len); if (f.w) { c.w = f.w; c.h = f.h; } if (f.rows) { c.rows = f.rows; c.cols = f.cols; } return c; });
-  if (p.guts.length) o.guts = p.guts.map(g => ({ k: g.k, at: [r1(g.at[0]), r1(g.at[1])], w: r1(g.w), h: r1(g.h), ...(g.label ? { label: g.label } : {}) }));
+  if (p.guts.length) o.guts = p.guts.map(g => ({ k: g.k, at: [r1(g.at[0]), r1(g.at[1])], w: r1(g.w), h: r1(g.h), ...(g.label ? { label: g.label } : {}), ...(g.push ? { push: g.push } : {}), ...(g.donor ? { donor: g.donor } : {}) }));
+  if (p.events && p.events.length) o.events = p.events;
   if (p.wires) o.wires = p.wires;
   if (p.fmax) o.fmax = p.fmax;
   return JSON.stringify(o);
@@ -147,6 +163,7 @@ export function fromJSON(str) {
     origin: R.ORIGINS.includes(o.origin) ? o.origin : 'HANDMADE',
     sealed: !!o.sealed, heat: o.heat || 0,
     ports: o.ports || [], feats: o.feats || [], guts: o.guts || [],
+    events: o.events || [],
     wires: o.wires || null, fmax: o.fmax || 0,
   });
 }
