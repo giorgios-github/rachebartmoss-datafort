@@ -1,0 +1,49 @@
+/* css/techlab.css — Techlab editor chrome. The DRAWING is always ink #111 on pure
+   white paper (DF-TO-000, 1-bit rule); only the chrome around it follows the theme. */
+#tk-app { display:flex; flex-direction:column; height:100vh; background:var(--bg); color:var(--text); font-size:14px; }
+
+/* header bar */
+#tk-bar { display:flex; align-items:center; gap:14px; padding:6px 12px; border-bottom:2px solid var(--border); background:var(--bg1); flex-wrap:wrap; }
+#tk-title { font-family:var(--head); font-size:17px; letter-spacing:2px; }
+#tk-title .tk-sub { font-family:var(--mono); font-size:12px; color:var(--text2); letter-spacing:0; }
+.tk-grp { display:flex; align-items:center; gap:4px; }
+.tk-right { margin-left:auto; }
+.tk-btn { font-family:var(--mono); font-size:12px; background:var(--bg); color:var(--text); border:1px solid var(--border); padding:4px 10px; cursor:pointer; }
+.tk-btn:hover { background:var(--text); color:var(--bg); }
+.tk-btn.on { background:var(--text); color:var(--bg); }
+.tk-lab { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--text2); margin:0 2px 0 8px; }
+
+/* main : tools | stage | side */
+#tk-main { flex:1; min-height:0; display:flex; }
+#tk-tools { width:148px; flex:0 0 148px; border-right:1px solid var(--border); overflow-y:auto; padding:8px 8px 20px; background:var(--bg1); }
+.tk-sect { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--text2); margin:12px 0 4px; }
+.tk-sect:first-child { margin-top:0; }
+.tk-tool { display:block; width:100%; box-sizing:border-box; text-align:left; font-family:var(--mono); font-size:12px; background:var(--bg); color:var(--text); border:1px solid var(--border); padding:4px 8px; margin-bottom:3px; cursor:pointer; }
+.tk-tool:hover { background:var(--text); color:var(--bg); }
+.tk-tool.on { background:var(--text); color:var(--bg); }
+
+#tk-stage-wrap { flex:1; min-width:0; position:relative; overflow:hidden; background:#f2f0ec; display:flex; align-items:center; justify-content:center; }
+#tk-stage { background:#fff; box-shadow:0 1px 6px rgba(0,0,0,.18); display:block; cursor:crosshair; user-select:none; touch-action:none; max-width:calc(100% - 24px); max-height:calc(100% - 24px); }
+#tk-hint { position:absolute; left:12px; bottom:8px; font-size:11px; color:#666; background:rgba(255,255,255,.85); padding:2px 8px; pointer-events:none; }
+
+/* side panel */
+#tk-side { width:300px; flex:0 0 300px; border-left:1px solid var(--border); overflow-y:auto; padding:10px; background:var(--bg1); }
+.tk-fiche { border:2px solid var(--border); background:#fff; padding:6px; margin-bottom:10px; }
+.tk-fiche svg { display:block; width:100%; height:auto; }
+.tk-fiche-cap { font-size:11px; color:#333; border-top:1px solid #ccc; margin-top:6px; padding-top:5px; font-family:var(--mono); }
+.tk-field { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+.tk-field label { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--text2); width:52px; flex:0 0 52px; }
+.tk-field input[type=text], .tk-field select, .tk-field input[type=number] { flex:1; min-width:0; font-family:var(--mono); font-size:12px; background:var(--bg); color:var(--text); border:1px solid var(--border); padding:3px 6px; }
+.tk-field input[type=number] { flex:0 0 58px; }
+.tk-budgets { display:flex; flex-wrap:wrap; gap:4px; margin:8px 0; }
+.tk-chip { font-size:11px; border:1px solid var(--border); padding:2px 7px; font-family:var(--mono); }
+.tk-chip.bad { border-color:var(--red); color:var(--red); }
+.tk-list { margin:2px 0 8px; }
+.tk-row { display:flex; align-items:center; gap:5px; font-size:12px; padding:2px 0; border-bottom:1px dotted #bbb; }
+.tk-row.sel { background:var(--text); color:var(--bg); }
+.tk-row .tk-kind { font-size:10px; text-transform:uppercase; width:56px; flex:0 0 56px; opacity:.75; }
+.tk-row input[type=number] { width:44px; font-family:var(--mono); font-size:11px; border:1px solid var(--border); background:var(--bg); color:inherit; padding:1px 3px; }
+.tk-x { cursor:pointer; border:1px solid var(--border); background:transparent; color:inherit; font-size:11px; padding:0 5px; margin-left:auto; }
+.tk-json { width:100%; box-sizing:border-box; font-family:var(--mono); font-size:10px; border:1px solid var(--border); background:var(--bg); color:var(--text); padding:4px; }
+h3.tk-h { font-family:var(--head); font-size:13px; letter-spacing:1.5px; margin:14px 0 5px; border-bottom:2px solid var(--border); padding-bottom:2px; }
+h3.tk-h:first-child { margin-top:0; }

@@ -737,6 +737,7 @@ function setCategory(panel) {
   document.querySelectorAll('.panel').forEach(function(p) { p.classList.toggle('active', p.id === panel); });
   renderSubNav(panel);
   if (panel === 'pdfs') mountSiteReader();
+  if (panel === 'tech') loadToolFrame(document.getElementById('tech'));
 }
 // Files tab → the "Établi" sourcebook reader (offline). Books from the hub's
 // local folder (/__api/books) when served by a hub, else the static pdf-src list.
@@ -772,6 +773,8 @@ function renderSubNav(panel) {
   } else if (panel === 'pdfs') {
     // The reader has its own source tabs / TOC; the sidebar is just a hint.
     sn.innerHTML = '<div class="sub-note">Sourcebooks open on the workbench. Switch books with the tabs at the top.</div>';
+  } else if (panel === 'tech') {
+    sn.innerHTML = '<div class="sub-note">Techlab — draw a module shell, seat the guts, drop ports &amp; controls. The drawing derives from the data; export it as one line of JSON or a plate SVG.</div>';
   } else if (panel === 'multiplayer') {
     sn.innerHTML = '<div class="sub-note">Local-first co-op: the GM runs a small free app, players sync on the same Wi-Fi. No cloud.</div>' +
       '<div class="sub-item" onclick="document.getElementById(\'dl-mac\').scrollIntoView({behavior:\'smooth\'})">Download the GM Hub</div>' +
