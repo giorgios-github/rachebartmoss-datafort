@@ -2,40 +2,69 @@
    Upload / paste a screenshot of any object → run it through a 1-bit press so it
    reads as a Cyberpunk 2020 sourcebook illustration (the original books did exactly
    this: high-contrast thresholded photos). Pure canvas, no server, ink #111 on
-   pure white. v1 = the image engine alone; the fiche layer comes next.
+   pure white.
 
-   The press does NOT threshold raw luminance: two different colours of equal
-   brightness would melt together. It first SEPARATES colours — k-means over RGB
-   (deterministic), clusters ranked by brightness and remapped to well-spread
-   tones, in-cluster shading kept — so the OBJECT appears. All three presses read
-   that separated channel; TRAME also inks a fine outline along region boundaries.
+   Pipeline: COLOUR SEPARATION first (deterministic k-means over RGB, clusters
+   ranked by brightness and spread over well-separated tones, labels cleaned by a
+   3×3 majority filter) — so two colours of equal brightness stay distinct and the
+   OBJECT appears. Presses read that channel through a gamma. The outline is NOT a
+   gradient filter (that inked texture noise): it is the region-boundary map —
+   crisp 1px lines exactly where two colour regions meet.
+   Precise sliders drive every stage; all deterministic.
    Exposes window.TechSection { render(tab, pane) }. */
 (function () {
   'use strict';
   var INK = 17;                       // #111
   var MAXW = 1000;                    // longest side after downscale, px
   var LS_MODE = 'bartmoss_tech_mode';
+  var LS_PAR = 'bartmoss_tech_params';
 
   var MODES = [
-    { key: 'trame', label: 'TRAME', title: 'Atkinson dither + fine outline — the sourcebook halftone' },
-    { key: 'seuil', label: 'SEUIL', title: 'Hard threshold (Otsu) on separated tones — pure silhouette' },
-    { key: 'trait', label: 'TRAIT', title: 'Sobel edges — line drawing' },
+    { key: 'trame', label: 'TRAME', title: 'Atkinson dither + region outline — the sourcebook halftone' },
+    { key: 'seuil', label: 'SEUIL', title: 'Hard threshold (Otsu + bias) on separated tones' },
+    { key: 'trait', label: 'TRAIT', title: 'Line drawing — region boundaries + strong gradients' },
+  ];
+  function defaults() {
+    return { k: 5, relief: 40, gamma: 100, bias: 0, outline: 1, fine: 88 };
+  }
+  // slider registry: [key, label, min, max, step, title]
+  var SLIDERS = [
+    ['k', 'COULEURS', 2, 8, 1, 'colour groups — how many tones the press separates'],
+    ['relief', 'RELIEF', 0, 100, 5, 'in-region shading kept (0 = flat posters)'],
+    ['gamma', 'GAMMA', 40, 250, 5, 'tone curve before the press (100 = neutral; lower = darker plate)'],
+    ['bias', 'NIVEAU', -60, 60, 2, 'SEUIL: ink more (+) or less (−) than Otsu suggests'],
+    ['outline', 'CONTOUR', 0, 3, 1, 'region-boundary line thickness in px (0 = off)'],
+    ['fine', 'FINESSE', 70, 98, 1, 'TRAIT: gradient percentile — higher = fewer, finer lines'],
   ];
 
   /* ── per-pane state (one press per tab) ── */
+  function loadParams() {
+    try {
+      var p = JSON.parse(localStorage.getItem(LS_PAR)) || {};
+      var d = defaults();
+      for (var k in d) if (typeof p[k] === 'number') d[k] = p[k];
+      return d;
+    } catch (e) { return defaults(); }
+  }
   function st(pane) {
-    if (!pane._tech) pane._tech = { gray: null, w: 0, h: 0, mode: localStorage.getItem(LS_MODE) || 'trame', name: 'untitled' };
+    if (!pane._tech) pane._tech = {
+      rgba: null, w: 0, h: 0, name: 'untitled',
+      mode: localStorage.getItem(LS_MODE) || 'trame',
+      params: loadParams(),
+      labels: null, L: null, mL: null, tone: null, _kDone: 0,
+    };
     return pane._tech;
   }
 
-  /* ── COLOUR SEPARATION: RGBA → one channel where colour differences survive.
-     k-means (K=5) in RGB, deterministic init (centroids at luminance quantiles of
-     a fixed-step sample); clusters ranked by mean luminance and spread over
-     [10..245]; each pixel = its cluster tone + damped in-cluster shading. ── */
-  function separate(d, W, H) {
-    var N = W * H, L = new Float32Array(N), i, k;
-    for (i = 0; i < N; i++) { var j = i * 4; L[i] = 0.2126 * d[j] + 0.7152 * d[j + 1] + 0.0722 * d[j + 2]; }
-    var K = 5;
+  /* ── stage 1 · COLOUR SEPARATION: k-means over RGB, deterministic ── */
+  function clusterize(s) {
+    var d = s.rgba, W = s.w, H = s.h, N = W * H, K = s.params.k, i, k;
+    var L = s.L;
+    if (!L) {
+      L = new Float32Array(N);
+      for (i = 0; i < N; i++) { var j0 = i * 4; L[i] = 0.2126 * d[j0] + 0.7152 * d[j0 + 1] + 0.0722 * d[j0 + 2]; }
+      s.L = L;
+    }
     var step = Math.max(1, Math.floor(N / 12000)), samp = [];
     for (i = 0; i < N; i += step) samp.push(i);
     var sorted = samp.slice().sort(function (a, b) { return L[a] - L[b]; });
@@ -62,36 +91,63 @@
       }
       for (k = 0; k < K; k++) if (cnt[k]) cent[k] = [sum[k][0] / cnt[k], sum[k][1] / cnt[k], sum[k][2] / cnt[k]];
     }
-    // cluster mean luminance (over the sample) → rank → spread tones
-    var mL = [], mC = [];
-    for (k = 0; k < K; k++) { mL.push(0); mC.push(0); }
-    for (i = 0; i < samp.length; i++) { var c2 = nearest(d[samp[i] * 4], d[samp[i] * 4 + 1], d[samp[i] * 4 + 2]); mL[c2] += L[samp[i]]; mC[c2]++; }
-    for (k = 0; k < K; k++) mL[k] = mC[k] ? mL[k] / mC[k] : 128;
-    var order = [0, 1, 2, 3, 4].slice(0, K).sort(function (a, b) { return mL[a] - mL[b]; });
-    var tone = new Float32Array(K);
-    for (k = 0; k < K; k++) tone[order[k]] = 10 + k * (235 / (K - 1));
-    // assign every pixel: cluster tone + damped in-cluster relief
-    var sep = new Float32Array(N);
-    for (i = 0; i < N; i++) {
-      var p2 = i * 4, c3 = nearest(d[p2], d[p2 + 1], d[p2 + 2]);
-      sep[i] = Math.max(0, Math.min(255, tone[c3] + 0.4 * (L[i] - mL[c3])));
+    // label every pixel, then clean speckle with a 3×3 majority vote (crisp regions)
+    var lab = new Uint8Array(N);
+    for (i = 0; i < N; i++) { var p2 = i * 4; lab[i] = nearest(d[p2], d[p2 + 1], d[p2 + 2]); }
+    var lab2 = new Uint8Array(N), votes = new Uint8Array(K);
+    for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) {
+      i = y * W + x;
+      if (x === 0 || y === 0 || x === W - 1 || y === H - 1) { lab2[i] = lab[i]; continue; }
+      votes.fill(0);
+      for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) votes[lab[i + dy * W + dx]]++;
+      var best = lab[i];
+      for (k = 0; k < K; k++) if (votes[k] > votes[best]) best = k;
+      lab2[i] = best;
     }
-    return sep;
+    // cluster mean luminance → rank → spread tones over [10..245]
+    var mL = new Float32Array(K), mC = new Uint32Array(K);
+    for (i = 0; i < N; i++) { mL[lab2[i]] += L[i]; mC[lab2[i]]++; }
+    for (k = 0; k < K; k++) mL[k] = mC[k] ? mL[k] / mC[k] : 128;
+    var order = [];
+    for (k = 0; k < K; k++) order.push(k);
+    order.sort(function (a, b) { return mL[a] - mL[b]; });
+    var tone = new Float32Array(K);
+    for (k = 0; k < K; k++) tone[order[k]] = K === 1 ? 128 : 10 + k * (235 / (K - 1));
+    s.labels = lab2; s.mL = mL; s.tone = tone; s._kDone = K;
   }
 
-  /* ── pipeline: image → downscaled, colour-separated channel ── */
-  function toChannels(img) {
-    var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
-    var s = Math.min(1, MAXW / Math.max(w, h));
-    var W = Math.max(1, Math.round(w * s)), H = Math.max(1, Math.round(h * s));
-    var c = document.createElement('canvas'); c.width = W; c.height = H;
-    var x = c.getContext('2d', { willReadFrequently: true });
-    x.drawImage(img, 0, 0, W, H);
-    var d = x.getImageData(0, 0, W, H).data;
-    return { g: separate(d, W, H), w: W, h: H };
+  /* ── stage 2 · the separated channel, through relief + gamma ── */
+  function chanOf(s) {
+    var N = s.w * s.h, out = new Float32Array(N);
+    var relief = s.params.relief / 100, inv = 100 / s.params.gamma;
+    for (var i = 0; i < N; i++) {
+      var c = s.labels[i];
+      var v = Math.max(0, Math.min(255, s.tone[c] + relief * (s.L[i] - s.mL[c])));
+      out[i] = 255 * Math.pow(v / 255, inv);
+    }
+    return out;
   }
 
-  /* ── treatments: separated channel → Uint8Array of 0 (ink) / 1 (paper) ── */
+  /* ── stage 3 · outline = region boundaries (labels change), dilated to px ── */
+  function boundaryBits(s) {
+    var W = s.w, H = s.h, lab = s.labels, t = s.params.outline;
+    var out = new Uint8Array(W * H).fill(1);
+    if (!t) return out;
+    for (var y = 0; y < H - 1; y++) for (var x = 0; x < W - 1; x++) {
+      var i = y * W + x;
+      if (lab[i] !== lab[i + 1] || lab[i] !== lab[i + W]) out[i] = 0;
+    }
+    for (var pass = 1; pass < t; pass++) {           // thickness: dilate ink
+      var prev = Uint8Array.from(out);
+      for (y = 1; y < H - 1; y++) for (x = 1; x < W - 1; x++) {
+        i = y * W + x;
+        if (!prev[i - 1] || !prev[i + 1] || !prev[i - W] || !prev[i + W]) out[i] = 0;
+      }
+    }
+    return out;
+  }
+
+  /* ── presses: state → Uint8Array of 0 (ink) / 1 (paper) ── */
   function otsu(g) {
     var hist = new Uint32Array(256), i;
     for (i = 0; i < g.length; i++) hist[g[i] | 0]++;
@@ -107,34 +163,17 @@
     }
     return best;
   }
-  // Sobel on the separated channel → 0 where edge ink lands. pct picks fineness:
-  // higher percentile = fewer, finer lines (region boundaries survive first).
-  function edgeBits(s, pct) {
-    var w = s.w, h = s.h, g = s.gray;
-    var mag = new Float32Array(w * h), i, x, y;
-    for (y = 1; y < h - 1; y++) for (x = 1; x < w - 1; x++) {
-      i = y * w + x;
-      var gx = (g[i - w + 1] + 2 * g[i + 1] + g[i + w + 1]) - (g[i - w - 1] + 2 * g[i - 1] + g[i + w - 1]);
-      var gy = (g[i + w - 1] + 2 * g[i + w] + g[i + w + 1]) - (g[i - w - 1] + 2 * g[i - w] + g[i - w + 1]);
-      mag[i] = Math.sqrt(gx * gx + gy * gy);
-    }
-    var samp = [], step = Math.max(1, (w * h / 20000) | 0);
-    for (i = 0; i < mag.length; i += step) if (mag[i] > 0) samp.push(mag[i]);
-    samp.sort(function (a, b) { return a - b; });
-    var thr = samp.length ? samp[Math.floor(samp.length * pct)] : 80;
-    var out = new Uint8Array(w * h);
-    for (i = 0; i < out.length; i++) out[i] = mag[i] > thr ? 0 : 1;
-    return out;
-  }
   function pressSeuil(s) {
-    var t = otsu(s.gray), out = new Uint8Array(s.w * s.h);
-    for (var i = 0; i < out.length; i++) out[i] = s.gray[i] > t ? 1 : 0;
+    var g = chanOf(s), t = Math.max(1, Math.min(254, otsu(g) + s.params.bias));
+    var out = new Uint8Array(s.w * s.h);
+    for (var i = 0; i < out.length; i++) out[i] = g[i] > t ? 1 : 0;
+    var edge = boundaryBits(s);
+    for (i = 0; i < out.length; i++) if (!edge[i]) out[i] = 0;
     return out;
   }
   function pressTrame(s) {
-    // Atkinson error diffusion — the photocopied-halftone voice of the sourcebooks —
-    // then a FINE OUTLINE inked along the separated-region boundaries.
-    var w = s.w, h = s.h, g = Float32Array.from(s.gray), out = new Uint8Array(w * h);
+    // Atkinson error diffusion, then the region outline inked on top
+    var w = s.w, h = s.h, g = chanOf(s), out = new Uint8Array(w * h);
     for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
       var i = y * w + x, v = g[i], on = v > 127 ? 1 : 0;
       out[i] = on;
@@ -148,14 +187,34 @@
       }
       if (y + 2 < h) g[i + 2 * w] += err;
     }
-    var edge = edgeBits(s, 0.94);
+    var edge = boundaryBits(s);
     for (var j = 0; j < out.length; j++) if (!edge[j]) out[j] = 0;
     return out;
   }
-  function pressTrait(s) { return edgeBits(s, 0.88); }
+  function pressTrait(s) {
+    // line drawing: region boundaries + the strongest in-region gradients
+    var w = s.w, h = s.h, g = chanOf(s);
+    var mag = new Float32Array(w * h), i, x, y;
+    for (y = 1; y < h - 1; y++) for (x = 1; x < w - 1; x++) {
+      i = y * w + x;
+      var gx = (g[i - w + 1] + 2 * g[i + 1] + g[i + w + 1]) - (g[i - w - 1] + 2 * g[i - 1] + g[i + w - 1]);
+      var gy = (g[i + w - 1] + 2 * g[i + w] + g[i + w + 1]) - (g[i - w - 1] + 2 * g[i - w] + g[i - w + 1]);
+      mag[i] = Math.sqrt(gx * gx + gy * gy);
+    }
+    var samp = [], step = Math.max(1, (w * h / 20000) | 0);
+    for (i = 0; i < mag.length; i += step) if (mag[i] > 0) samp.push(mag[i]);
+    samp.sort(function (a, b) { return a - b; });
+    var thr = samp.length ? samp[Math.floor(samp.length * (s.params.fine / 100))] : 80;
+    var out = new Uint8Array(w * h);
+    for (i = 0; i < out.length; i++) out[i] = mag[i] > thr ? 0 : 1;
+    var edge = boundaryBits(s);
+    for (i = 0; i < out.length; i++) if (!edge[i]) out[i] = 0;
+    return out;
+  }
 
   function press(s) {
-    if (!s.gray) return null;
+    if (!s.rgba) return null;
+    if (s._kDone !== s.params.k || !s.labels) clusterize(s);
     var fn = s.mode === 'seuil' ? pressSeuil : s.mode === 'trait' ? pressTrait : pressTrame;
     return fn(s);
   }
@@ -175,8 +234,15 @@
     var url = URL.createObjectURL(blob), img = new Image();
     img.onload = function () {
       URL.revokeObjectURL(url);
-      var s = st(pane), r = toChannels(img);
-      s.gray = r.g; s.w = r.w; s.h = r.h;
+      var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+      var sc = Math.min(1, MAXW / Math.max(w, h));
+      var W = Math.max(1, Math.round(w * sc)), H = Math.max(1, Math.round(h * sc));
+      var c = document.createElement('canvas'); c.width = W; c.height = H;
+      var x = c.getContext('2d', { willReadFrequently: true });
+      x.drawImage(img, 0, 0, W, H);
+      var s = st(pane);
+      s.rgba = x.getImageData(0, 0, W, H).data; s.w = W; s.h = H;
+      s.L = null; s.labels = null; s._kDone = 0;
       s.name = (name || 'capture').replace(/\.[a-z0-9]+$/i, '');
       redraw(pane);
     };
@@ -185,7 +251,8 @@
   }
 
   /* ── UI ── */
-  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function fmtVal(key, v) { return key === 'gamma' ? (v / 100).toFixed(2) : String(v); }
   function redraw(pane) {
     var s = st(pane);
     var stage = pane.querySelector('.tech-stage'), bar = pane.querySelector('.tech-modes');
@@ -193,8 +260,8 @@
     if (bar) bar.querySelectorAll('[data-mode]').forEach(function (b) {
       b.classList.toggle('is-on', b.getAttribute('data-mode') === s.mode);
     });
-    pane.querySelectorAll('.tech-need-img').forEach(function (b) { b.disabled = !s.gray; });
-    if (!s.gray) {
+    pane.querySelectorAll('.tech-need-img').forEach(function (b) { b.disabled = !s.rgba; });
+    if (!s.rgba) {
       stage.innerHTML =
         '<div class="tech-drop"><div class="tech-drop-g">▣</div>' +
         '<div class="tech-drop-l">DROP A SCREENSHOT</div>' +
@@ -206,6 +273,8 @@
       '<div class="tech-plate-cap">' + esc(s.name.toUpperCase()) + ' · ' + s.w + '×' + s.h + ' · 1-BIT</div></div>';
     paint(stage.querySelector('.tech-canvas'), s);
   }
+  var _rt = null;
+  function redrawSoon(pane) { clearTimeout(_rt); _rt = setTimeout(function () { redraw(pane); }, 70); }
 
   function render(tab, pane) {
     var s = st(pane);
@@ -217,10 +286,17 @@
           return '<button class="app-btn" data-mode="' + m.key + '" title="' + m.title + '">' + m.label + '</button>';
         }).join('') + '</span>' +
         '<span class="tech-bar-sp"></span>' +
+        '<button class="app-btn tech-reset tech-need-img">↺ RESET</button>' +
         '<button class="app-btn tech-import">⇪ IMPORT</button>' +
         '<button class="app-btn tech-export tech-need-img">▤ EXPORT PNG</button>' +
         '<input type="file" class="tech-file" accept="image/*" style="display:none">' +
       '</div>' +
+      '<div class="tech-ctrl">' + SLIDERS.map(function (S) {
+        var v = s.params[S[0]];
+        return '<label class="tech-sl" title="' + S[5] + '"><span class="tech-sl-l">' + S[1] + '</span>' +
+          '<input type="range" data-par="' + S[0] + '" min="' + S[2] + '" max="' + S[3] + '" step="' + S[4] + '" value="' + v + '">' +
+          '<span class="tech-sl-v" data-val="' + S[0] + '">' + fmtVal(S[0], v) + '</span></label>';
+      }).join('') + '</div>' +
       '<div class="tech-stage"></div>';
 
     pane.querySelector('.tech-import').onclick = function () { pane.querySelector('.tech-file').click(); };
@@ -230,18 +306,38 @@
       e.target.value = '';
     };
     pane.querySelector('.tech-export').onclick = function () {
-      if (!s.gray) return;
+      if (!s.rgba) return;
       var c = pane.querySelector('.tech-canvas'); if (!c) return;
       var a = document.createElement('a');
       a.download = s.name + '-' + s.mode + '.png';
       a.href = c.toDataURL('image/png');
       a.click();
     };
+    pane.querySelector('.tech-reset').onclick = function () {
+      s.params = defaults();
+      try { localStorage.setItem(LS_PAR, JSON.stringify(s.params)); } catch (e) {}
+      SLIDERS.forEach(function (S) {
+        var inp = pane.querySelector('[data-par="' + S[0] + '"]'), out = pane.querySelector('[data-val="' + S[0] + '"]');
+        if (inp) inp.value = s.params[S[0]];
+        if (out) out.textContent = fmtVal(S[0], s.params[S[0]]);
+      });
+      redraw(pane);
+    };
     pane.querySelectorAll('[data-mode]').forEach(function (b) {
       b.onclick = function () {
         s.mode = b.getAttribute('data-mode');
         try { localStorage.setItem(LS_MODE, s.mode); } catch (e) {}
         redraw(pane);
+      };
+    });
+    pane.querySelectorAll('[data-par]').forEach(function (inp) {
+      inp.oninput = function () {
+        var key = inp.getAttribute('data-par'), v = +inp.value;
+        s.params[key] = v;
+        var out = pane.querySelector('[data-val="' + key + '"]');
+        if (out) out.textContent = fmtVal(key, v);
+        try { localStorage.setItem(LS_PAR, JSON.stringify(s.params)); } catch (e) {}
+        redrawSoon(pane);
       };
     });
 
@@ -268,5 +364,8 @@
     redraw(pane);
   }
 
-  window.TechSection = { render: render, _press: { separate: separate, otsu: otsu, edgeBits: edgeBits, pressTrame: pressTrame, pressSeuil: pressSeuil, pressTrait: pressTrait } };
+  window.TechSection = {
+    render: render,
+    _press: { defaults: defaults, clusterize: clusterize, chanOf: chanOf, boundaryBits: boundaryBits, otsu: otsu, pressTrame: pressTrame, pressSeuil: pressSeuil, pressTrait: pressTrait },
+  };
 })();

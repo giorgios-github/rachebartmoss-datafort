@@ -37,3 +37,25 @@
   border-top: 2px solid var(--ink); font-family: var(--mono); font-size: 11px;
   letter-spacing: 1px; color: var(--ink); padding: 4px 8px;
 }
+
+/* precise sliders row */
+.tech-ctrl {
+  display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: center;
+  padding: 6px 12px; border-bottom: 2px solid var(--ink); background: #fff;
+}
+.tech-sl { display: flex; align-items: center; gap: 7px; }
+.tech-sl-l { font-family: var(--mono); font-size: 11px; letter-spacing: 1px; color: var(--ink); }
+.tech-sl-v { font-family: var(--mono); font-size: 11px; color: var(--ink); min-width: 34px; text-align: right; }
+.tech-sl input[type="range"] {
+  -webkit-appearance: none; appearance: none; width: 110px; height: 2px;
+  background: var(--ink); outline: none; cursor: pointer;
+}
+.tech-sl input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 10px; height: 14px;
+  background: #fff; border: 2px solid var(--ink); border-radius: 0; cursor: pointer;
+}
+.tech-sl input[type="range"]::-webkit-slider-thumb:hover { background: var(--ink); }
+.tech-sl input[type="range"]::-moz-range-thumb {
+  width: 8px; height: 12px; background: #fff; border: 2px solid var(--ink); border-radius: 0; cursor: pointer;
+}
+.tech-sl input[type="range"]::-moz-range-track { height: 2px; background: var(--ink); }
