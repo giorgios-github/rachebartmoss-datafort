@@ -10,7 +10,7 @@
    → editable gray) — the pipette picks a pixel on the source and selects its
    chip. Outline = region-boundary map (crisp, no texture noise). Cutout: a
    polygon drawn on the source; outside stays present but FADES INSIDE THE PRESS
-   ITSELF (ordered Bayer mask on the ink — still strictly 1-bit), dosed by FOND.
+   ITSELF (ordered Bayer mask on the ink — still strictly 1-bit), dosed by BACKDROP.
    Exposes window.TechSection { render(tab, pane) }. */
 (function () {
   'use strict';
@@ -21,24 +21,26 @@
   var BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
 
   var MODES = [
-    { key: 'trame', label: 'TRAME', title: 'Atkinson dither + region outline — the sourcebook halftone' },
-    { key: 'seuil', label: 'SEUIL', title: 'Hard threshold (Otsu + bias) on separated tones' },
-    { key: 'trait', label: 'TRAIT', title: 'Line drawing — region boundaries + strong gradients' },
+    { key: 'trame', label: 'HALFTONE', title: 'Atkinson dither + region outline — the sourcebook look' },
+    { key: 'seuil', label: 'THRESHOLD', title: 'Hard threshold (Otsu + level) on separated tones' },
+    { key: 'trait', label: 'LINES', title: 'Line drawing — region boundaries + strong gradients' },
   ];
+  function modeLabel(key) { for (var i = 0; i < MODES.length; i++) if (MODES[i].key === key) return MODES[i].label; return key; }
   function defaults() {
     return { k: 5, chroma: 250, relief: 40, gamma: 100, bias: 0, outline: 1, fine: 88, fond: 35 };
   }
-  // slider registry: [key, label, min, max, step, title]
+  // slider registry: [key, label, min, max, step, title, advancedOnly]
   var SLIDERS = [
-    ['k', 'COULEURS', 2, 8, 1, 'colour groups — how many tones the press separates'],
-    ['chroma', 'TEINTE', 100, 500, 25, 'how much HUE separates the groups — raise it when two colours of similar darkness merge (blue vs gray)'],
-    ['relief', 'RELIEF', 0, 100, 5, 'in-region shading kept (0 = flat posters)'],
-    ['gamma', 'GAMMA', 40, 250, 5, 'tone curve before the press (100 = neutral; lower = darker plate)'],
-    ['bias', 'NIVEAU', -60, 60, 2, 'SEUIL: ink more (+) or less (−) than Otsu suggests'],
-    ['outline', 'CONTOUR', 0, 3, 1, 'region-boundary line thickness in px (0 = off)'],
-    ['fine', 'FINESSE', 70, 98, 1, 'TRAIT: gradient percentile — higher = fewer, finer lines'],
-    ['fond', 'FOND', 0, 100, 5, 'outside the cutout: how much of the press remains (0 = removed)'],
+    ['k', 'COLORS', 2, 8, 1, 'colour groups — how many tones the press separates', false],
+    ['outline', 'OUTLINE', 0, 3, 1, 'region-boundary line thickness in px (0 = off)', false],
+    ['fond', 'BACKDROP', 0, 100, 5, 'outside the cutout: how much of the press remains (0 = removed)', false],
+    ['chroma', 'HUE', 100, 500, 25, 'how much hue separates the groups — raise it when two colours of similar darkness merge (blue vs gray)', true],
+    ['relief', 'SHADING', 0, 100, 5, 'in-region shading kept (0 = flat poster tones)', true],
+    ['gamma', 'GAMMA', 40, 250, 5, 'tone curve before the press (1.00 = neutral; lower = darker plate)', true],
+    ['bias', 'LEVEL', -60, 60, 2, 'THRESHOLD: ink more (+) or less (−) than Otsu suggests', true],
+    ['fine', 'DETAIL', 70, 98, 1, 'LINES: gradient percentile — higher = fewer, finer lines', true],
   ];
+  var LS_ADV = 'bartmoss_tech_adv';
 
   /* ── per-pane state (one press per tab) ── */
   function loadParams() {
@@ -58,13 +60,14 @@
       toneOv: {},                    // pipette: label → user gray
       selLab: -1,                    // selected chip
       tool: 'none',                  // 'none' | 'pip' | 'cut'
+      adv: localStorage.getItem(LS_ADV) === '1',
       cut: [], cutClosed: false, _mask: null,
     };
     return pane._tech;
   }
 
   /* ── stage 1 · COLOUR SEPARATION: k-means, deterministic. The distance runs in
-     [Y, α·Cb, α·Cr] — chrominance AMPLIFIED (α = TEINTE/100) so hue separates
+     [Y, α·Cb, α·Cr] — chrominance AMPLIFIED (α = HUE/100) so hue separates
      groups more than brightness: a dark desaturated blue and a dark gray are
      neighbours in RGB but far apart here. ── */
   function clusterize(s) {
@@ -358,8 +361,11 @@
     if (tp) tp.classList.toggle('is-on', s.tool === 'pip');
     if (tc) tc.classList.toggle('is-on', s.tool === 'cut');
     if (tz) tz.style.display = s.cut.length ? '' : 'none';
-    if (!s.rgba) {
+    if (!s.rgba || !s.adv) {
+      if (s.tool === 'pip') s.tool = 'none';
       pane.querySelector('.tech-tones').innerHTML = '';
+    }
+    if (!s.rgba) {
       stage.innerHTML =
         '<div class="tech-drop"><div class="tech-drop-g">▣</div>' +
         '<div class="tech-drop-l">DROP A SCREENSHOT</div>' +
@@ -368,9 +374,10 @@
       return;
     }
     if (s._kDone !== s.params.k || s._cDone !== s.params.chroma || !s.labels) clusterize(s);
-    // chips (pipette targets)
+    // chips (picker targets) — advanced only
     var tones = pane.querySelector('.tech-tones');
-    tones.innerHTML = '<span class="tech-tones-l">GAMME</span>' + chipsHtml(s);
+    if (s.adv) {
+    tones.innerHTML = '<span class="tech-tones-l">GRAYS</span>' + chipsHtml(s);
     tones.querySelectorAll('[data-tone]').forEach(function (inp) {
       inp.oninput = function () {
         var c = +inp.getAttribute('data-tone');
@@ -387,12 +394,13 @@
         tones.querySelectorAll('.tech-chip').forEach(function (o) { o.classList.toggle('is-sel', +o.getAttribute('data-chip') === s.selLab); });
       };
     });
+    }
     // plates
     stage.innerHTML =
       '<div class="tech-plate tech-plate-src"><canvas class="tech-src"></canvas>' +
-        '<div class="tech-plate-cap">SOURCE · ' + (s.tool === 'cut' ? 'DÉTOURAGE: click points, close on the first' : s.tool === 'pip' ? 'PIPETTE: click a colour' : 'pipette + lasso work here') + '</div></div>' +
+        '<div class="tech-plate-cap">SOURCE · ' + (s.tool === 'cut' ? 'CUTOUT: click points, close on the first one' : s.tool === 'pip' ? 'PICKER: click a colour' : (s.adv ? 'picker + cutout work here' : 'cutout works here')) + '</div></div>' +
       '<div class="tech-plate"><canvas class="tech-canvas"></canvas>' +
-        '<div class="tech-plate-cap">' + esc(s.name.toUpperCase()) + ' · ' + s.w + '×' + s.h + ' · 1-BIT · ' + s.mode.toUpperCase() + '</div></div>';
+        '<div class="tech-plate-cap">' + esc(s.name.toUpperCase()) + ' · ' + s.w + '×' + s.h + ' · 1-BIT · ' + modeLabel(s.mode) + '</div></div>';
     var src = stage.querySelector('.tech-src');
     paintSource(src, s);
     paintPress(stage.querySelector('.tech-canvas'), s);
@@ -435,16 +443,17 @@
         '<span class="tech-modes">' + MODES.map(function (m) {
           return '<button class="app-btn" data-mode="' + m.key + '" title="' + m.title + '">' + m.label + '</button>';
         }).join('') + '</span>' +
-        '<button class="app-btn tech-tool-pip tech-need-img" title="pick a colour on the SOURCE — selects its chip in the gamme">⌖ PIPETTE</button>' +
-        '<button class="app-btn tech-tool-cut tech-need-img" title="draw a polygon on the SOURCE around the object — outside fades (FOND)">▱ DÉTOURAGE</button>' +
-        '<button class="app-btn tech-tool-clear" title="remove the cutout">✕ ZONE</button>' +
+        (s.adv ? '<button class="app-btn tech-tool-pip tech-need-img" title="pick a colour on the SOURCE — selects its gray chip">⌖ PICKER</button>' : '') +
+        '<button class="app-btn tech-tool-cut tech-need-img" title="draw a polygon on the SOURCE around the object — outside fades (BACKDROP)">▱ CUTOUT</button>' +
+        '<button class="app-btn tech-tool-clear" title="remove the cutout">✕ CLEAR</button>' +
         '<span class="tech-bar-sp"></span>' +
+        '<button class="app-btn tech-adv' + (s.adv ? ' is-on' : '') + '" title="colour picker, gray chips, and the full slider set">⚙ ADVANCED</button>' +
         '<button class="app-btn tech-reset tech-need-img">↺ RESET</button>' +
         '<button class="app-btn tech-import">⇪ IMPORT</button>' +
         '<button class="app-btn tech-export tech-need-img">▤ EXPORT PNG</button>' +
         '<input type="file" class="tech-file" accept="image/*" style="display:none">' +
       '</div>' +
-      '<div class="tech-ctrl">' + SLIDERS.map(function (S) {
+      '<div class="tech-ctrl">' + SLIDERS.filter(function (S) { return s.adv || !S[6]; }).map(function (S) {
         var v = s.params[S[0]];
         return '<label class="tech-sl" title="' + S[5] + '"><span class="tech-sl-l">' + S[1] + '</span>' +
           '<input type="range" data-par="' + S[0] + '" min="' + S[2] + '" max="' + S[3] + '" step="' + S[4] + '" value="' + v + '">' +
@@ -477,7 +486,13 @@
       });
       redraw(pane);
     };
-    pane.querySelector('.tech-tool-pip').onclick = function () { s.tool = s.tool === 'pip' ? 'none' : 'pip'; redraw(pane); };
+    pane.querySelector('.tech-adv').onclick = function () {
+      s.adv = !s.adv;
+      try { localStorage.setItem(LS_ADV, s.adv ? '1' : '0'); } catch (e) {}
+      render(tab, pane);
+    };
+    var pipBtn = pane.querySelector('.tech-tool-pip');
+    if (pipBtn) pipBtn.onclick = function () { s.tool = s.tool === 'pip' ? 'none' : 'pip'; redraw(pane); };
     pane.querySelector('.tech-tool-cut').onclick = function () {
       if (s.tool === 'cut') { s.tool = 'none'; }
       else { s.tool = 'cut'; if (s.cutClosed) { s.cut = []; s.cutClosed = false; s._mask = null; } }
