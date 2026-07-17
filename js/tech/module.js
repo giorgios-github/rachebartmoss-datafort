@@ -10,7 +10,8 @@ import * as G from './geom.js';
 import * as R from './rules.js';
 import { defsBlock } from './law.js';
 import { autoWires, effHeat } from './model.js';
-import { catEmbed } from './catalog.js';
+import { catEmbed, catInner, catWallAnchor, catWirePad, catFigure, CAT_PAD } from './catalog.js';
+const FOOT_K = 8;
 
 const N = G.fmt;
 const line = (x1, y1, x2, y2, w, dash) => `<line x1="${N(x1)}" y1="${N(y1)}" x2="${N(x2)}" y2="${N(y2)}" stroke="#111" stroke-width="${w}"${dash ? ` stroke-dasharray="${dash}"` : ''}/>`;
@@ -240,7 +241,7 @@ function gutGlyph(g, part, mapP, k, dens, ghost) {
   const wv = ghost ? 0.9 : R.W.mid;
   if (ghost) { out.push(rect(x, y, w, h, wv, '#fff', dash)); return out.join(''); }
   if (g.k === 'cat') {                                                                        // DF-TO-C catalogue part, embedded
-    out.push(catEmbed(g.cat, g.params, x, y, w, h, dens));
+    out.push(catEmbed(g.cat, g.params, x, y, w, h, dens, undefined, g.rot || 0));
   } else if (g.k === 'board') {
     out.push(rect(x, y, w, h, R.W.mid, '#fff'));
     const so = Math.min(2.5, g.w / 5) * k;
@@ -425,10 +426,71 @@ export function renderModule(part, view = {}) {
     }
     return out.join('');
   };
+  // ── catalogue parts by MOUNT: 'in' (cavity), 'face' (on the lid), 'wall' (trans-paroi) ──
+  const isWallG = g => g.k === 'cat' && g.mount === 'wall';
+  const isFaceG = g => g.k === 'cat' && g.mount === 'face';
+  // shared wall alignment: the part's flange anchor sits ON the wall centreline,
+  // its outward axis rotated onto the outward normal at t.
+  const wallGutXform = (g, exterior) => {
+    const P = G.perimeter(pts);
+    const s = ((((g.t ?? 0.25) % 1) + 1) % 1) * P;
+    const q = G.pointAt(pts, s);
+    const nAng = Math.atan2(q.ny, q.nx) * 180 / Math.PI;
+    const view2 = { k, density: dens, wallMm: wall, exterior };
+    const params2 = exterior ? { ...g.params, mounted: 'exterior' } : { ...g.params, mounted: false };
+    const a = catWallAnchor(g.cat, params2, view2);
+    if (!a) return null;
+    return { q, a, rot: a.axis === 'x' ? nAng : nAng + 90, view2, params2, wallMid: [q.x - q.nx * wall / 2, q.y - q.ny * wall / 2] };
+  };
+  const drawCatWalls = exterior => part.guts.filter(isWallG).map(g => {
+    const t2 = wallGutXform(g, exterior);
+    if (!t2) return '';
+    const fig = catInner(g.cat, t2.params2, t2.view2);
+    if (!fig) return '';
+    const [px, py] = mapP(t2.wallMid[0], t2.wallMid[1]);
+    return `<g transform="translate(${N(px)},${N(py)}) rotate(${N(t2.rot)}) translate(${N(-(t2.a.x + CAT_PAD))},${N(-(t2.a.y + CAT_PAD))})">${fig.inner}</g>`;
+  }).join('');
+  const drawCatFaces = (hidden = false) => part.guts.filter(isFaceG).map(g => {
+    const [x, y] = mapP(g.at[0], g.at[1]);
+    if (hidden) return rect(x, y, g.w * k, g.h * k, 0.9, 'none', R.DASH.hl);       // lid furniture above the cut plane
+    return catEmbed(g.cat, g.params, x, y, g.w * k, g.h * k, dens, undefined, g.rot || 0);
+  }).join('');
+
   // wires — the internal logic made visible. Solid when resolved (knowledge).
   const wirePoint = ref => {
     const kind = ref[0], i = +ref.slice(1);
-    if (kind === 'g' && part.guts[i]) return gutCenterMm(part.guts[i]);
+    if (kind === 'g' && part.guts[i]) {
+      const g = part.guts[i];
+      if (g.k !== 'cat') return gutCenterMm(g);
+      if (isWallG(g)) {                                          // exact interior pad through the wall transform
+        const t2 = wallGutXform(g, false);
+        const wp = t2 && catWirePad(g.cat, t2.params2, t2.view2);
+        if (t2 && wp) {
+          const rad = t2.rot * Math.PI / 180, dx = wp.x - t2.a.x, dy = wp.y - t2.a.y;
+          return [t2.wallMid[0] + (dx * Math.cos(rad) - dy * Math.sin(rad)) / k,
+                  t2.wallMid[1] + (dx * Math.sin(rad) + dy * Math.cos(rad)) / k];
+        }
+        const P = G.perimeter(pts), q = G.pointAt(pts, (g.t ?? 0.25) * P);
+        return [q.x - q.nx * (wall + 1.5), q.y - q.ny * (wall + 1.5)];
+      }
+      // in/face: land on the part's OWN pad, mapped through the meet-embed transform
+      const nat = catFigure(g.cat, g.params, { k: FOOT_K, density: 1 });
+      const wp = catWirePad(g.cat, g.params, { k: FOOT_K });
+      if (nat && wp) {
+        const natW = nat.wPx / FOOT_K, natH = nat.hPx / FOOT_K;  // natural size, mm
+        const s2 = Math.min(g.w / natW, g.h / natH);
+        const offX = (g.w - natW * s2) / 2, offY = (g.h - natH * s2) / 2;
+        let lx = (wp.x + CAT_PAD) / FOOT_K, ly = (wp.y + CAT_PAD) / FOOT_K;
+        if (g.rot) {
+          const cx2 = natW / 2, cy2 = natH / 2, r2 = g.rot * Math.PI / 180;
+          const rx3 = cx2 + (lx - cx2) * Math.cos(r2) - (ly - cy2) * Math.sin(r2);
+          const ry3 = cy2 + (lx - cx2) * Math.sin(r2) + (ly - cy2) * Math.cos(r2);
+          lx = rx3; ly = ry3;
+        }
+        return [g.at[0] + offX + lx * s2, g.at[1] + offY + ly * s2];
+      }
+      return gutCenterMm(g);
+    }
     if (kind === 'p' && ports[i]) return [ports[i].x - ports[i].nx * (wall + 1.5), ports[i].y - ports[i].ny * (wall + 1.5)];
     if (kind === 'f') {
       const pf = pFeats.find(q => q.i === i);
@@ -456,8 +518,10 @@ export function renderModule(part, view = {}) {
       else if (Math.abs(dx) >= Math.abs(dy)) m1 = [x2 - sx * dd, y1];            // run first
       else m1 = [x1, y2 - sy * dd];
       out.push(`<path d="M${N(x1)},${N(y1)} L${N(m1[0])},${N(m1[1])} L${N(x2)},${N(y2)}" fill="none" stroke="#111" stroke-width="${R.W.mid}"/>`);
-      out.push(rect(x1 - 1.7, y1 - 1.7, 3.4, 3.4, 0.9, '#fff'));                 // solder pad
-      out.push(circ(x2, y2, 1.5, 0.9, '#fff') + circ(x2, y2, 0.6, 0, '#111'));   // pin
+      // terminations: catalogue parts draw their OWN pads — the lead just lands on them
+      const isCatEnd = ref => ref[0] === 'g' && part.guts[+ref.slice(1)] && part.guts[+ref.slice(1)].k === 'cat';
+      if (!isCatEnd(w2[0])) out.push(rect(x1 - 1.7, y1 - 1.7, 3.4, 3.4, 0.9, '#fff'));                 // solder pad
+      if (!isCatEnd(w2[1])) out.push(circ(x2, y2, 1.5, 0.9, '#fff') + circ(x2, y2, 0.6, 0, '#111'));   // pin
       if (dens >= 3) {
         const long = Math.hypot(m1[0] - x1, m1[1] - y1) > Math.hypot(x2 - m1[0], y2 - m1[1])
           ? [x1, y1, m1[0], m1[1]] : [m1[0], m1[1], x2, y2];
@@ -495,7 +559,7 @@ export function renderModule(part, view = {}) {
     }
     if (part.sealed) out.push(`<path d="${innerD}" fill="url(#pot)" stroke="none"/>`);       // potted but KNOWN: solid guts under pot
     else out.push(drawBosses());
-    for (const g of part.guts) out.push(gutGlyph(g, part, mapP, k, dens, false));
+    for (const g of part.guts) { if (isWallG(g) || isFaceG(g)) continue; out.push(gutGlyph(g, part, mapP, k, dens, false)); }
     out.push(drawWires());
     if (part.sealed && lod !== 'thumb' && dens >= 2) {
       const [tx2, ty2] = mapP(cavRect.x + cavRect.w / 2, cavRect.y + 1.5);
@@ -525,6 +589,8 @@ export function renderModule(part, view = {}) {
     L.push(drawVents());
     L.push(drawLabels());
     L.push(drawFaceFeats());
+    L.push(drawCatFaces());                            // catalogue lid parts, visible outside
+    L.push(drawCatWalls(true));                        // trans-paroi parts: EXT SEUL register
     L.push(drawPerimFeats());
     L.push(drawPorts());
     L.push(drawScrews());
@@ -535,6 +601,8 @@ export function renderModule(part, view = {}) {
     L.push(`<path d="${innerD}" fill="#fff" stroke="#111" stroke-width="${R.W.mid}"/>`);
     L.push(interior());
     if (dens >= 2) L.push(drawFaceFeats(true));       // lid furniture above the cut plane → hidden line
+    if (dens >= 2) L.push(drawCatFaces(true));
+    L.push(drawCatWalls(false));                       // trans-paroi parts: full profile crossing the wall
     L.push(drawPerimFeats());
     L.push(drawPorts());
     L.push(drawDims());

@@ -52,3 +52,11 @@ export function draw(p, view = {}) {
 }
 export function thumb(p) { return draw(norm(p ?? {}), { lod: 'thumb', density: 1, fit: 54 }); }
 export function binGlyph() { return thumb({}); }
+
+// loom termination: the pump
+export function wirePad(p, view = {}) {
+  const q = norm(p), k = view.k ?? 8;
+  const ptsMm = q.path ?? [[0, 0], [q.span, 0], [q.span, q.span * 0.5], [0, q.span * 0.5]];
+  const bb = G.bbox(ptsMm);
+  return { x: 5 * k + (ptsMm[0][0] - bb.x) * k, y: 4 * k + (ptsMm[0][1] - bb.y) * k };
+}

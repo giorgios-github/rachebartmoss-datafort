@@ -74,3 +74,11 @@ export function draw(p, view = {}) {
 }
 export function thumb(p) { return draw({ ...norm(p ?? {}) }, { lod: 'thumb', density: 1, fit: 54 }); }
 export function binGlyph() { return thumb({ format: 'cylindrical', cap: 2 }); }
+
+// loom termination: the drawn terminal, not the centre
+export function wirePad(p, view = {}) {
+  const q = norm(p), k = view.k ?? 8, dim = DIMS[q.format][q.cap];
+  if (q.format === 'prismatic') return { x: 3.5 * k, y: 1.8 * k };
+  if (q.format === 'cylindrical') return { x: dim[1] * k + 0.9 * k, y: dim[0] * 0.5 * k };
+  return { x: dim[0] / 2 * k, y: dim[0] / 2 * k };
+}

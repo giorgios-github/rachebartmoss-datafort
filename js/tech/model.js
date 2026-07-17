@@ -58,6 +58,9 @@ export function normalize(p) {
       return {
         k: 'cat', cat: String(x.cat || 'cell'), params: (x.params && typeof x.params === 'object') ? x.params : {},
         at: x.at || [0, 0], w: x.w || 14, h: x.h || 12,
+        ...(x.mount === 'face' || x.mount === 'wall' ? { mount: x.mount } : {}),  // 'in' (default) | 'face' (on the lid) | 'wall' (trans-paroi)
+        ...(x.t != null ? { t: x.t } : {}),                                       // wall parts: perimeter position
+        ...(x.rot ? { rot: ((x.rot % 360) + 360) % 360 } : {}),                   // R rotation, 90° steps
         ...(x.label ? { label: x.label } : {}),
         ...(x.push ? { push: Math.max(0, Math.min(3, x.push | 0)) } : {}),
         ...(x.donor ? { donor: String(x.donor) } : {}),
@@ -159,7 +162,7 @@ export function toJSON(p) {
   if (p.heat) o.heat = p.heat;
   if (p.ports.length) o.ports = p.ports.map(x => ({ k: x.k, t: Math.round(x.t * 1000) / 1000 }));
   if (p.feats.length) o.feats = p.feats.map(f => { const c = { k: f.k }; if (f.at) c.at = [r1(f.at[0]), r1(f.at[1])]; if (f.t != null) c.t = Math.round(f.t * 1000) / 1000; if (f.len) c.len = r1(f.len); if (f.w) { c.w = f.w; c.h = f.h; } if (f.rows) { c.rows = f.rows; c.cols = f.cols; } return c; });
-  if (p.guts.length) o.guts = p.guts.map(g => ({ k: g.k, ...(g.k === 'cat' ? { cat: g.cat, ...(Object.keys(g.params || {}).length ? { params: g.params } : {}) } : {}), at: [r1(g.at[0]), r1(g.at[1])], w: r1(g.w), h: r1(g.h), ...(g.label ? { label: g.label } : {}), ...(g.push ? { push: g.push } : {}), ...(g.donor ? { donor: g.donor } : {}) }));
+  if (p.guts.length) o.guts = p.guts.map(g => ({ k: g.k, ...(g.k === 'cat' ? { cat: g.cat, ...(Object.keys(g.params || {}).length ? { params: g.params } : {}), ...(g.mount ? { mount: g.mount } : {}), ...(g.t != null ? { t: Math.round(g.t * 1000) / 1000 } : {}), ...(g.rot ? { rot: g.rot } : {}) } : {}), at: [r1(g.at[0]), r1(g.at[1])], w: r1(g.w), h: r1(g.h), ...(g.label ? { label: g.label } : {}), ...(g.push ? { push: g.push } : {}), ...(g.donor ? { donor: g.donor } : {}) }));
   if (p.events && p.events.length) o.events = p.events;
   if (p.wires) o.wires = p.wires;
   if (p.fmax) o.fmax = p.fmax;

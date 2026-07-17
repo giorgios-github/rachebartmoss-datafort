@@ -5,7 +5,7 @@ import * as G from './tech/geom.js';
 import * as R from './tech/rules.js';
 import * as M from './tech/model.js';
 import { renderModule, standalone, placePorts, placePerimFeats, binThumb } from './tech/module.js';
-import { BINS as CAT_BINS, BIN_ORDER as CAT_BIN_ORDER, byId as catById, catFootprint } from './tech/catalog.js';
+import { BINS as CAT_BINS, BIN_ORDER as CAT_BIN_ORDER, byId as catById, catFootprint, catMount } from './tech/catalog.js';
 import { defsBlock } from './tech/law.js';
 
 const $ = id => document.getElementById(id);
@@ -90,8 +90,14 @@ function overlaySvg() {
     const acc = '#c0392b';
     if (sel.type === 'gut' && part.guts[sel.i]) {
       const g = part.guts[sel.i];
-      const [x, y] = mmToPx(g.at[0], g.at[1]);
-      s += `<rect x="${x - 3}" y="${y - 3}" width="${g.w * K + 6}" height="${g.h * K + 6}" fill="none" stroke="${acc}" stroke-width="1.4" stroke-dasharray="4 3"/>`;
+      if (g.k === 'cat' && g.mount === 'wall') {
+        const P = G.perimeter(part.outline), q = G.pointAt(part.outline, ((((g.t ?? 0.25) % 1) + 1) % 1) * P);
+        const [x, y] = mmToPx(q.x, q.y);
+        s += `<circle cx="${x}" cy="${y}" r="${9 * K}" fill="none" stroke="${acc}" stroke-width="1.4" stroke-dasharray="4 3"/>`;
+      } else {
+        const [x, y] = mmToPx(g.at[0], g.at[1]);
+        s += `<rect x="${x - 3}" y="${y - 3}" width="${g.w * K + 6}" height="${g.h * K + 6}" fill="none" stroke="${acc}" stroke-width="1.4" stroke-dasharray="4 3"/>`;
+      }
     } else if (sel.type === 'port') {
       const pl = placePorts(part.outline, part.ports)[sel.i];
       if (pl) { const [x, y] = mmToPx(pl.x, pl.y); s += `<circle cx="${x}" cy="${y}" r="${(pl.spec.half + 3) * K}" fill="none" stroke="${acc}" stroke-width="1.4" stroke-dasharray="4 3"/>`; }
@@ -128,6 +134,14 @@ function render() {
 
 // ── hit testing (mm) ──
 function hitTest(x, y) {
+  // wall-mounted catalogue parts: pick near their wall point
+  for (let i = part.guts.length - 1; i >= 0; i--) {
+    const g = part.guts[i];
+    if (g.k === 'cat' && g.mount === 'wall') {
+      const P = G.perimeter(part.outline), q = G.pointAt(part.outline, ((((g.t ?? 0.25) % 1) + 1) % 1) * P);
+      if (Math.hypot(q.x - x, q.y - y) < 9) return { type: 'gut', i };
+    }
+  }
   const pf = placePerimFeats(part.outline, part.feats);
   for (const f of pf) if (Math.hypot(f.x - x, f.y - y) < 8) return { type: 'feat', i: f.i };
   const pl = placePorts(part.outline, part.ports);
@@ -167,7 +181,11 @@ stage.addEventListener('mousemove', e => {
   hover = [x, y];
   if (rectStart) { render(); return; }
   if (drag) {
-    if (drag.type === 'gut') { const g = part.guts[drag.i]; g.at = [Math.round((x + drag.dx) * 2) / 2, Math.round((y + drag.dy) * 2) / 2]; }
+    if (drag.type === 'gut') {
+      const g = part.guts[drag.i];
+      if (g.k === 'cat' && g.mount === 'wall') { const P = G.perimeter(part.outline); g.t = G.closestS(part.outline, x, y) / P; }   // wall parts slide the edge
+      else g.at = [Math.round((x + drag.dx) * 2) / 2, Math.round((y + drag.dy) * 2) / 2];
+    }
     else if (drag.type === 'port') { const P = G.perimeter(part.outline); part.ports[drag.i].t = G.closestS(part.outline, x, y) / P; }
     else if (drag.type === 'feat') {
       const f = part.feats[drag.i];
@@ -202,7 +220,7 @@ stage.addEventListener('click', e => {
     if (sketch.length >= 3 && Math.hypot(x - sketch[0][0], y - sketch[0][1]) < 3.5) return commitSketch();
     sketch.push([Math.round(x), Math.round(y)]); render(); return;
   }
-  if (tool.kind === 'port') { part.ports.push({ k: tool.sub, t: G.closestS(part.outline, x, y) / P }); sel = { type: 'port', i: part.ports.length - 1 }; setTool('select'); return; }
+  if (tool.kind === 'port') { part.ports.push({ k: tool.sub, t: G.closestS(part.outline, x, y) / P }); sel = { type: 'port', i: part.ports.length - 1 }; setTool('select'); render(); return; }
   if (tool.kind === 'feat') {
     const spec = R.FEAT[tool.sub];
     const f = { k: tool.sub };
@@ -210,17 +228,27 @@ stage.addEventListener('click', e => {
     else if (tool.sub === 'screen' || tool.sub === 'keypad') f.at = [Math.round(x), Math.round(y)];
     else f.at = [Math.round(x * 2) / 2, Math.round(y * 2) / 2];
     part.feats.push(f); M.normalize(part);
-    sel = { type: 'feat', i: part.feats.length - 1 }; setTool('select'); return;
+    sel = { type: 'feat', i: part.feats.length - 1 }; setTool('select'); render(); return;
   }
   if (tool.kind === 'gut') {
     const d = R.GUT[tool.sub];
     part.guts.push({ k: tool.sub, at: [Math.round(x - d.w / 2), Math.round(y - d.h / 2)], w: d.w, h: d.h });
-    sel = { type: 'gut', i: part.guts.length - 1 }; setTool('select'); return;
+    sel = { type: 'gut', i: part.guts.length - 1 }; setTool('select'); render(); return;
   }
   if (tool.kind === 'cat') {
+    // mount decides itself: part default, or WALL when dropped near the edge and the
+    // part knows how to cross a wall (wallAnchor contract)
+    const mod = catById[tool.sub];
+    const sEdge = G.closestS(part.outline, x, y);
+    const qe = G.pointAt(part.outline, sEdge);
+    const nearEdge = Math.hypot(qe.x - x, qe.y - y) < 6;
+    const mount = catMount(tool.sub) === 'wall' || (nearEdge && mod && mod.wallAnchor) ? 'wall' : catMount(tool.sub);
     const fp = catFootprint(tool.sub);
-    part.guts.push({ k: 'cat', cat: tool.sub, params: {}, at: [Math.round(x - fp.w / 2), Math.round(y - fp.h / 2)], w: fp.w, h: fp.h });
-    sel = { type: 'gut', i: part.guts.length - 1 }; setTool('select'); return;
+    const gut = { k: 'cat', cat: tool.sub, params: {}, at: [Math.round(x - fp.w / 2), Math.round(y - fp.h / 2)], w: fp.w, h: fp.h };
+    if (mount === 'wall') { gut.mount = 'wall'; gut.t = sEdge / P; }
+    else if (mount === 'face') gut.mount = 'face';
+    part.guts.push(gut);
+    sel = { type: 'gut', i: part.guts.length - 1 }; setTool('select'); render(); return;
   }
 });
 stage.addEventListener('dblclick', e => { e.preventDefault(); if (tool.kind === 'outline' && sketch.length >= 3) commitSketch(); });
@@ -229,6 +257,13 @@ window.addEventListener('keydown', e => {
   if (ae && /INPUT|SELECT|TEXTAREA/.test(ae.tagName)) return;
   if (e.key === 'Escape') { sketch = []; rectStart = null; sel = null; setTool('select'); return; }
   if (e.key === 'Enter' && tool.kind === 'outline' && sketch.length >= 3) return commitSketch();
+  if ((e.key === 'r' || e.key === 'R') && sel?.type === 'gut' && part.guts[sel.i]) {
+    const g = part.guts[sel.i];
+    if (g.k === 'cat' && g.mount === 'wall') return;                 // wall parts orient by the wall
+    g.rot = g.k === 'cat' ? ((g.rot || 0) + 90) % 360 : 0;
+    const t2 = g.w; g.w = g.h; g.h = t2;
+    render(); return;
+  }
   if ((e.key === 'Delete' || e.key === 'Backspace') && sel) {
     if (sel.type === 'port') part.ports.splice(sel.i, 1);
     else if (sel.type === 'gut') part.guts.splice(sel.i, 1);
@@ -383,15 +418,70 @@ function renderSide() {
     s.append(el('h3', { class: 'tk-h' }, `selected · ${g.k === 'cat' ? g.cat : g.k}`));
     if (g.k === 'cat' && catById[g.cat]) {
       const m2 = catById[g.cat].meta;
+      const refit = () => { if (g.mount !== 'wall') { const fp = catFootprint(g.cat, g.params); if (!g.rot || g.rot % 180 === 0) { g.w = fp.w; g.h = fp.h; } else { g.w = fp.h; g.h = fp.w; } } render(); };
+      const inpStyle = 'flex:1;min-width:0;font-family:var(--mono);font-size:11px;background:var(--bg);color:var(--text);border:1px solid var(--border);padding:2px 4px';
+      // quick presets
       if (m2.variants && m2.variants.length) {
-        const vSel = el('select', { onchange: e => { const v = m2.variants[+e.target.value]; if (v) { g.params = { ...v.p }; const fp = catFootprint(g.cat, g.params); g.w = fp.w; g.h = fp.h; render(); } }, style: 'width:100%;font-family:var(--mono);font-size:11px;background:var(--bg);color:var(--text);border:1px solid var(--border);padding:2px' });
-        vSel.append(el('option', { value: '-1' }, '— variant —'));
+        const vSel = el('select', { onchange: e => { const v = m2.variants[+e.target.value]; if (v) { g.params = { ...v.p }; refit(); } }, style: 'width:100%;font-family:var(--mono);font-size:11px;background:var(--bg);color:var(--text);border:1px solid var(--border);padding:2px' });
+        vSel.append(el('option', { value: '-1' }, '— preset —'));
         m2.variants.forEach((v, i) => vSel.append(el('option', { value: String(i), ...(JSON.stringify(v.p) === JSON.stringify(g.params) ? { selected: '' } : {}) }, v.label.toLowerCase())));
         s.append(vSel);
       }
+      // FULL param grid — every combination the part declares (screen: 4 types × 3 bezels × sizes…)
+      for (const [key, spec] of Object.entries(m2.params || {})) {
+        if (key === 'mounted' || key === 'outline' || key === 'path') continue;   // view-driven / area-driven
+        const cur = g.params[key] ?? spec.def;
+        const commit = v => { g.params = { ...g.params, [key]: v }; refit(); };
+        let inp;
+        if (spec.options) {
+          inp = el('select', { style: inpStyle });
+          for (const o of spec.options) inp.append(el('option', { value: String(o), ...(String(o) === String(cur) ? { selected: '' } : {}) }, String(o)));
+          inp.addEventListener('change', () => { const o = spec.options.find(o2 => String(o2) === inp.value); commit(o); });
+        } else if (spec.stock) {
+          inp = el('select', { style: inpStyle });
+          for (const o of spec.stock) inp.append(el('option', { value: String(o), ...(String(o) === String(cur) ? { selected: '' } : {}) }, String(o)));
+          inp.addEventListener('change', () => commit(+inp.value));
+        } else if (typeof spec.def === 'number') {
+          inp = el('input', { type: 'number', value: String(cur), style: inpStyle });
+          inp.addEventListener('change', () => commit(+inp.value || spec.def));
+        } else if (typeof spec.def === 'boolean') {
+          inp = el('input', { type: 'checkbox', ...(cur ? { checked: '' } : {}) });
+          inp.addEventListener('change', () => commit(inp.checked));
+        } else {
+          inp = el('input', { type: 'text', value: String(cur ?? ''), style: inpStyle });
+          inp.addEventListener('change', () => commit(inp.value));
+        }
+        s.append(field(key.slice(0, 8), inp));
+      }
+      // mount: in / face / wall (wall only if the part has the wall contract)
+      const mSel = el('select', { style: inpStyle, onchange: e => {
+        const v = e.target.value;
+        if (v === 'wall') { g.mount = 'wall'; if (g.t == null) g.t = 0.25; }
+        else { if (v === 'face') g.mount = 'face'; else delete g.mount; delete g.t; }
+        render();
+      } });
+      const opts = ['in', 'face'].concat(catById[g.cat].wallAnchor ? ['wall'] : []);
+      for (const o of opts) mSel.append(el('option', { value: o, ...(o === (g.mount || 'in') ? { selected: '' } : {}) }, o === 'wall' ? 'wall (trans-paroi)' : o));
+      s.append(field('mount', mSel));
+      if (g.mount !== 'wall') s.append(el('div', { style: 'font-size:10px;color:var(--text2)' }, 'R = rotate 90°'));
+      // aires variables: conformal tank / coolant tracé take the cavity
+      if (g.cat === 'vessel' || g.cat === 'coolant-loop') {
+        s.append(el('button', { class: 'tk-btn', style: 'margin:3px 0', onclick: () => {
+          const bb2 = G.bbox(part.outline);
+          const inner = G.offsetInward(part.outline, R.wallFor(R.tierOf(Math.max(bb2.w, bb2.h))) + 2);
+          const rct = G.inscribedRect(inner, -2);
+          const poly = [[rct.x, rct.y], [rct.x + rct.w, rct.y], [rct.x + rct.w, rct.y + rct.h], [rct.x, rct.y + rct.h]].map(([px2, py2]) => [Math.round(px2), Math.round(py2)]);
+          if (g.cat === 'vessel') g.params = { ...g.params, style: 'conformal', outline: poly };
+          else g.params = { ...g.params, path: poly };
+          delete g.mount; delete g.t;
+          g.at = [rct.x - 2, rct.y - 2]; g.w = Math.round(rct.w + 9); g.h = Math.round(rct.h + 7);
+          render();
+        } }, 'fit to cavity'));
+      }
       const fn = m2.functions || {};
       s.append(el('div', { style: 'font-size:10px;color:var(--text2);margin:3px 0' },
-        `provides ${((fn.provides || []).join(', ')) || '—'} · needs ${((fn.needs || []).join(', ')) || '—'}${fn.latent ? ' · latent: ?' : ''}`));
+        `provides ${((fn.provides || []).join(', ')) || '—'} · needs ${((fn.needs || []).join(', ')) || '—'}${fn.latent ? ' · latent: ?' : ''}` +
+        ((m2.slots || []).length ? ` · slots: ${m2.slots.map(sl => `${sl.id}→${sl.accepts}`).join(', ')}` : '')));
     }
     const pushSel = el('select', { onchange: e => { const v = +e.target.value; if (v) g.push = v; else delete g.push; render(); }, style: 'font-family:var(--mono);font-size:12px;background:var(--bg);color:var(--text);border:1px solid var(--border);padding:2px' });
     for (const v of [0, 1, 2, 3]) pushSel.append(el('option', { value: String(v), ...(v === (g.push || 0) ? { selected: '' } : {}) }, v ? `+${v} overdrive` : 'stock'));

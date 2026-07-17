@@ -75,3 +75,9 @@ export function draw(p, view = {}) {
 }
 export function thumb(p) { return draw(norm(p ?? {}), { lod: 'thumb', density: 1, fit: 58 }); }
 export function binGlyph() { return thumb({ cores: 1, socket: 'occupied' }); }
+
+// loom termination: the edge-connector fingers
+export function wirePad(p, view = {}) {
+  const q = norm(p), k = view.k ?? 8, [Wm, Hm] = DIMS[q.cores];
+  return { x: Wm / 2 * k, y: Hm * k + 1.5 * k };
+}

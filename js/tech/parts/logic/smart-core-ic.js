@@ -79,3 +79,6 @@ export function draw(p, view = {}) {
 }
 export function thumb(p) { return draw(norm(p ?? {}), { lod: 'thumb', fit: 42 }); }
 export function binGlyph() { return thumb({}); }
+
+// loom termination: pin 1
+export function wirePad(p, view = {}) { const k = view.k ?? 8, m = 2.2 * k; return { x: m + 1.4 * k, y: m + 1.4 * k }; }

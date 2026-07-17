@@ -122,3 +122,9 @@ export function thumb(p) {
 export function binGlyph() {
   return thumb({ w: 38, h: 18, displayType: 'scope-wave', bezel: 'raised', content: 'BIN' });
 }
+
+// loom termination: the west solder tab
+export function wirePad(p, view = {}) {
+  const q = norm(p), k = view.k ?? 8, b = BEZEL[q.bezel] ?? BEZEL.flush;
+  return { x: 0.6 * k, y: (q.h / 2 + b) * k };
+}

@@ -29,10 +29,10 @@ export function draw(p, view = {}) {
     const bodyL = q.d * 1.6;
     const k = view.k ?? fitK(bodyL * 0.5 + 12, q.d + 6, view.fit ?? 110);
     const hpx = q.d * k, y0 = 3 * k, ry = y0 + hpx / 2, bl = bodyL * k;
-    const fx = 3 * k, mx = fx + 1.8 * k, ml = bl * 0.38 - 1.8 * k + 4 * k;
+    const fx = 3 * k, fw = (view.wallMm ?? 1.8) * k, mx = fx + fw, ml = bl * 0.38 - fw + 4 * k;
     // the flange plate IS on the outside of the wall — it stays in the exterior view
-    let out = RC(fx, y0 - 1.8 * k, 1.8 * k, hpx + 3.6 * k, W.mid, '#fff');
-    out += screwMini(fx + 0.9 * k, y0 - 0.9 * k, 0.7 * k, 'cross') + screwMini(fx + 0.9 * k, y0 + hpx + 0.9 * k, 0.7 * k, 'cross');
+    let out = RC(fx, y0 - 1.8 * k, fw, hpx + 3.6 * k, W.mid, '#fff');
+    out += screwMini(fx + fw / 2, y0 - 0.9 * k, 0.7 * k, 'cross') + screwMini(fx + fw / 2, y0 + hpx + 0.9 * k, 0.7 * k, 'cross');
     out += RC(mx, y0 + 0.6 * k, ml, hpx - 1.2 * k, W.vis, '#fff');
     const faceX = mx + ml;
     if (q.medium === 'ir') { out += L(faceX, y0 + 0.6 * k, faceX, y0 + hpx - 0.6 * k, W.mid); out += L(faceX - 0.8 * k, y0 + 1 * k, faceX - 0.8 * k, y0 + hpx - 1 * k, 0.6); }
@@ -49,11 +49,12 @@ export function draw(p, view = {}) {
   let out = RC(x0, y0, bl, hpx, swB, '#fff');
   if (!heavy) for (let i = 1; i <= 3; i++) out += L(x0 + bl * 0.12 * i, y0 + 0.5 * k, x0 + bl * 0.12 * i, y0 + hpx - 0.5 * k, 0.7);
   // panel flange at the front third: taller disc + 2 screws
+  const fw = (view.wallMm ?? 1.8) * k;
   const fx = x0 + bl * 0.62;
-  out += RC(fx, y0 - 1.8 * k, 1.8 * k, hpx + 3.6 * k, swM, '#fff');
-  if (!heavy) { out += screwMini(fx + 0.9 * k, y0 - 0.9 * k, 0.7 * k, 'cross') + screwMini(fx + 0.9 * k, y0 + hpx + 0.9 * k, 0.7 * k, 'cross'); }
+  out += RC(fx, y0 - 1.8 * k, fw, hpx + 3.6 * k, swM, '#fff');
+  if (!heavy) { out += screwMini(fx + fw / 2, y0 - 0.9 * k, 0.7 * k, 'cross') + screwMini(fx + fw / 2, y0 + hpx + 0.9 * k, 0.7 * k, 'cross'); }
   // mouth: short bezel + medium-specific face
-  const mx = fx + 1.8 * k, ml = bl * 0.38 - 1.8 * k + 4 * k;
+  const mx = fx + fw, ml = bl * 0.38 - fw + 4 * k;
   out += RC(mx, y0 + 0.6 * k, ml, hpx - 1.2 * k, swB, '#fff');
   const faceX = mx + ml;
   if (q.medium === 'ir') { // window: double line + glass tick
@@ -72,3 +73,19 @@ export function draw(p, view = {}) {
 }
 export function thumb(p) { return draw(norm(p ?? {}), { lod: 'thumb', density: 1, fit: 52 }); }
 export function binGlyph() { return thumb({}); }
+
+// ── mounting contract (trans-paroi) ──
+// wallAnchor: LOCAL drawing coords (no frame pad) of the point that must sit on the
+// host WALL CENTRELINE + the local outward axis. wirePad: where the loom lands.
+export function wallAnchor(p, view = {}) {
+  const q = norm(p), k = view.k ?? 8;
+  const fw = (view.wallMm ?? 1.8) * k;
+  const hpx = q.d * k, y0 = 3 * k;
+  if (q.mounted === 'exterior' || view.exterior) return { x: 3 * k + fw / 2, y: y0 + hpx / 2, axis: 'x' };
+  const bl = q.d * 1.6 * k;
+  return { x: 4 * k + bl * 0.62 + fw / 2, y: y0 + hpx / 2, axis: 'x' };
+}
+export function wirePad(p, view = {}) {
+  const q = norm(p), k = view.k ?? 8;
+  return { x: 4 * k - 2.2 * k, y: 3 * k + q.d * k / 2 - 1.2 * k };
+}

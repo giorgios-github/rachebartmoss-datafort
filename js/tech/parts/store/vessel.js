@@ -65,3 +65,17 @@ export function draw(p, view = {}) {
 }
 export function thumb(p) { return draw(norm(p ?? {}), { lod: 'thumb', density: 1, fit: 54 }); }
 export function binGlyph() { return thumb({}); }
+
+// loom/hose termination: the matter port
+export function wirePad(p, view = {}) {
+  const q = norm(p), k = view.k ?? 8;
+  if (q.style === 'conformal') {
+    const pts = q.outline ?? [[0, 0], [30, 0], [30, 12], [0, 12]];
+    const bb = G.bbox(pts);
+    let ri = 0; pts.forEach((pt, i) => { if (pt[0] > pts[ri][0]) ri = i; });
+    return { x: 3 * k + (pts[ri][0] - bb.x) * k + 2 * k, y: 2 * k + (pts[ri][1] - bb.y) * k };
+  }
+  const D2 = q.vol <= 10 ? 12 : q.vol <= 25 ? 18 : 26, len = D2 * 2.1;
+  if (q.style === 'bottle') return { x: 2 * k + len * k + 4.5 * k, y: 2 * k + D2 * k / 2 };
+  return { x: 2 * k + len * k - 4 * k, y: 2 * k + D2 * k / 2 };
+}
