@@ -4,8 +4,8 @@
 import * as G from './tech/geom.js';
 import * as R from './tech/rules.js';
 import * as M from './tech/model.js';
-import { renderModule, standalone, placePorts, placePerimFeats, binThumb } from './tech/module.js';
-import { BINS as CAT_BINS, BIN_ORDER as CAT_BIN_ORDER, byId as catById, catFootprint, catMount } from './tech/catalog.js';
+import { renderModule, standalone, placePorts, placePerimFeats, placeScrews, binThumb } from './tech/module.js';
+import { BINS as CAT_BINS, BIN_ORDER as CAT_BIN_ORDER, byId as catById, catFootprint, catMount, SEATS_IN } from './tech/catalog.js';
 import { defsBlock } from './tech/law.js';
 
 const $ = id => document.getElementById(id);
@@ -98,6 +98,9 @@ function overlaySvg() {
         const [x, y] = mmToPx(g.at[0], g.at[1]);
         s += `<rect x="${x - 3}" y="${y - 3}" width="${g.w * K + 6}" height="${g.h * K + 6}" fill="none" stroke="${acc}" stroke-width="1.4" stroke-dasharray="4 3"/>`;
       }
+    } else if (sel.type === 'screw' && part.screws[sel.i]) {
+      const [x, y] = mmToPx(...screwPosMm(sel.i));
+      s += `<circle cx="${x}" cy="${y}" r="${4 * K}" fill="none" stroke="${acc}" stroke-width="1.4" stroke-dasharray="4 3"/>`;
     } else if (sel.type === 'port') {
       const pl = placePorts(part.outline, part.ports)[sel.i];
       if (pl) { const [x, y] = mmToPx(pl.x, pl.y); s += `<circle cx="${x}" cy="${y}" r="${(pl.spec.half + 3) * K}" fill="none" stroke="${acc}" stroke-width="1.4" stroke-dasharray="4 3"/>`; }
@@ -117,6 +120,31 @@ function overlaySvg() {
   }
   return `<g>${s}</g>`;
 }
+// manual screw position in mm (same inset rule as the renderer)
+function screwPosMm(i) {
+  const bb = G.bbox(part.outline), wall = R.wallFor(R.tierOf(Math.max(bb.w, bb.h)));
+  const e = R.edgeDist(wall, R.screwFor(wall));
+  const P = G.perimeter(part.outline);
+  const q = G.pointAt(part.outline, (((part.screws[i].t % 1) + 1) % 1) * P);
+  return [q.x - q.nx * e, q.y - q.ny * e];
+}
+// where a host's antenna slot roughly sits (for picking/seating — the renderer is exact)
+function hostSlotApprox(g) {
+  if (g.mount === 'wall') {
+    const P = G.perimeter(part.outline), q = G.pointAt(part.outline, ((((g.t ?? 0.25) % 1) + 1) % 1) * P);
+    return [q.x, q.y];
+  }
+  return [g.at[0] + g.w * 0.78, g.at[1]];
+}
+function removeGut(i) {
+  part.guts.splice(i, 1);
+  for (let j = part.guts.length - 1; j >= 0; j--) {           // coupling survives renumbering
+    const g = part.guts[j];
+    if (!Number.isInteger(g.host)) continue;
+    if (g.host === i) part.guts.splice(j, 1);                 // host gone → the seated part goes with it
+    else if (g.host > i) g.host--;
+  }
+}
 function render() {
   M.normalize(part);
   let figSvg;
@@ -134,6 +162,18 @@ function render() {
 
 // ── hit testing (mm) ──
 function hitTest(x, y) {
+  // seated parts (antenna in a host slot): pick near the host's slot
+  for (let i = part.guts.length - 1; i >= 0; i--) {
+    const g = part.guts[i];
+    if (g.k === 'cat' && Number.isInteger(g.host) && part.guts[g.host]) {
+      const [sx, sy] = hostSlotApprox(part.guts[g.host]);
+      if (Math.hypot(sx - x, sy - y) < 8) return { type: 'gut', i };
+    }
+  }
+  for (let i = 0; i < (part.screws || []).length; i++) {
+    const [sx, sy] = screwPosMm(i);
+    if (Math.hypot(sx - x, sy - y) < 3.5) return { type: 'screw', i };
+  }
   // wall-mounted catalogue parts: pick near their wall point
   for (let i = part.guts.length - 1; i >= 0; i--) {
     const g = part.guts[i];
@@ -183,9 +223,12 @@ stage.addEventListener('mousemove', e => {
   if (drag) {
     if (drag.type === 'gut') {
       const g = part.guts[drag.i];
-      if (g.k === 'cat' && g.mount === 'wall') { const P = G.perimeter(part.outline); g.t = G.closestS(part.outline, x, y) / P; }   // wall parts slide the edge
+      const gH = Number.isInteger(g.host) ? part.guts[g.host] : null;
+      if (gH) { if (gH.mount === 'wall') { const P = G.perimeter(part.outline); gH.t = G.closestS(part.outline, x, y) / P; } }  // seated: the HOST slides, the antenna rides
+      else if (g.k === 'cat' && g.mount === 'wall') { const P = G.perimeter(part.outline); g.t = G.closestS(part.outline, x, y) / P; }   // wall parts slide the edge
       else g.at = [Math.round((x + drag.dx) * 2) / 2, Math.round((y + drag.dy) * 2) / 2];
     }
+    else if (drag.type === 'screw' && part.screws[drag.i]) { const P = G.perimeter(part.outline); part.screws[drag.i].t = G.closestS(part.outline, x, y) / P; }
     else if (drag.type === 'port') { const P = G.perimeter(part.outline); part.ports[drag.i].t = G.closestS(part.outline, x, y) / P; }
     else if (drag.type === 'feat') {
       const f = part.feats[drag.i];
@@ -220,6 +263,19 @@ stage.addEventListener('click', e => {
     if (sketch.length >= 3 && Math.hypot(x - sketch[0][0], y - sketch[0][1]) < 3.5) return commitSketch();
     sketch.push([Math.round(x), Math.round(y)]); render(); return;
   }
+  if (tool.kind === 'screw') {
+    // first gesture captures the CURRENT rule layout — then every screw is yours
+    if (!part.screws.length) {
+      const bb = G.bbox(part.outline), wall = R.wallFor(R.tierOf(Math.max(bb.w, bb.h)));
+      const keep = placePorts(part.outline, part.ports).concat(placePerimFeats(part.outline, part.feats).filter(f => f.perim));
+      part.screws = placeScrews(part.outline, wall, R.screwFor(wall), part, keep).map(s2 => ({ t: s2.s / P }));
+    }
+    let near = -1;
+    for (let i = 0; i < part.screws.length; i++) { const [sx, sy] = screwPosMm(i); if (Math.hypot(sx - x, sy - y) < 3.5) near = i; }
+    if (near >= 0) sel = { type: 'screw', i: near };
+    else { part.screws.push({ t: G.closestS(part.outline, x, y) / P }); sel = { type: 'screw', i: part.screws.length - 1 }; }
+    render(); return;
+  }
   if (tool.kind === 'port') { part.ports.push({ k: tool.sub, t: G.closestS(part.outline, x, y) / P }); sel = { type: 'port', i: part.ports.length - 1 }; setTool('select'); render(); return; }
   if (tool.kind === 'feat') {
     const spec = R.FEAT[tool.sub];
@@ -233,6 +289,27 @@ stage.addEventListener('click', e => {
   if (tool.kind === 'gut') {
     const d = R.GUT[tool.sub];
     part.guts.push({ k: tool.sub, at: [Math.round(x - d.w / 2), Math.round(y - d.h / 2)], w: d.w, h: d.h });
+    sel = { type: 'gut', i: part.guts.length - 1 }; setTool('select'); render(); return;
+  }
+  if (tool.kind === 'cat' && SEATS_IN[tool.sub]) {
+    // COUPLING: this part only exists seated in a host's slot — find the nearest
+    // host port; seating flips an in-cavity host trans-paroi (the antenna emerges).
+    const hostCat = SEATS_IN[tool.sub];
+    let best = -1, bd = 16;
+    part.guts.forEach((g, i) => {
+      if (g.k !== 'cat' || g.cat !== hostCat) return;
+      if (part.guts.some(o => o.host === i)) return;          // slot already taken
+      const [sx, sy] = hostSlotApprox(g);
+      const d = Math.hypot(sx - x, sy - y);
+      if (d < bd) { bd = d; best = i; }
+    });
+    if (best < 0) { $('tk-hint').textContent = `no free ${hostCat} port here — seat the ${tool.sub} ON a ${hostCat}'s slot`; return; }
+    const gH = part.guts[best];
+    if (gH.mount !== 'wall' && catById[gH.cat] && catById[gH.cat].wallAnchor) {
+      gH.mount = 'wall';
+      gH.t = G.closestS(part.outline, gH.at[0] + gH.w / 2, gH.at[1]) / P;
+    }
+    part.guts.push({ k: 'cat', cat: tool.sub, params: { geom: 'stub', size: 18 }, at: [0, 0], w: 12, h: 20, host: best });
     sel = { type: 'gut', i: part.guts.length - 1 }; setTool('select'); render(); return;
   }
   if (tool.kind === 'cat') {
@@ -259,15 +336,16 @@ window.addEventListener('keydown', e => {
   if (e.key === 'Enter' && tool.kind === 'outline' && sketch.length >= 3) return commitSketch();
   if ((e.key === 'r' || e.key === 'R') && sel?.type === 'gut' && part.guts[sel.i]) {
     const g = part.guts[sel.i];
-    if (g.k === 'cat' && g.mount === 'wall') return;                 // wall parts orient by the wall
+    if (g.k === 'cat' && (g.mount === 'wall' || Number.isInteger(g.host))) return;   // wall/seated parts orient by wall/host
     g.rot = g.k === 'cat' ? ((g.rot || 0) + 90) % 360 : 0;
     const t2 = g.w; g.w = g.h; g.h = t2;
     render(); return;
   }
   if ((e.key === 'Delete' || e.key === 'Backspace') && sel) {
     if (sel.type === 'port') part.ports.splice(sel.i, 1);
-    else if (sel.type === 'gut') part.guts.splice(sel.i, 1);
+    else if (sel.type === 'gut') removeGut(sel.i);
     else if (sel.type === 'feat') part.feats.splice(sel.i, 1);
+    else if (sel.type === 'screw') part.screws.splice(sel.i, 1);   // remove ALL → back to the rule
     sel = null; render();
   }
 });
@@ -296,8 +374,10 @@ function hint() {
     rect: 'drag = chassis — corner treatment derives from size + origin',
     outline: 'click = vertex · click 1st / Enter = close · Esc = cancel',
     port: `click the edge → drop a ${tool.sub || ''} port (snaps to a flat seat)`,
+    screw: 'click = place a screw on the edge (1st click captures the current layout) · drag = slide · Del = remove · remove all = rule again',
     gut: `click inside → seat a ${tool.sub || ''}`,
-    cat: `click inside → seat a ${tool.sub || ''} (catalogue part — pick a variant once seated)`,
+    cat: SEATS_IN[tool.sub] ? `click ON a ${SEATS_IN[tool.sub]}'s slot → couple the ${tool.sub} (it rides the port through the shell)`
+      : `click inside → seat a ${tool.sub || ''} (catalogue part — pick a variant once seated)`,
     feat: `click ${R.FEAT[tool.sub]?.perim ? 'the edge' : 'the lid'} → mount a ${tool.sub || ''}`,
   };
   h.textContent = view.mode === 'exploded' ? 'exploded view is read-only — switch to exterior/section to edit' : (msgs[tool.kind] || '');
@@ -315,6 +395,7 @@ function renderTools() {
   t.append(btn('◇ chamfer box', false, () => stockOutline('chamfer')));
   t.append(btn('⬭ pill', false, () => stockOutline('pill')));
   t.append(btn('~ organic', false, () => stockOutline('blob')));
+  t.append(btn('⊙ screws (manual)', tool.kind === 'screw', () => setTool('screw'), 'take over the fastener layout by hand'));
   // parts BINS — trays you grab drawn parts from, not word-lists
   const bin = (title, cat, kinds, toolKind) => {
     t.append(el('div', { class: 'tk-sect' }, title));
@@ -430,17 +511,10 @@ function renderSide() {
       // FULL param grid — every combination the part declares (screen: 4 types × 3 bezels × sizes…)
       for (const [key, spec] of Object.entries(m2.params || {})) {
         if (key === 'mounted' || key === 'outline' || key === 'path') continue;   // view-driven / area-driven
+        if (g.cat === 'rf-transceiver' && key === 'antenna') continue;             // coupling is a REAL object now (seat one from the LINK tray)
+        if (Number.isInteger(g.host) && key === 'bare') continue;                  // seated = bare by construction
         const cur = g.params[key] ?? spec.def;
-        const commit = v => {
-          g.params = { ...g.params, [key]: v };
-          // seating an antenna in the rf-transceiver port = the part goes trans-paroi
-          // (body inside, port + antenna emerging through the shell)
-          if (g.cat === 'rf-transceiver' && key === 'antenna') {
-            if (v !== 'empty') { g.mount = 'wall'; if (g.t == null) g.t = 0.25; }
-            else if (g.mount === 'wall') { delete g.mount; delete g.t; }
-          }
-          refit();
-        };
+        const commit = v => { g.params = { ...g.params, [key]: v }; refit(); };
         let inp;
         if (spec.options) {
           inp = el('select', { style: inpStyle });

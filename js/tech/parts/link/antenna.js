@@ -108,3 +108,13 @@ export function wallAnchor(p, view = {}) {
   return { x: D2 / 2 + 3 * k, y: yv + 4 * k, axis: '-y' };
 }
 export function wirePad(p, view = {}) { const a = wallAnchor(p, view); return { x: a.x, y: a.y }; }
+
+// ── coupling contract: the base point that lands ON a host port collar ──
+export function seatAnchor(p, view = {}) {
+  const q = norm(p), k = view.k ?? 8;
+  if (q.geom === 'whip') { const hpx = (q.size + 12) * k; return { x: 8 * k, y: hpx - 4 * k }; }
+  if (q.geom === 'stub') { const hpx = (q.size + 6) * k; return { x: 6 * k, y: hpx - 4 * k }; }
+  if (q.geom === 'patch') { const s2 = q.size * k; return { x: 2 * k + s2 * 0.5, y: s2 + 2 * k }; }
+  const D2 = q.size * k, f = D2 / 4, yv = 2 * k + f;
+  return { x: D2 / 2 + 3 * k, y: yv + 2 * k };
+}

@@ -10,7 +10,7 @@ import * as G from './geom.js';
 import * as R from './rules.js';
 import { defsBlock } from './law.js';
 import { autoWires, effHeat } from './model.js';
-import { catEmbed, catInner, catWallAnchor, catWirePad, catFigure, CAT_PAD } from './catalog.js';
+import { catEmbed, catInner, catWallAnchor, catWirePad, catSlotAnchor, catSeatAnchor, catFigure, CAT_PAD } from './catalog.js';
 const FOOT_K = 8;
 
 const N = G.fmt;
@@ -31,6 +31,12 @@ function pathOf(pts, map) {
 export function placeScrews(pts, wall, screw, part, keepPts) {
   const e = R.edgeDist(wall, screw);
   const P = G.perimeter(pts);
+  if (part.screws && part.screws.length) {                     // MANUAL layout = design intent, verbatim
+    return part.screws.map(({ t }) => {
+      const s = (((t % 1) + 1) % 1) * P, q = G.pointAt(pts, s);
+      return { x: q.x - q.nx * e, y: q.y - q.ny * e, s };
+    }).sort((a, b) => a.s - b.s);
+  }
   const corners = G.cornerClusters(pts);
   let cands = corners.map(c => ({ x: c.x + c.ix * e, y: c.y + c.iy * e, s: c.s }));
   const Pm = R.pitchMax(screw);
@@ -458,6 +464,51 @@ export function renderModule(part, view = {}) {
     if (hidden) return rect(x, y, g.w * k, g.h * k, 0.9, 'none', R.DASH.hl);       // lid furniture above the cut plane
     return catEmbed(g.cat, g.params, x, y, g.w * k, g.h * k, dens, undefined, g.rot || 0);
   }).join('');
+  // ── COUPLING: a part seated in another part's slot (antenna → rf-transceiver ant0).
+  // The seated object is drawn AT the host's slot anchor, bare (the collar belongs to
+  // the host port), riding the host's own transform — wall or in-cavity, rotated or not.
+  const isSeated = g => g.k === 'cat' && Number.isInteger(g.host);
+  const hostSlotMm = (gH, exterior) => {
+    if (isWallG(gH)) {
+      const t2 = wallGutXform(gH, exterior);
+      const sa = t2 && catSlotAnchor(gH.cat, t2.params2, t2.view2);
+      if (!t2 || !sa) return null;
+      const rad = t2.rot * Math.PI / 180, dx = sa.x - t2.a.x, dy = sa.y - t2.a.y;
+      return { pt: [t2.wallMid[0] + (dx * Math.cos(rad) - dy * Math.sin(rad)) / k,
+                    t2.wallMid[1] + (dx * Math.sin(rad) + dy * Math.cos(rad)) / k], ang: t2.rot };
+    }
+    const nat = catFigure(gH.cat, gH.params, { k: FOOT_K, density: 1 });
+    const sa = catSlotAnchor(gH.cat, gH.params, { k: FOOT_K });
+    if (!nat || !sa) return null;
+    const natW = nat.wPx / FOOT_K, natH = nat.hPx / FOOT_K;
+    const quarter = gH.rot === 90 || gH.rot === 270;
+    const bw = quarter ? gH.h : gH.w, bh = quarter ? gH.w : gH.h;
+    const s2 = Math.min(bw / natW, bh / natH);
+    const ox2 = gH.at[0] + (gH.w - bw) / 2 + (bw - natW * s2) / 2;
+    const oy2 = gH.at[1] + (gH.h - bh) / 2 + (bh - natH * s2) / 2;
+    let px2 = ox2 + (sa.x + CAT_PAD) / FOOT_K * s2, py2 = oy2 + (sa.y + CAT_PAD) / FOOT_K * s2;
+    if (gH.rot) {
+      const cx2 = gH.at[0] + gH.w / 2, cy2 = gH.at[1] + gH.h / 2, r2 = gH.rot * Math.PI / 180;
+      const rx3 = cx2 + (px2 - cx2) * Math.cos(r2) - (py2 - cy2) * Math.sin(r2);
+      const ry3 = cy2 + (px2 - cx2) * Math.sin(r2) + (py2 - cy2) * Math.cos(r2);
+      px2 = rx3; py2 = ry3;
+    }
+    return { pt: [px2, py2], ang: gH.rot || 0 };
+  };
+  const drawSeated = exterior => part.guts.filter(isSeated).map(g => {
+    const gH = part.guts[g.host];
+    if (!gH || gH.k !== 'cat') return '';
+    if (exterior && !isWallG(gH)) return '';                // buried host — nothing shows outside
+    const an = hostSlotMm(gH, exterior);
+    if (!an) return '';
+    const params2 = { ...g.params, bare: true };
+    const view3 = { k, density: Math.min(dens, 2) };
+    const fig = catInner(g.cat, params2, view3);
+    const sa = catSeatAnchor(g.cat, params2, view3);
+    if (!fig || !sa) return '';
+    const [px, py] = mapP(an.pt[0], an.pt[1]);
+    return `<g transform="translate(${N(px)},${N(py)}) rotate(${N(an.ang)}) translate(${N(-(sa.x + CAT_PAD))},${N(-(sa.y + CAT_PAD))})">${fig.inner}</g>`;
+  }).join('');
 
   // wires — the internal logic made visible. Solid when resolved (knowledge).
   const wirePoint = ref => {
@@ -465,6 +516,10 @@ export function renderModule(part, view = {}) {
     if (kind === 'g' && part.guts[i]) {
       const g = part.guts[i];
       if (g.k !== 'cat') return gutCenterMm(g);
+      if (isSeated(g) && part.guts[g.host]) {
+        const an = hostSlotMm(part.guts[g.host], false);
+        if (an) return an.pt;
+      }
       if (isWallG(g)) {                                          // exact interior pad through the wall transform
         const t2 = wallGutXform(g, false);
         const wp = t2 && catWirePad(g.cat, t2.params2, t2.view2);
@@ -512,7 +567,9 @@ export function renderModule(part, view = {}) {
   const drawWires = () => {
     if (dens < 2) return '';
     const out = [];
+    const coupled = (a, b) => a[0] === 'g' && b[0] === 'g' && part.guts[+a.slice(1)] && part.guts[+a.slice(1)].host === +b.slice(1);
     wires.forEach((w2, wi) => {
+      if (coupled(w2[0], w2[1]) || coupled(w2[1], w2[0])) return;   // seated = the collar IS the connection
       const A = wirePoint(w2[0]), B = wirePoint(w2[1]);
       if (!A || !B) return;
       const [x1, y1] = mapP(A[0], A[1]), [x2, y2] = mapP(B[0], B[1]);
@@ -565,7 +622,7 @@ export function renderModule(part, view = {}) {
     }
     if (part.sealed) out.push(`<path d="${innerD}" fill="url(#pot)" stroke="none"/>`);       // potted but KNOWN: solid guts under pot
     else out.push(drawBosses());
-    for (const g of part.guts) { if (isWallG(g) || isFaceG(g)) continue; out.push(gutGlyph(g, part, mapP, k, dens, false)); }
+    for (const g of part.guts) { if (isWallG(g) || isFaceG(g) || isSeated(g)) continue; out.push(gutGlyph(g, part, mapP, k, dens, false)); }
     out.push(drawWires());
     if (part.sealed && lod !== 'thumb' && dens >= 2) {
       const [tx2, ty2] = mapP(cavRect.x + cavRect.w / 2, cavRect.y + 1.5);
@@ -597,6 +654,7 @@ export function renderModule(part, view = {}) {
     L.push(drawFaceFeats());
     L.push(drawCatFaces());                            // catalogue lid parts, visible outside
     L.push(drawCatWalls(true));                        // trans-paroi parts: EXT SEUL register
+    L.push(drawSeated(true));                          // coupled parts riding a trans-paroi host
     L.push(drawPerimFeats());
     L.push(drawPorts());
     L.push(drawScrews());
@@ -609,6 +667,7 @@ export function renderModule(part, view = {}) {
     if (dens >= 2) L.push(drawFaceFeats(true));       // lid furniture above the cut plane → hidden line
     if (dens >= 2) L.push(drawCatFaces(true));
     L.push(drawCatWalls(false));                       // trans-paroi parts: full profile crossing the wall
+    L.push(drawSeated(false));                         // coupled parts, seated on their host slot
     L.push(drawPerimFeats());
     L.push(drawPorts());
     L.push(drawDims());

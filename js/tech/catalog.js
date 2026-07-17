@@ -60,3 +60,7 @@ export function catInner(id, params, view) {
 }
 export function catWallAnchor(id, params, view) { const mod = byId[id]; return mod && mod.wallAnchor ? mod.wallAnchor(params || {}, view || {}) : null; }
 export function catWirePad(id, params, view) { const mod = byId[id]; return mod && mod.wirePad ? mod.wirePad(params || {}, view || {}) : null; }
+export function catSlotAnchor(id, params, view) { const mod = byId[id]; return mod && mod.slotAnchor ? mod.slotAnchor(params || {}, view || {}) : null; }
+export function catSeatAnchor(id, params, view) { const mod = byId[id]; return mod && mod.seatAnchor ? mod.seatAnchor(params || {}, view || {}) : null; }
+// which parts SEAT INTO which hosts (the coupling table)
+export const SEATS_IN = { antenna: 'rf-transceiver' };

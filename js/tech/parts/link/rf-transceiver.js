@@ -103,3 +103,16 @@ export function wirePad(p, view = {}) {
   const [, Hm] = BANDS[q.band];
   return { x: 4.5 * k - 2.2 * k, y: top + Hm * k * 0.32 };
 }
+
+// ── coupling contract: where a SEPARATE antenna object seats (ant0 collar top) ──
+export function slotAnchor(p, view = {}) {
+  const q = norm(p), k = view.k ?? 8;
+  if (q.mounted === 'exterior' || view.exterior) {
+    const pb = (q.antenna === 'whip' ? 22 : 15) * k;
+    return { x: 8 * k, y: pb - 3 * k, axis: '-y' };
+  }
+  const lift = q.mounted === true ? 1.8 * k : 0;
+  const top = (q.antenna === 'empty' ? 7 : q.antenna === 'whip' ? 22 : 14) * k + lift;
+  const [Wm] = BANDS[q.band];
+  return { x: 4.5 * k + Wm * k * 0.78, y: top - lift - 3 * k, axis: '-y' };
+}

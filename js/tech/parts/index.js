@@ -25,7 +25,7 @@ export const BINS = {
   POWER: { glyphOf: 'cell', parts: [cell], planned: ['psu', 'induction-coil', 'thermo-gen'] },
   LOGIC: { glyphOf: 'processor-board', parts: [procBoard, smartCore], planned: ['memory-spool', 'crypto-module'] },
   SENSE: { glyphOf: 'optic', parts: [optic], planned: ['microphone', 'chem-sniffer', 'imu', 'em-probe', 'biomonitor'] },
-  LINK: { glyphOf: 'rf-transceiver', parts: [rfxcvr], planned: ['antenna — seat it in the rf-transceiver port', 'neural-jack', 'laser-link'] },
+  LINK: { glyphOf: 'rf-transceiver', parts: [rfxcvr, antenna], planned: ['neural-jack', 'laser-link'] },
   ACT: { glyphOf: 'emitter', parts: [emitter], planned: ['servo', 'linear-actuator', 'injector', 'micro-pump', 'siren'] },
   INTERFACE: { glyphOf: 'screen', parts: [screen], planned: ['keypad', 'button', 'switch', 'dial', 'led-array', 'haptic'] },
   STORE: { glyphOf: 'vessel', parts: [magazine, vessel], planned: ['cartridge-bay'] },
@@ -35,9 +35,7 @@ export const BINS = {
   GRAFT: { glyphOf: 'adapter-plate', parts: [], planned: ['adapter-plate', 'shim-set', 'reducer-bushing', 'pigtail', 'jury-rig-bracket'] }
 };
 
-// parts that resolve by id but are NOT offered in the tray (antenna: seat it in
-// the rf-transceiver's ant0 port — that IS how an antenna is placed)
-export const HIDDEN = [antenna];
+export const HIDDEN = [];   // ids resolvable but not offered in the tray
 
 export function allParts() {
   const out = [];

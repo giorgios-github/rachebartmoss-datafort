@@ -110,16 +110,24 @@ export function cornerClusters(p, minTurn = 45) {
     const dot = Math.max(-1, Math.min(1, (u[0] * v[0] + u[1] * v[1]) / (lu * lv)));
     turns.push(Math.acos(dot) * 180 / Math.PI);
   }
+  // a cluster is a chain of turning vertices linked by SHORT edges (arc segments,
+  // chamfer cuts) — a long straight edge always breaks the run. Start scanning at a
+  // vertex whose incoming edge is long, so no cluster is split across the seam.
+  const edgeLen = i => { const a = p[(i - 1 + n) % n], b = p[i]; return Math.hypot(b[0] - a[0], b[1] - a[1]); };
+  let i0 = 0;
+  for (let i = 0; i < n; i++) if (edgeLen(i) > 8) { i0 = i; break; }
   const used = new Array(n).fill(false), clusters = [];
-  for (let i = 0; i < n; i++) {
+  for (let o = 0; o < n; o++) {
+    const i = (i0 + o) % n;
     if (used[i] || turns[i] < 10) continue;
     let js = [i], j = (i + 1) % n;
-    while (turns[j] >= 10 && !used[j] && js.length < n) { js.push(j); j = (j + 1) % n; }
+    while (turns[j] >= 10 && !used[j] && edgeLen(j) <= 8 && js.length < n) { js.push(j); j = (j + 1) % n; }
     let sum = 0;
     for (const q of js) { sum += turns[q]; used[q] = true; }
     if (sum >= minTurn) {
-      let best = js[0];
-      for (const q of js) if (turns[q] > turns[best]) best = q;
+      // angular MIDPOINT of the run — symmetric on rounded/chamfered corners
+      let acc = 0, best = js[0];
+      for (const q of js) { acc += turns[q]; if (acc >= sum / 2) { best = q; break; } }
       const b = p[best];
       const nPrev = edgeNormal(p, (best - 1 + n) % n, c), nNext = edgeNormal(p, best, c);
       let bx = nPrev[0] + nNext[0], by = nPrev[1] + nNext[1];

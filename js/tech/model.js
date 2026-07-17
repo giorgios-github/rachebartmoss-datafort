@@ -40,6 +40,7 @@ export function newPart(outline, opts = {}) {
     guts: opts.guts || [],
     wires: opts.wires || null,
     fmax: opts.fmax || 0,
+    screws: opts.screws || [],
   });
 }
 
@@ -62,6 +63,7 @@ export function normalize(p) {
         ...(x.mount === 'face' || x.mount === 'wall' ? { mount: x.mount } : {}),  // 'in' (default) | 'face' (on the lid) | 'wall' (trans-paroi)
         ...(x.t != null ? { t: x.t } : {}),                                       // wall parts: perimeter position
         ...(x.rot ? { rot: ((x.rot % 360) + 360) % 360 } : {}),                   // R rotation, 90° steps
+        ...(Number.isInteger(x.host) ? { host: x.host } : {}),                    // COUPLING: seated in this gut's slot (antenna → rf-transceiver ant0)
         ...(x.label ? { label: x.label } : {}),
         ...(x.push ? { push: Math.max(0, Math.min(3, x.push | 0)) } : {}),
         ...(x.donor ? { donor: String(x.donor) } : {}),
@@ -75,6 +77,7 @@ export function normalize(p) {
       ...(x.donor ? { donor: String(x.donor) } : {}),                      // LINEAGE: where this part lived before
     };
   });
+  p.screws = Array.isArray(p.screws) ? p.screws.map(x => ({ t: ((+x.t % 1) + 1) % 1 || 0 })) : [];  // MANUAL screws: replace the rule entirely
   p.events = Array.isArray(p.events) ? p.events.filter(s => typeof s === 'string' && s) : [];  // the object's history
   if (!Array.isArray(p.wires)) p.wires = null;
   return p;
@@ -99,7 +102,8 @@ export function autoWires(p) {
   p.guts.forEach((g, i) => {
     if (board < 0 || i === board) return;
     if (g.k === 'module') { W2.push([`g${i}`, `g${board}`]); return; }
-    if (g.k === 'cat') {                                     // wire only what NEEDS power/control
+    if (g.k === 'cat') {
+      if (Number.isInteger(g.host) && p.guts[g.host]) { W2.push([`g${i}`, `g${g.host}`]); return; }  // coupled: feed its host
       const needs = (catParts[g.cat] && catParts[g.cat].meta.functions && catParts[g.cat].meta.functions.needs) || [];
       if (needs.length) W2.push([`g${i}`, `g${board}`]);
     }
@@ -175,7 +179,8 @@ export function toJSON(p) {
   if (p.heat) o.heat = p.heat;
   if (p.ports.length) o.ports = p.ports.map(x => ({ k: x.k, t: Math.round(x.t * 1000) / 1000 }));
   if (p.feats.length) o.feats = p.feats.map(f => { const c = { k: f.k }; if (f.at) c.at = [r1(f.at[0]), r1(f.at[1])]; if (f.t != null) c.t = Math.round(f.t * 1000) / 1000; if (f.len) c.len = r1(f.len); if (f.w) { c.w = f.w; c.h = f.h; } if (f.rows) { c.rows = f.rows; c.cols = f.cols; } return c; });
-  if (p.guts.length) o.guts = p.guts.map(g => ({ k: g.k, ...(g.k === 'cat' ? { cat: g.cat, ...(Object.keys(g.params || {}).length ? { params: g.params } : {}), ...(g.mount ? { mount: g.mount } : {}), ...(g.t != null ? { t: Math.round(g.t * 1000) / 1000 } : {}), ...(g.rot ? { rot: g.rot } : {}) } : {}), at: [r1(g.at[0]), r1(g.at[1])], w: r1(g.w), h: r1(g.h), ...(g.label ? { label: g.label } : {}), ...(g.push ? { push: g.push } : {}), ...(g.donor ? { donor: g.donor } : {}) }));
+  if (p.guts.length) o.guts = p.guts.map(g => ({ k: g.k, ...(g.k === 'cat' ? { cat: g.cat, ...(Object.keys(g.params || {}).length ? { params: g.params } : {}), ...(g.mount ? { mount: g.mount } : {}), ...(g.t != null ? { t: Math.round(g.t * 1000) / 1000 } : {}), ...(g.rot ? { rot: g.rot } : {}), ...(Number.isInteger(g.host) ? { host: g.host } : {}) } : {}), at: [r1(g.at[0]), r1(g.at[1])], w: r1(g.w), h: r1(g.h), ...(g.label ? { label: g.label } : {}), ...(g.push ? { push: g.push } : {}), ...(g.donor ? { donor: g.donor } : {}) }));
+  if (p.screws && p.screws.length) o.screws = p.screws.map(x => ({ t: Math.round(x.t * 1000) / 1000 }));
   if (p.events && p.events.length) o.events = p.events;
   if (p.wires) o.wires = p.wires;
   if (p.fmax) o.fmax = p.fmax;
@@ -188,7 +193,7 @@ export function fromJSON(str) {
     origin: R.ORIGINS.includes(o.origin) ? o.origin : 'HANDMADE',
     sealed: !!o.sealed, heat: o.heat || 0,
     ports: o.ports || [], feats: o.feats || [], guts: o.guts || [],
-    events: o.events || [],
+    screws: o.screws || [], events: o.events || [],
     wires: o.wires || null, fmax: o.fmax || 0,
   });
 }
@@ -205,7 +210,8 @@ export function examples() {
       guts: [
         { k: 'cat', cat: 'smart-core-ic', params: { body: 7 }, at: [4, 5], w: 11, h: 11 },
         { k: 'cat', cat: 'cell', params: { format: 'coin', cap: 1 }, at: [16.5, 6], w: 9, h: 9, donor: 'pried from a parking meter' },
-        { k: 'cat', cat: 'rf-transceiver', params: { band: 'HB', antenna: 'stub' }, mount: 'wall', t: 0.9 },
+        { k: 'cat', cat: 'rf-transceiver', params: { band: 'HB' }, mount: 'wall', t: 0.9 },
+        { k: 'cat', cat: 'antenna', params: { geom: 'stub', size: 12 }, at: [0, 0], w: 12, h: 18, host: 2 },
       ],
       events: ['lived three weeks taped behind a vending machine'],
     }),
@@ -242,7 +248,8 @@ export function examples() {
       ports: [{ k: 'power', t: 0.55 }],
       guts: [
         { k: 'cat', cat: 'emitter', params: { d: 12, medium: 'ultrasonic' }, mount: 'wall', t: 0.98, push: 1, donor: 'ex-riot-wagon siren head' },
-        { k: 'cat', cat: 'rf-transceiver', params: { band: 'HB', antenna: 'stub' }, mount: 'wall', t: 0.3 },
+        { k: 'cat', cat: 'rf-transceiver', params: { band: 'HB' }, mount: 'wall', t: 0.3 },
+        { k: 'cat', cat: 'antenna', params: { geom: 'stub', size: 12 }, at: [0, 0], w: 12, h: 18, host: 1 },
         { k: 'cat', cat: 'cell', params: { format: 'prismatic', cap: 2 }, at: [33, 6], w: 12, h: 14 },
         { k: 'cat', cat: 'rail-clamp', params: { w: 14 }, mount: 'face', at: [17, 16], w: 22, h: 10 },
       ],
