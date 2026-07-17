@@ -5,6 +5,7 @@ import * as G from './tech/geom.js';
 import * as R from './tech/rules.js';
 import * as M from './tech/model.js';
 import { renderModule, standalone, placePorts, placePerimFeats, binThumb } from './tech/module.js';
+import { BINS as CAT_BINS, BIN_ORDER as CAT_BIN_ORDER, byId as catById, catFootprint } from './tech/catalog.js';
 import { defsBlock } from './tech/law.js';
 
 const $ = id => document.getElementById(id);
@@ -216,6 +217,11 @@ stage.addEventListener('click', e => {
     part.guts.push({ k: tool.sub, at: [Math.round(x - d.w / 2), Math.round(y - d.h / 2)], w: d.w, h: d.h });
     sel = { type: 'gut', i: part.guts.length - 1 }; setTool('select'); return;
   }
+  if (tool.kind === 'cat') {
+    const fp = catFootprint(tool.sub);
+    part.guts.push({ k: 'cat', cat: tool.sub, params: {}, at: [Math.round(x - fp.w / 2), Math.round(y - fp.h / 2)], w: fp.w, h: fp.h });
+    sel = { type: 'gut', i: part.guts.length - 1 }; setTool('select'); return;
+  }
 });
 stage.addEventListener('dblclick', e => { e.preventDefault(); if (tool.kind === 'outline' && sketch.length >= 3) commitSketch(); });
 window.addEventListener('keydown', e => {
@@ -256,6 +262,7 @@ function hint() {
     outline: 'click = vertex · click 1st / Enter = close · Esc = cancel',
     port: `click the edge → drop a ${tool.sub || ''} port (snaps to a flat seat)`,
     gut: `click inside → seat a ${tool.sub || ''}`,
+    cat: `click inside → seat a ${tool.sub || ''} (catalogue part — pick a variant once seated)`,
     feat: `click ${R.FEAT[tool.sub]?.perim ? 'the edge' : 'the lid'} → mount a ${tool.sub || ''}`,
   };
   h.textContent = view.mode === 'exploded' ? 'exploded view is read-only — switch to exterior/section to edit' : (msgs[tool.kind] || '');
@@ -287,6 +294,21 @@ function renderTools() {
   bin('bin · ports', 'port', M.PORT_KINDS, 'port');
   bin('bin · controls', 'feat', M.FEAT_KINDS, 'feat');
   bin('bin · guts', 'gut', M.GUT_KINDS, 'gut');
+  // THE CATALOGUE (DF-TO-C) — parametric parts, drawn by their own binGlyph
+  for (const b of CAT_BIN_ORDER) {
+    const B = CAT_BINS[b];
+    if (!B.parts.length) continue;
+    t.append(el('div', { class: 'tk-sect' }, `catalogue · ${b.toLowerCase()}`));
+    const tray = el('div', { class: 'tk-bin' });
+    for (const p of B.parts) {
+      const id = p.meta.id;
+      const cell = el('button', { class: 'tk-cell' + (tool.kind === 'cat' && tool.sub === id ? ' on' : ''), title: p.meta.label, onclick: () => setTool('cat', id) });
+      cell.innerHTML = p.binGlyph() + `<span>${id}</span>`;
+      tray.append(cell);
+    }
+    if (B.planned.length) tray.append(el('div', { style: 'grid-column:1/-1;font-size:8px;color:var(--text2);padding:1px 2px', title: B.planned.join(', ') }, `+ ${B.planned.length} planned`));
+    t.append(tray);
+  }
 }
 
 // ── header (view controls + exports) ──
@@ -355,10 +377,22 @@ function renderSide() {
   if (B.push) chips.append(chip(`instability +${B.instability}`, B.instability >= 3));
   s.append(chips);
 
-  // selected part — the transgression + lineage controls
+  // selected part — the transgression + lineage controls (+ catalogue variants)
   if (sel?.type === 'gut' && part.guts[sel.i]) {
     const g = part.guts[sel.i];
-    s.append(el('h3', { class: 'tk-h' }, `selected · ${g.k}`));
+    s.append(el('h3', { class: 'tk-h' }, `selected · ${g.k === 'cat' ? g.cat : g.k}`));
+    if (g.k === 'cat' && catById[g.cat]) {
+      const m2 = catById[g.cat].meta;
+      if (m2.variants && m2.variants.length) {
+        const vSel = el('select', { onchange: e => { const v = m2.variants[+e.target.value]; if (v) { g.params = { ...v.p }; const fp = catFootprint(g.cat, g.params); g.w = fp.w; g.h = fp.h; render(); } }, style: 'width:100%;font-family:var(--mono);font-size:11px;background:var(--bg);color:var(--text);border:1px solid var(--border);padding:2px' });
+        vSel.append(el('option', { value: '-1' }, '— variant —'));
+        m2.variants.forEach((v, i) => vSel.append(el('option', { value: String(i), ...(JSON.stringify(v.p) === JSON.stringify(g.params) ? { selected: '' } : {}) }, v.label.toLowerCase())));
+        s.append(vSel);
+      }
+      const fn = m2.functions || {};
+      s.append(el('div', { style: 'font-size:10px;color:var(--text2);margin:3px 0' },
+        `provides ${((fn.provides || []).join(', ')) || '—'} · needs ${((fn.needs || []).join(', ')) || '—'}${fn.latent ? ' · latent: ?' : ''}`));
+    }
     const pushSel = el('select', { onchange: e => { const v = +e.target.value; if (v) g.push = v; else delete g.push; render(); }, style: 'font-family:var(--mono);font-size:12px;background:var(--bg);color:var(--text);border:1px solid var(--border);padding:2px' });
     for (const v of [0, 1, 2, 3]) pushSel.append(el('option', { value: String(v), ...(v === (g.push || 0) ? { selected: '' } : {}) }, v ? `+${v} overdrive` : 'stock'));
     s.append(field('push', pushSel));
@@ -375,7 +409,7 @@ function renderSide() {
     () => { sel = { type: 'feat', i }; render(); }, () => { part.feats.splice(i, 1); sel = null; render(); })));
   part.guts.forEach((g, i) => {
     const r = row('gut', '', sel?.type === 'gut' && sel.i === i, () => { sel = { type: 'gut', i }; render(); }, () => { part.guts.splice(i, 1); sel = null; render(); });
-    r.insertBefore(el('span', {}, g.k), r.querySelector('.tk-x'));
+    r.insertBefore(el('span', {}, g.k === 'cat' ? g.cat : g.k), r.querySelector('.tk-x'));
     const wIn = el('input', { type: 'number', min: '3', value: g.w, oninput: e => { g.w = Math.max(3, +e.target.value || g.w); render(); } });
     const hIn = el('input', { type: 'number', min: '3', value: g.h, oninput: e => { g.h = Math.max(3, +e.target.value || g.h); render(); } });
     r.insertBefore(wIn, r.querySelector('.tk-x')); r.insertBefore(el('span', { style: 'font-size:10px' }, '×'), r.querySelector('.tk-x')); r.insertBefore(hIn, r.querySelector('.tk-x'));

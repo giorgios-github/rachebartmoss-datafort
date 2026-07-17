@@ -10,6 +10,7 @@ import * as G from './geom.js';
 import * as R from './rules.js';
 import { defsBlock } from './law.js';
 import { autoWires, effHeat } from './model.js';
+import { catEmbed } from './catalog.js';
 
 const N = G.fmt;
 const line = (x1, y1, x2, y2, w, dash) => `<line x1="${N(x1)}" y1="${N(y1)}" x2="${N(x2)}" y2="${N(y2)}" stroke="#111" stroke-width="${w}"${dash ? ` stroke-dasharray="${dash}"` : ''}/>`;
@@ -238,7 +239,9 @@ function gutGlyph(g, part, mapP, k, dens, ghost) {
   const dash = ghost ? R.DASH.ph : '';
   const wv = ghost ? 0.9 : R.W.mid;
   if (ghost) { out.push(rect(x, y, w, h, wv, '#fff', dash)); return out.join(''); }
-  if (g.k === 'board') {
+  if (g.k === 'cat') {                                                                        // DF-TO-C catalogue part, embedded
+    out.push(catEmbed(g.cat, g.params, x, y, w, h, dens));
+  } else if (g.k === 'board') {
     out.push(rect(x, y, w, h, R.W.mid, '#fff'));
     const so = Math.min(2.5, g.w / 5) * k;
     if (dens >= 2) for (const [qx, qy] of [[so, so], [w - so, so], [so, h - so], [w - so, h - so]])

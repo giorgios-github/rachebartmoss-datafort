@@ -54,6 +54,15 @@ export function normalize(p) {
     return f;
   });
   p.guts = (p.guts || []).map(x => {
+    if (x.k === 'cat') {                                                   // catalogue part (DF-TO-C), params drive its geometry
+      return {
+        k: 'cat', cat: String(x.cat || 'cell'), params: (x.params && typeof x.params === 'object') ? x.params : {},
+        at: x.at || [0, 0], w: x.w || 14, h: x.h || 12,
+        ...(x.label ? { label: x.label } : {}),
+        ...(x.push ? { push: Math.max(0, Math.min(3, x.push | 0)) } : {}),
+        ...(x.donor ? { donor: String(x.donor) } : {}),
+      };
+    }
     const d = R.GUT[x.k] || R.GUT.board;
     return {
       k: x.k in R.GUT ? x.k : 'board', at: x.at || [0, 0], w: x.w || d.w, h: x.h || d.h,
@@ -83,7 +92,7 @@ export function autoWires(p) {
   const cell = gi('cell'), mech = gi('mech'), stack = gi('stack');
   const W2 = [];
   if (cell >= 0 && board >= 0 && cell !== board) W2.push([`g${cell}`, `g${board}`]);
-  p.guts.forEach((g, i) => { if (g.k === 'module' && board >= 0 && i !== board) W2.push([`g${i}`, `g${board}`]); });
+  p.guts.forEach((g, i) => { if ((g.k === 'module' || g.k === 'cat') && board >= 0 && i !== board) W2.push([`g${i}`, `g${board}`]); });
   p.ports.forEach((pt, i) => {
     let tgt = board;
     if (pt.k === 'power') tgt = cell >= 0 ? cell : board;
@@ -150,7 +159,7 @@ export function toJSON(p) {
   if (p.heat) o.heat = p.heat;
   if (p.ports.length) o.ports = p.ports.map(x => ({ k: x.k, t: Math.round(x.t * 1000) / 1000 }));
   if (p.feats.length) o.feats = p.feats.map(f => { const c = { k: f.k }; if (f.at) c.at = [r1(f.at[0]), r1(f.at[1])]; if (f.t != null) c.t = Math.round(f.t * 1000) / 1000; if (f.len) c.len = r1(f.len); if (f.w) { c.w = f.w; c.h = f.h; } if (f.rows) { c.rows = f.rows; c.cols = f.cols; } return c; });
-  if (p.guts.length) o.guts = p.guts.map(g => ({ k: g.k, at: [r1(g.at[0]), r1(g.at[1])], w: r1(g.w), h: r1(g.h), ...(g.label ? { label: g.label } : {}), ...(g.push ? { push: g.push } : {}), ...(g.donor ? { donor: g.donor } : {}) }));
+  if (p.guts.length) o.guts = p.guts.map(g => ({ k: g.k, ...(g.k === 'cat' ? { cat: g.cat, ...(Object.keys(g.params || {}).length ? { params: g.params } : {}) } : {}), at: [r1(g.at[0]), r1(g.at[1])], w: r1(g.w), h: r1(g.h), ...(g.label ? { label: g.label } : {}), ...(g.push ? { push: g.push } : {}), ...(g.donor ? { donor: g.donor } : {}) }));
   if (p.events && p.events.length) o.events = p.events;
   if (p.wires) o.wires = p.wires;
   if (p.fmax) o.fmax = p.fmax;

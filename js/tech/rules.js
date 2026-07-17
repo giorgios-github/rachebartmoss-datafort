@@ -65,6 +65,34 @@ export function screenSnap(w, h) {                                      // QUANT
   return best;
 }
 
+// ---- archetype tables required by the parts catalogue (DF-TO-C) ----
+export const BORE_STOCK = [2, 3, 5, 6, 8, 10, 14, 18];                  // QUANTISED mm
+export function boreFor(od, wall) {
+  const max = od - 2 * wall;
+  let b = BORE_STOCK[0];
+  for (const s of BORE_STOCK) if (s <= max * 0.8) b = s;
+  return b;
+}
+export function threadFor(od) {                                          // QUANTISED
+  const q = [8, 10, 12, 14, 18, 24, 32].reduce((a, s) => s <= od ? s : a, 8);
+  return { name: `M${q}×${q >= 14 ? '1.5' : '1.0'}`, len: od <= 12 ? 6 : od <= 18 ? 8 : 10 };
+}
+export const ringPitch = 30;                                             // COUNTED driver
+export function plateThick(tier) { return [2, 3, 4, 5][tier - 1]; }      // QUANTISED
+export function plateSnap(v) { let b = 2; for (const s of [2, 3, 4, 5]) if (Math.abs(s - v) < Math.abs(b - v)) b = s; return b; }
+export function pivotBore(tier) { return [2, 3, 4, 5][tier - 1]; }       // QUANTISED
+export const PAYLOAD = { round: 10, cell: 15, vial: 12 };                // FIXED Ø mm
+export function finBase(tier) { return [3, 4, 5, 6][tier - 1]; }         // QUANTISED
+export function finHeight(tier) { return [8, 12, 16, 20][tier - 1]; }    // QUANTISED
+export const FIN = { w: 1.5, pitch: 5 };                                 // FIXED
+export function substrateFor(tier) { return tier === 1 ? 0.8 : tier === 2 ? 1.6 : 2.4; } // QUANTISED
+export const FINGER = { pitch: 2.54, w: 1.4, len: 5 };                   // FIXED
+export const PIN_PITCH = 0.8;                                            // FIXED
+export function dieFor(body) { return body > 18 ? 8 : body > 10 ? 5 : 3; } // QUANTISED
+export const CLIP_PITCH = 40;                                            // COUNTED driver
+export const JACKET = 4;                                                 // FIXED Ø
+export function vesselWall(tier, bar) { const w = wallFor(tier); return (bar || 0) >= 12 ? wallSnap(w + 1) : w; }
+
 // ---- INTERIOR FURNITURE — default stock sizes (QUANTISED at placement, user-resizable)
 export const GUT = {
   board:  { w: 14, h: 10, label: 'PCB' },
