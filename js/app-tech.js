@@ -1,16 +1,16 @@
 /* app-tech.js — TECH section: the image press.
-   Upload / paste a screenshot of any object → run it through a 1-bit press so it
-   reads as a Cyberpunk 2020 sourcebook illustration (the original books did exactly
-   this: high-contrast thresholded photos). Pure canvas, no server, ink #111 on
-   pure white.
+   Upload / paste a screenshot of any object → press it into a Cyberpunk 2020
+   sourcebook illustration (the original books did exactly this: high-contrast
+   thresholded photos). Pure canvas, no server, ink #111 on pure white.
 
-   Pipeline: COLOUR SEPARATION first (deterministic k-means over RGB, clusters
-   ranked by brightness and spread over well-separated tones, labels cleaned by a
-   3×3 majority filter) — so two colours of equal brightness stay distinct and the
-   OBJECT appears. Presses read that channel through a gamma. The outline is NOT a
-   gradient filter (that inked texture noise): it is the region-boundary map —
-   crisp 1px lines exactly where two colour regions meet.
-   Precise sliders drive every stage; all deterministic.
+   Layout: SOURCE plate on the left (colour original — the pipette and the cutout
+   lasso work HERE), pressed plate on the right. Pipeline: colour separation first
+   (deterministic k-means over RGB, labels cleaned by 3×3 majority vote, clusters
+   ranked by brightness onto spread tones); every cluster is a CHIP (colour swatch
+   → editable gray) — the pipette picks a pixel on the source and selects its
+   chip. Outline = region-boundary map (crisp, no texture noise). Cutout: a
+   polygon drawn on the source; outside stays present but FADES INSIDE THE PRESS
+   ITSELF (ordered Bayer mask on the ink — still strictly 1-bit), dosed by FOND.
    Exposes window.TechSection { render(tab, pane) }. */
 (function () {
   'use strict';
@@ -18,6 +18,7 @@
   var MAXW = 1000;                    // longest side after downscale, px
   var LS_MODE = 'bartmoss_tech_mode';
   var LS_PAR = 'bartmoss_tech_params';
+  var BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
 
   var MODES = [
     { key: 'trame', label: 'TRAME', title: 'Atkinson dither + region outline — the sourcebook halftone' },
@@ -25,7 +26,7 @@
     { key: 'trait', label: 'TRAIT', title: 'Line drawing — region boundaries + strong gradients' },
   ];
   function defaults() {
-    return { k: 5, relief: 40, gamma: 100, bias: 0, outline: 1, fine: 88 };
+    return { k: 5, relief: 40, gamma: 100, bias: 0, outline: 1, fine: 88, fond: 35 };
   }
   // slider registry: [key, label, min, max, step, title]
   var SLIDERS = [
@@ -35,6 +36,7 @@
     ['bias', 'NIVEAU', -60, 60, 2, 'SEUIL: ink more (+) or less (−) than Otsu suggests'],
     ['outline', 'CONTOUR', 0, 3, 1, 'region-boundary line thickness in px (0 = off)'],
     ['fine', 'FINESSE', 70, 98, 1, 'TRAIT: gradient percentile — higher = fewer, finer lines'],
+    ['fond', 'FOND', 0, 100, 5, 'outside the cutout: how much of the press remains (0 = removed)'],
   ];
 
   /* ── per-pane state (one press per tab) ── */
@@ -51,7 +53,11 @@
       rgba: null, w: 0, h: 0, name: 'untitled',
       mode: localStorage.getItem(LS_MODE) || 'trame',
       params: loadParams(),
-      labels: null, L: null, mL: null, tone: null, _kDone: 0,
+      labels: null, L: null, mL: null, tone: null, cent: null, _kDone: 0,
+      toneOv: {},                    // pipette: label → user gray
+      selLab: -1,                    // selected chip
+      tool: 'none',                  // 'none' | 'pip' | 'cut'
+      cut: [], cutClosed: false, _mask: null,
     };
     return pane._tech;
   }
@@ -113,16 +119,18 @@
     order.sort(function (a, b) { return mL[a] - mL[b]; });
     var tone = new Float32Array(K);
     for (k = 0; k < K; k++) tone[order[k]] = K === 1 ? 128 : 10 + k * (235 / (K - 1));
-    s.labels = lab2; s.mL = mL; s.tone = tone; s._kDone = K;
+    s.labels = lab2; s.mL = mL; s.tone = tone; s.cent = cent; s._kDone = K;
+    s.toneOv = {}; s.selLab = -1;                 // new clustering = new chips
   }
 
-  /* ── stage 2 · the separated channel, through relief + gamma ── */
+  /* ── stage 2 · the separated channel: chip tones + relief + gamma ── */
+  function toneOf(s, c) { return s.toneOv[c] != null ? s.toneOv[c] : s.tone[c]; }
   function chanOf(s) {
     var N = s.w * s.h, out = new Float32Array(N);
     var relief = s.params.relief / 100, inv = 100 / s.params.gamma;
     for (var i = 0; i < N; i++) {
       var c = s.labels[i];
-      var v = Math.max(0, Math.min(255, s.tone[c] + relief * (s.L[i] - s.mL[c])));
+      var v = Math.max(0, Math.min(255, toneOf(s, c) + relief * (s.L[i] - s.mL[c])));
       out[i] = 255 * Math.pow(v / 255, inv);
     }
     return out;
@@ -147,6 +155,34 @@
     return out;
   }
 
+  /* ── cutout: polygon (source px) → inside mask; outside fades IN the press ── */
+  function pointInPoly(pts, x, y) {
+    var inside = false;
+    for (var i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      var xi = pts[i][0], yi = pts[i][1], xj = pts[j][0], yj = pts[j][1];
+      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  }
+  function maskOf(s) {
+    if (!s.cutClosed || s.cut.length < 3) return null;
+    if (s._mask) return s._mask;
+    var W = s.w, H = s.h, m = new Uint8Array(W * H);
+    for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) m[y * W + x] = pointInPoly(s.cut, x + 0.5, y + 0.5) ? 1 : 0;
+    s._mask = m;
+    return m;
+  }
+  function applyFade(s, bits) {
+    var m = maskOf(s); if (!m) return bits;
+    var keep = s.params.fond / 100, W = s.w;
+    for (var i = 0; i < bits.length; i++) {
+      if (bits[i] || m[i]) continue;                             // ink outside the cutout:
+      var x = i % W, y = (i / W) | 0;
+      if (BAYER[y & 3][x & 3] / 16 >= keep) bits[i] = 1;         // thin it — still 1-bit
+    }
+    return bits;
+  }
+
   /* ── presses: state → Uint8Array of 0 (ink) / 1 (paper) ── */
   function otsu(g) {
     var hist = new Uint32Array(256), i;
@@ -169,7 +205,7 @@
     for (var i = 0; i < out.length; i++) out[i] = g[i] > t ? 1 : 0;
     var edge = boundaryBits(s);
     for (i = 0; i < out.length; i++) if (!edge[i]) out[i] = 0;
-    return out;
+    return applyFade(s, out);
   }
   function pressTrame(s) {
     // Atkinson error diffusion, then the region outline inked on top
@@ -189,7 +225,7 @@
     }
     var edge = boundaryBits(s);
     for (var j = 0; j < out.length; j++) if (!edge[j]) out[j] = 0;
-    return out;
+    return applyFade(s, out);
   }
   function pressTrait(s) {
     // line drawing: region boundaries + the strongest in-region gradients
@@ -209,7 +245,7 @@
     for (i = 0; i < out.length; i++) out[i] = mag[i] > thr ? 0 : 1;
     var edge = boundaryBits(s);
     for (i = 0; i < out.length; i++) if (!edge[i]) out[i] = 0;
-    return out;
+    return applyFade(s, out);
   }
 
   function press(s) {
@@ -218,7 +254,7 @@
     var fn = s.mode === 'seuil' ? pressSeuil : s.mode === 'trait' ? pressTrait : pressTrame;
     return fn(s);
   }
-  function paint(canvas, s) {
+  function paintPress(canvas, s) {
     var bits = press(s); if (!bits) return;
     canvas.width = s.w; canvas.height = s.h;
     var x = canvas.getContext('2d'), im = x.createImageData(s.w, s.h), d = im.data;
@@ -227,6 +263,25 @@
       d[j] = v; d[j + 1] = v; d[j + 2] = v; d[j + 3] = 255;
     }
     x.putImageData(im, 0, 0);
+  }
+  function paintSource(canvas, s) {
+    canvas.width = s.w; canvas.height = s.h;
+    var x = canvas.getContext('2d');
+    var im = new ImageData(new Uint8ClampedArray(s.rgba), s.w, s.h);
+    x.putImageData(im, 0, 0);
+    // cutout overlay: the lasso lives on the source
+    if (s.cut.length) {
+      x.strokeStyle = '#111'; x.lineWidth = Math.max(1.5, s.w / 400); x.setLineDash([6, 4]);
+      x.beginPath();
+      x.moveTo(s.cut[0][0], s.cut[0][1]);
+      for (var i = 1; i < s.cut.length; i++) x.lineTo(s.cut[i][0], s.cut[i][1]);
+      if (s.cutClosed) x.closePath();
+      x.stroke();
+      x.setLineDash([]);
+      x.fillStyle = '#fff'; x.strokeStyle = '#111'; x.lineWidth = 1.5;
+      var r = Math.max(2.5, s.w / 250);
+      for (i = 0; i < s.cut.length; i++) { x.fillRect(s.cut[i][0] - r, s.cut[i][1] - r, 2 * r, 2 * r); x.strokeRect(s.cut[i][0] - r, s.cut[i][1] - r, 2 * r, 2 * r); }
+    }
   }
 
   /* ── input plumbing ── */
@@ -243,6 +298,7 @@
       var s = st(pane);
       s.rgba = x.getImageData(0, 0, W, H).data; s.w = W; s.h = H;
       s.L = null; s.labels = null; s._kDone = 0;
+      s.toneOv = {}; s.selLab = -1; s.cut = []; s.cutClosed = false; s._mask = null; s.tool = 'none';
       s.name = (name || 'capture').replace(/\.[a-z0-9]+$/i, '');
       redraw(pane);
     };
@@ -253,6 +309,27 @@
   /* ── UI ── */
   function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
   function fmtVal(key, v) { return key === 'gamma' ? (v / 100).toFixed(2) : String(v); }
+  function imgXY(canvas, s, e) {
+    var r = canvas.getBoundingClientRect();
+    return [Math.max(0, Math.min(s.w - 1, (e.clientX - r.left) * s.w / r.width)),
+            Math.max(0, Math.min(s.h - 1, (e.clientY - r.top) * s.h / r.height))];
+  }
+
+  function chipsHtml(s) {
+    if (!s.labels) return '';
+    var order = [];
+    for (var k = 0; k < s.params.k; k++) order.push(k);
+    order.sort(function (a, b) { return toneOf(s, a) - toneOf(s, b); });
+    return order.map(function (c) {
+      var col = 'rgb(' + Math.round(s.cent[c][0]) + ',' + Math.round(s.cent[c][1]) + ',' + Math.round(s.cent[c][2]) + ')';
+      var v = Math.round(toneOf(s, c));
+      return '<span class="tech-chip' + (s.selLab === c ? ' is-sel' : '') + '" data-chip="' + c + '">' +
+        '<span class="tech-chip-sw" style="background:' + col + '"></span>' +
+        '<input type="range" data-tone="' + c + '" min="0" max="255" step="5" value="' + v + '">' +
+        '<span class="tech-chip-v" data-tval="' + c + '">' + v + '</span></span>';
+    }).join('');
+  }
+
   function redraw(pane) {
     var s = st(pane);
     var stage = pane.querySelector('.tech-stage'), bar = pane.querySelector('.tech-modes');
@@ -261,7 +338,12 @@
       b.classList.toggle('is-on', b.getAttribute('data-mode') === s.mode);
     });
     pane.querySelectorAll('.tech-need-img').forEach(function (b) { b.disabled = !s.rgba; });
+    var tp = pane.querySelector('.tech-tool-pip'), tc = pane.querySelector('.tech-tool-cut'), tz = pane.querySelector('.tech-tool-clear');
+    if (tp) tp.classList.toggle('is-on', s.tool === 'pip');
+    if (tc) tc.classList.toggle('is-on', s.tool === 'cut');
+    if (tz) tz.style.display = s.cut.length ? '' : 'none';
     if (!s.rgba) {
+      pane.querySelector('.tech-tones').innerHTML = '';
       stage.innerHTML =
         '<div class="tech-drop"><div class="tech-drop-g">▣</div>' +
         '<div class="tech-drop-l">DROP A SCREENSHOT</div>' +
@@ -269,12 +351,64 @@
       stage.querySelector('.tech-drop').onclick = function () { pane.querySelector('.tech-file').click(); };
       return;
     }
-    stage.innerHTML = '<div class="tech-plate"><canvas class="tech-canvas"></canvas>' +
-      '<div class="tech-plate-cap">' + esc(s.name.toUpperCase()) + ' · ' + s.w + '×' + s.h + ' · 1-BIT</div></div>';
-    paint(stage.querySelector('.tech-canvas'), s);
+    if (s._kDone !== s.params.k || !s.labels) clusterize(s);
+    // chips (pipette targets)
+    var tones = pane.querySelector('.tech-tones');
+    tones.innerHTML = '<span class="tech-tones-l">GAMME</span>' + chipsHtml(s);
+    tones.querySelectorAll('[data-tone]').forEach(function (inp) {
+      inp.oninput = function () {
+        var c = +inp.getAttribute('data-tone');
+        s.toneOv[c] = +inp.value;
+        var out = tones.querySelector('[data-tval="' + c + '"]');
+        if (out) out.textContent = inp.value;
+        redrawPressSoon(pane);
+      };
+    });
+    tones.querySelectorAll('.tech-chip').forEach(function (ch) {
+      ch.onclick = function (e) {
+        if (e.target && e.target.getAttribute && e.target.getAttribute('data-tone')) return;   // slider drag
+        s.selLab = +ch.getAttribute('data-chip');
+        tones.querySelectorAll('.tech-chip').forEach(function (o) { o.classList.toggle('is-sel', +o.getAttribute('data-chip') === s.selLab); });
+      };
+    });
+    // plates
+    stage.innerHTML =
+      '<div class="tech-plate tech-plate-src"><canvas class="tech-src"></canvas>' +
+        '<div class="tech-plate-cap">SOURCE · ' + (s.tool === 'cut' ? 'DÉTOURAGE: click points, close on the first' : s.tool === 'pip' ? 'PIPETTE: click a colour' : 'pipette + lasso work here') + '</div></div>' +
+      '<div class="tech-plate"><canvas class="tech-canvas"></canvas>' +
+        '<div class="tech-plate-cap">' + esc(s.name.toUpperCase()) + ' · ' + s.w + '×' + s.h + ' · 1-BIT · ' + s.mode.toUpperCase() + '</div></div>';
+    var src = stage.querySelector('.tech-src');
+    paintSource(src, s);
+    paintPress(stage.querySelector('.tech-canvas'), s);
+    src.classList.toggle('is-pip', s.tool === 'pip');
+    src.classList.toggle('is-cut', s.tool === 'cut');
+    src.onclick = function (e) {
+      var xy = imgXY(src, s, e), xi = Math.round(xy[0]), yi = Math.round(xy[1]);
+      if (s.tool === 'pip') {
+        s.selLab = s.labels[yi * s.w + xi];
+        var chips = pane.querySelectorAll('.tech-chip');
+        chips.forEach(function (o) { o.classList.toggle('is-sel', +o.getAttribute('data-chip') === s.selLab); });
+        return;
+      }
+      if (s.tool === 'cut') {
+        if (s.cutClosed) { s.cut = []; s.cutClosed = false; s._mask = null; }   // restart a new lasso
+        var first = s.cut[0];
+        var closeR = Math.max(6, s.w / 60);
+        if (s.cut.length >= 3 && first && Math.hypot(first[0] - xy[0], first[1] - xy[1]) < closeR) {
+          s.cutClosed = true; s._mask = null; s.tool = 'none';
+        } else s.cut.push([xy[0], xy[1]]);
+        redraw(pane);
+      }
+    };
   }
   var _rt = null;
-  function redrawSoon(pane) { clearTimeout(_rt); _rt = setTimeout(function () { redraw(pane); }, 70); }
+  function redrawPressSoon(pane) {
+    clearTimeout(_rt);
+    _rt = setTimeout(function () {
+      var s = st(pane), c = pane.querySelector('.tech-canvas');
+      if (c && s.rgba) paintPress(c, s); else redraw(pane);
+    }, 70);
+  }
 
   function render(tab, pane) {
     var s = st(pane);
@@ -285,6 +419,9 @@
         '<span class="tech-modes">' + MODES.map(function (m) {
           return '<button class="app-btn" data-mode="' + m.key + '" title="' + m.title + '">' + m.label + '</button>';
         }).join('') + '</span>' +
+        '<button class="app-btn tech-tool-pip tech-need-img" title="pick a colour on the SOURCE — selects its chip in the gamme">⌖ PIPETTE</button>' +
+        '<button class="app-btn tech-tool-cut tech-need-img" title="draw a polygon on the SOURCE around the object — outside fades (FOND)">▱ DÉTOURAGE</button>' +
+        '<button class="app-btn tech-tool-clear" title="remove the cutout">✕ ZONE</button>' +
         '<span class="tech-bar-sp"></span>' +
         '<button class="app-btn tech-reset tech-need-img">↺ RESET</button>' +
         '<button class="app-btn tech-import">⇪ IMPORT</button>' +
@@ -297,6 +434,7 @@
           '<input type="range" data-par="' + S[0] + '" min="' + S[2] + '" max="' + S[3] + '" step="' + S[4] + '" value="' + v + '">' +
           '<span class="tech-sl-v" data-val="' + S[0] + '">' + fmtVal(S[0], v) + '</span></label>';
       }).join('') + '</div>' +
+      '<div class="tech-tones"></div>' +
       '<div class="tech-stage"></div>';
 
     pane.querySelector('.tech-import').onclick = function () { pane.querySelector('.tech-file').click(); };
@@ -314,7 +452,7 @@
       a.click();
     };
     pane.querySelector('.tech-reset').onclick = function () {
-      s.params = defaults();
+      s.params = defaults(); s.toneOv = {}; s.selLab = -1;
       try { localStorage.setItem(LS_PAR, JSON.stringify(s.params)); } catch (e) {}
       SLIDERS.forEach(function (S) {
         var inp = pane.querySelector('[data-par="' + S[0] + '"]'), out = pane.querySelector('[data-val="' + S[0] + '"]');
@@ -323,6 +461,13 @@
       });
       redraw(pane);
     };
+    pane.querySelector('.tech-tool-pip').onclick = function () { s.tool = s.tool === 'pip' ? 'none' : 'pip'; redraw(pane); };
+    pane.querySelector('.tech-tool-cut').onclick = function () {
+      if (s.tool === 'cut') { s.tool = 'none'; }
+      else { s.tool = 'cut'; if (s.cutClosed) { s.cut = []; s.cutClosed = false; s._mask = null; } }
+      redraw(pane);
+    };
+    pane.querySelector('.tech-tool-clear').onclick = function () { s.cut = []; s.cutClosed = false; s._mask = null; redraw(pane); };
     pane.querySelectorAll('[data-mode]').forEach(function (b) {
       b.onclick = function () {
         s.mode = b.getAttribute('data-mode');
@@ -337,7 +482,7 @@
         var out = pane.querySelector('[data-val="' + key + '"]');
         if (out) out.textContent = fmtVal(key, v);
         try { localStorage.setItem(LS_PAR, JSON.stringify(s.params)); } catch (e) {}
-        redrawSoon(pane);
+        if (key === 'k') redraw(pane); else redrawPressSoon(pane);
       };
     });
 
@@ -366,6 +511,10 @@
 
   window.TechSection = {
     render: render,
-    _press: { defaults: defaults, clusterize: clusterize, chanOf: chanOf, boundaryBits: boundaryBits, otsu: otsu, pressTrame: pressTrame, pressSeuil: pressSeuil, pressTrait: pressTrait },
+    _press: {
+      defaults: defaults, clusterize: clusterize, chanOf: chanOf, boundaryBits: boundaryBits,
+      otsu: otsu, pressTrame: pressTrame, pressSeuil: pressSeuil, pressTrait: pressTrait,
+      maskOf: maskOf, applyFade: applyFade, toneOf: toneOf,
+    },
   };
 })();

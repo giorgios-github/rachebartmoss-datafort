@@ -59,3 +59,35 @@
   width: 8px; height: 12px; background: #fff; border: 2px solid var(--ink); border-radius: 0; cursor: pointer;
 }
 .tech-sl input[type="range"]::-moz-range-track { height: 2px; background: var(--ink); }
+
+/* gamme chips (pipette targets) */
+.tech-tones {
+  display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center;
+  padding: 6px 12px; border-bottom: 2px solid var(--ink); background: #fff;
+}
+.tech-tones:empty { display: none; }
+.tech-tones-l { font-family: var(--mono); font-size: 11px; letter-spacing: 1px; color: var(--ink); }
+.tech-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 6px; border: 2px solid transparent; cursor: pointer; }
+.tech-chip.is-sel { border-color: var(--ink); }
+.tech-chip-sw { width: 16px; height: 16px; border: 2px solid var(--ink); display: inline-block; }
+.tech-chip-v { font-family: var(--mono); font-size: 11px; color: var(--ink); min-width: 26px; text-align: right; }
+.tech-chip input[type="range"] {
+  -webkit-appearance: none; appearance: none; width: 70px; height: 2px;
+  background: var(--ink); outline: none; cursor: pointer;
+}
+.tech-chip input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 9px; height: 13px;
+  background: #fff; border: 2px solid var(--ink); border-radius: 0; cursor: pointer;
+}
+.tech-chip input[type="range"]::-moz-range-thumb { width: 7px; height: 11px; background: #fff; border: 2px solid var(--ink); border-radius: 0; cursor: pointer; }
+.tech-chip input[type="range"]::-moz-range-track { height: 2px; background: var(--ink); }
+
+/* two plates: source left (pipette/lasso), press right */
+.tech-stage { gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+.tech-plate { max-width: calc(50% - 9px); }
+.tech-plate-src .tech-src { display: block; max-width: 100%; height: auto; }
+.tech-src.is-pip { cursor: crosshair; }
+.tech-src.is-cut { cursor: crosshair; }
+.tech-modes { margin-right: 10px; }
+.app-btn.is-on { background: var(--ink); color: #fff; }
+@media (max-width: 1100px) { .tech-plate { max-width: 100%; } }
