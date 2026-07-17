@@ -6,7 +6,7 @@ import { defsBlock } from './law.js';
 export { BINS, BIN_ORDER, allParts };
 
 // default mount per part: 'in' (cavity) | 'face' (on the lid) | 'wall' (trans-paroi)
-export const MOUNT = { emitter: 'wall', antenna: 'wall', screen: 'face', 'rail-clamp': 'face' };
+export const MOUNT = { emitter: 'wall', antenna: 'wall', injector: 'wall', 'chem-sniffer': 'wall', screen: 'face', 'rail-clamp': 'face', keypad: 'face', button: 'face', switch: 'face', dial: 'face', 'led-array': 'face', socket: 'face', 'neural-jack': 'face' };
 export const catMount = id => MOUNT[id] || 'in';
 
 export const byId = {};
