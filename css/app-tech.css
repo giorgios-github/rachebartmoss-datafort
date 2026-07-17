@@ -91,3 +91,8 @@
 .tech-modes { margin-right: 10px; }
 .app-btn.is-on { background: var(--ink); color: #fff; }
 @media (max-width: 1100px) { .tech-plate { max-width: 100%; } }
+
+/* CUTOUT mode: the source takes the whole page */
+.tech-stage.is-cutfull { align-items: flex-start; }
+.tech-stage.is-cutfull .tech-plate { max-width: 100%; width: 100%; }
+.tech-stage.is-cutfull .tech-src { width: 100%; height: auto; }

@@ -8,8 +8,9 @@
    (deterministic k-means over RGB, labels cleaned by 3×3 majority vote, clusters
    ranked by brightness onto spread tones); every cluster is a CHIP (colour swatch
    → editable gray) — the pipette picks a pixel on the source and selects its
-   chip. Outline = region-boundary map (crisp, no texture noise). Cutout: a
-   polygon drawn on the source; outside stays present but FADES INSIDE THE PRESS
+   chip. Outline = region-boundary map (crisp, no texture noise). Cutout: one or
+   MORE polygons drawn full-page on the source (live preview line, draggable
+   points); outside the union stays present but FADES INSIDE THE PRESS
    ITSELF (ordered Bayer mask on the ink — still strictly 1-bit), dosed by BACKDROP.
    Exposes window.TechSection { render(tab, pane) }. */
 (function () {
@@ -61,7 +62,7 @@
       selLab: -1,                    // selected chip
       tool: 'none',                  // 'none' | 'pip' | 'cut'
       adv: localStorage.getItem(LS_ADV) === '1',
-      cut: [], cutClosed: false, _mask: null,
+      cuts: [], draft: [], _mask: null, _hover: null, _drag: null, _moved: false,
     };
     return pane._tech;
   }
@@ -184,10 +185,13 @@
     return inside;
   }
   function maskOf(s) {
-    if (!s.cutClosed || s.cut.length < 3) return null;
+    var zones = (s.cuts || []).filter(function (c) { return c.pts.length >= 3; });
+    if (!zones.length) return null;
     if (s._mask) return s._mask;
     var W = s.w, H = s.h, m = new Uint8Array(W * H);
-    for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) m[y * W + x] = pointInPoly(s.cut, x + 0.5, y + 0.5) ? 1 : 0;
+    for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) {
+      for (var z = 0; z < zones.length; z++) if (pointInPoly(zones[z].pts, x + 0.5, y + 0.5)) { m[y * W + x] = 1; break; }
+    }
     s._mask = m;
     return m;
   }
@@ -286,20 +290,31 @@
   function paintSource(canvas, s) {
     canvas.width = s.w; canvas.height = s.h;
     var x = canvas.getContext('2d');
-    var im = new ImageData(new Uint8ClampedArray(s.rgba), s.w, s.h);
-    x.putImageData(im, 0, 0);
-    // cutout overlay: the lasso lives on the source
-    if (s.cut.length) {
-      x.strokeStyle = '#111'; x.lineWidth = Math.max(1.5, s.w / 400); x.setLineDash([6, 4]);
+    x.putImageData(new ImageData(new Uint8ClampedArray(s.rgba), s.w, s.h), 0, 0);
+    var lw = Math.max(1.5, s.w / 400), r = Math.max(2.5, s.w / 250);
+    var drawPoly = function (pts, closed) {
+      if (!pts.length) return;
+      x.strokeStyle = '#111'; x.lineWidth = lw; x.setLineDash([6, 4]);
       x.beginPath();
-      x.moveTo(s.cut[0][0], s.cut[0][1]);
-      for (var i = 1; i < s.cut.length; i++) x.lineTo(s.cut[i][0], s.cut[i][1]);
-      if (s.cutClosed) x.closePath();
-      x.stroke();
-      x.setLineDash([]);
+      x.moveTo(pts[0][0], pts[0][1]);
+      for (var i = 1; i < pts.length; i++) x.lineTo(pts[i][0], pts[i][1]);
+      if (closed) x.closePath();
+      x.stroke(); x.setLineDash([]);
       x.fillStyle = '#fff'; x.strokeStyle = '#111'; x.lineWidth = 1.5;
-      var r = Math.max(2.5, s.w / 250);
-      for (i = 0; i < s.cut.length; i++) { x.fillRect(s.cut[i][0] - r, s.cut[i][1] - r, 2 * r, 2 * r); x.strokeRect(s.cut[i][0] - r, s.cut[i][1] - r, 2 * r, 2 * r); }
+      for (i = 0; i < pts.length; i++) { x.fillRect(pts[i][0] - r, pts[i][1] - r, 2 * r, 2 * r); x.strokeRect(pts[i][0] - r, pts[i][1] - r, 2 * r, 2 * r); }
+    };
+    for (var z = 0; z < s.cuts.length; z++) drawPoly(s.cuts[z].pts, true);
+    drawPoly(s.draft, false);
+    // live preview: last draft point → cursor; snaps SOLID onto the first point when closable
+    if (s.tool === 'cut' && s.draft.length && s._hover && !s._drag) {
+      var last = s.draft[s.draft.length - 1], tgt = s._hover;
+      var closeR = Math.max(6, s.w / 60);
+      var snap = s.draft.length >= 3 && Math.hypot(s.draft[0][0] - tgt[0], s.draft[0][1] - tgt[1]) < closeR;
+      if (snap) tgt = s.draft[0];
+      x.strokeStyle = '#111'; x.lineWidth = lw; x.setLineDash(snap ? [] : [3, 4]);
+      x.beginPath(); x.moveTo(last[0], last[1]); x.lineTo(tgt[0], tgt[1]); x.stroke();
+      x.setLineDash([]);
+      if (snap) { x.fillStyle = '#111'; x.fillRect(s.draft[0][0] - r, s.draft[0][1] - r, 2 * r, 2 * r); }
     }
   }
 
@@ -317,7 +332,7 @@
       var s = st(pane);
       s.rgba = x.getImageData(0, 0, W, H).data; s.w = W; s.h = H;
       s.L = null; s.labels = null; s._kDone = 0;
-      s.toneOv = {}; s.selLab = -1; s.cut = []; s.cutClosed = false; s._mask = null; s.tool = 'none';
+      s.toneOv = {}; s.selLab = -1; s.cuts = []; s.draft = []; s._mask = null; s.tool = 'none';
       s.name = (name || 'capture').replace(/\.[a-z0-9]+$/i, '');
       redraw(pane);
     };
@@ -360,7 +375,7 @@
     var tp = pane.querySelector('.tech-tool-pip'), tc = pane.querySelector('.tech-tool-cut'), tz = pane.querySelector('.tech-tool-clear');
     if (tp) tp.classList.toggle('is-on', s.tool === 'pip');
     if (tc) tc.classList.toggle('is-on', s.tool === 'cut');
-    if (tz) tz.style.display = s.cut.length ? '' : 'none';
+    if (tz) tz.style.display = (s.cuts.length || s.draft.length) ? '' : 'none';
     if (!s.rgba || !s.adv) {
       if (s.tool === 'pip') s.tool = 'none';
       pane.querySelector('.tech-tones').innerHTML = '';
@@ -395,17 +410,47 @@
       };
     });
     }
-    // plates
+    // plates — CUTOUT takes the FULL page (source only, live lasso); else side by side
+    var cutMode = s.tool === 'cut';
+    stage.classList.toggle('is-cutfull', cutMode);
     stage.innerHTML =
       '<div class="tech-plate tech-plate-src"><canvas class="tech-src"></canvas>' +
-        '<div class="tech-plate-cap">SOURCE · ' + (s.tool === 'cut' ? 'CUTOUT: click points, close on the first one' : s.tool === 'pip' ? 'PICKER: click a colour' : (s.adv ? 'picker + cutout work here' : 'cutout works here')) + '</div></div>' +
+        '<div class="tech-plate-cap">SOURCE · ' + (cutMode ? 'CUTOUT: click = point · close on the first point · drag a point to move it · keep clicking for more zones' : s.tool === 'pip' ? 'PICKER: click a colour' : (s.adv ? 'picker + cutout work here' : 'cutout works here')) + '</div></div>' +
+      (cutMode ? '' :
       '<div class="tech-plate"><canvas class="tech-canvas"></canvas>' +
-        '<div class="tech-plate-cap">' + esc(s.name.toUpperCase()) + ' · ' + s.w + '×' + s.h + ' · 1-BIT · ' + modeLabel(s.mode) + '</div></div>';
+        '<div class="tech-plate-cap">' + esc(s.name.toUpperCase()) + ' · ' + s.w + '×' + s.h + ' · 1-BIT · ' + modeLabel(s.mode) + '</div></div>');
     var src = stage.querySelector('.tech-src');
     paintSource(src, s);
-    paintPress(stage.querySelector('.tech-canvas'), s);
+    if (!cutMode) paintPress(stage.querySelector('.tech-canvas'), s);
     src.classList.toggle('is-pip', s.tool === 'pip');
-    src.classList.toggle('is-cut', s.tool === 'cut');
+    src.classList.toggle('is-cut', cutMode);
+    // vertex hit-test over closed zones + the open draft (image px)
+    var hitVertex = function (xy) {
+      var r = Math.max(5, s.w / 90), i;
+      for (var z = 0; z < s.cuts.length; z++) {
+        var pts = s.cuts[z].pts;
+        for (i = 0; i < pts.length; i++) if (Math.hypot(pts[i][0] - xy[0], pts[i][1] - xy[1]) < r) return { poly: z, i: i };
+      }
+      for (i = 0; i < s.draft.length; i++) if (Math.hypot(s.draft[i][0] - xy[0], s.draft[i][1] - xy[1]) < r) return { poly: -1, i: i };
+      return null;
+    };
+    src.onmousedown = function (e) {
+      if (!cutMode) return;
+      var v = hitVertex(imgXY(src, s, e));
+      if (v) { s._drag = v; s._moved = false; e.preventDefault(); }
+    };
+    src.onmousemove = function (e) {
+      if (!cutMode) return;
+      var xy = imgXY(src, s, e);
+      s._hover = xy;
+      if (s._drag) {
+        s._moved = true;
+        if (s._drag.poly >= 0) { s.cuts[s._drag.poly].pts[s._drag.i] = xy; s._mask = null; }
+        else s.draft[s._drag.i] = xy;
+      }
+      paintSource(src, s);
+    };
+    src.onmouseleave = function () { if (cutMode) { s._hover = null; paintSource(src, s); } };
     src.onclick = function (e) {
       var xy = imgXY(src, s, e), xi = Math.round(xy[0]), yi = Math.round(xy[1]);
       if (s.tool === 'pip') {
@@ -414,14 +459,17 @@
         chips.forEach(function (o) { o.classList.toggle('is-sel', +o.getAttribute('data-chip') === s.selLab); });
         return;
       }
-      if (s.tool === 'cut') {
-        if (s.cutClosed) { s.cut = []; s.cutClosed = false; s._mask = null; }   // restart a new lasso
-        var first = s.cut[0];
+      if (cutMode) {
+        if (s._moved) { s._moved = false; return; }                       // that was a drag, not a click
         var closeR = Math.max(6, s.w / 60);
-        if (s.cut.length >= 3 && first && Math.hypot(first[0] - xy[0], first[1] - xy[1]) < closeR) {
-          s.cutClosed = true; s._mask = null; s.tool = 'none';
-        } else s.cut.push([xy[0], xy[1]]);
-        redraw(pane);
+        var canClose = s.draft.length >= 3 && Math.hypot(s.draft[0][0] - xy[0], s.draft[0][1] - xy[1]) < closeR;
+        if (canClose) {
+          s.cuts.push({ pts: s.draft, closed: true });                    // zone closed — stay in the tool, add more
+          s.draft = []; s._mask = null;
+          redraw(pane);
+        } else if (hitVertex(xy)) {
+          /* clicking an existing point = grab target, not a new point */
+        } else { s.draft.push([xy[0], xy[1]]); paintSource(src, s); }
       }
     };
   }
@@ -494,11 +542,11 @@
     var pipBtn = pane.querySelector('.tech-tool-pip');
     if (pipBtn) pipBtn.onclick = function () { s.tool = s.tool === 'pip' ? 'none' : 'pip'; redraw(pane); };
     pane.querySelector('.tech-tool-cut').onclick = function () {
-      if (s.tool === 'cut') { s.tool = 'none'; }
-      else { s.tool = 'cut'; if (s.cutClosed) { s.cut = []; s.cutClosed = false; s._mask = null; } }
+      if (s.tool === 'cut') { s.tool = 'none'; s.draft = []; }
+      else s.tool = 'cut';
       redraw(pane);
     };
-    pane.querySelector('.tech-tool-clear').onclick = function () { s.cut = []; s.cutClosed = false; s._mask = null; redraw(pane); };
+    pane.querySelector('.tech-tool-clear').onclick = function () { s.cuts = []; s.draft = []; s._mask = null; redraw(pane); };
     pane.querySelectorAll('[data-mode]').forEach(function (b) {
       b.onclick = function () {
         s.mode = b.getAttribute('data-mode');
@@ -525,6 +573,10 @@
       var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
       if (f && /^image\//.test(f.type)) loadBlob(pane, f, f.name);
     });
+    if (!pane._techUp) {
+      pane._techUp = function () { var s2 = st(pane); s2._drag = null; };
+      document.addEventListener('mouseup', pane._techUp);
+    }
     // paste (⌘V) while this pane is on screen
     if (!pane._techPaste) {
       pane._techPaste = function (e) {
