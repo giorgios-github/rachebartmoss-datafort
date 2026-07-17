@@ -26,11 +26,12 @@
     { key: 'trait', label: 'TRAIT', title: 'Line drawing — region boundaries + strong gradients' },
   ];
   function defaults() {
-    return { k: 5, relief: 40, gamma: 100, bias: 0, outline: 1, fine: 88, fond: 35 };
+    return { k: 5, chroma: 250, relief: 40, gamma: 100, bias: 0, outline: 1, fine: 88, fond: 35 };
   }
   // slider registry: [key, label, min, max, step, title]
   var SLIDERS = [
     ['k', 'COULEURS', 2, 8, 1, 'colour groups — how many tones the press separates'],
+    ['chroma', 'TEINTE', 100, 500, 25, 'how much HUE separates the groups — raise it when two colours of similar darkness merge (blue vs gray)'],
     ['relief', 'RELIEF', 0, 100, 5, 'in-region shading kept (0 = flat posters)'],
     ['gamma', 'GAMMA', 40, 250, 5, 'tone curve before the press (100 = neutral; lower = darker plate)'],
     ['bias', 'NIVEAU', -60, 60, 2, 'SEUIL: ink more (+) or less (−) than Otsu suggests'],
@@ -62,44 +63,59 @@
     return pane._tech;
   }
 
-  /* ── stage 1 · COLOUR SEPARATION: k-means over RGB, deterministic ── */
+  /* ── stage 1 · COLOUR SEPARATION: k-means, deterministic. The distance runs in
+     [Y, α·Cb, α·Cr] — chrominance AMPLIFIED (α = TEINTE/100) so hue separates
+     groups more than brightness: a dark desaturated blue and a dark gray are
+     neighbours in RGB but far apart here. ── */
   function clusterize(s) {
     var d = s.rgba, W = s.w, H = s.h, N = W * H, K = s.params.k, i, k;
+    var A = s.params.chroma / 100;
     var L = s.L;
     if (!L) {
       L = new Float32Array(N);
       for (i = 0; i < N; i++) { var j0 = i * 4; L[i] = 0.2126 * d[j0] + 0.7152 * d[j0 + 1] + 0.0722 * d[j0 + 2]; }
       s.L = L;
     }
+    var feat = function (i2) {                                   // pixel → [Y, α·Cb, α·Cr]
+      var p3 = i2 * 4, Y = L[i2];
+      return [Y, A * (d[p3 + 2] - Y), A * (d[p3] - Y)];
+    };
     var step = Math.max(1, Math.floor(N / 12000)), samp = [];
     for (i = 0; i < N; i += step) samp.push(i);
     var sorted = samp.slice().sort(function (a, b) { return L[a] - L[b]; });
-    var cent = [];
+    var cent = [], centF = [];
     for (k = 0; k < K; k++) {
-      var si = sorted[Math.floor((k + 0.5) / K * (sorted.length - 1))] * 4;
+      var sIdx = sorted[Math.floor((k + 0.5) / K * (sorted.length - 1))];
+      var si = sIdx * 4;
       cent.push([d[si], d[si + 1], d[si + 2]]);
+      centF.push(feat(sIdx));
     }
-    var nearest = function (r, g, b) {
+    var nearest = function (f) {
       var bi = 0, bd = Infinity;
       for (var c = 0; c < K; c++) {
-        var dr = r - cent[c][0], dg = g - cent[c][1], db = b - cent[c][2];
-        var dist = dr * dr + dg * dg + db * db;
+        var d0 = f[0] - centF[c][0], d1 = f[1] - centF[c][1], d2 = f[2] - centF[c][2];
+        var dist = d0 * d0 + d1 * d1 + d2 * d2;
         if (dist < bd) { bd = dist; bi = c; }
       }
       return bi;
     };
     for (var it = 0; it < 8; it++) {
-      var sum = [], cnt = [];
-      for (k = 0; k < K; k++) { sum.push([0, 0, 0]); cnt.push(0); }
+      var sum = [], sumF = [], cnt = [];
+      for (k = 0; k < K; k++) { sum.push([0, 0, 0]); sumF.push([0, 0, 0]); cnt.push(0); }
       for (i = 0; i < samp.length; i++) {
-        var p = samp[i] * 4, c = nearest(d[p], d[p + 1], d[p + 2]);
-        sum[c][0] += d[p]; sum[c][1] += d[p + 1]; sum[c][2] += d[p + 2]; cnt[c]++;
+        var f2 = feat(samp[i]), c = nearest(f2), p = samp[i] * 4;
+        sum[c][0] += d[p]; sum[c][1] += d[p + 1]; sum[c][2] += d[p + 2];
+        sumF[c][0] += f2[0]; sumF[c][1] += f2[1]; sumF[c][2] += f2[2];
+        cnt[c]++;
       }
-      for (k = 0; k < K; k++) if (cnt[k]) cent[k] = [sum[k][0] / cnt[k], sum[k][1] / cnt[k], sum[k][2] / cnt[k]];
+      for (k = 0; k < K; k++) if (cnt[k]) {
+        cent[k] = [sum[k][0] / cnt[k], sum[k][1] / cnt[k], sum[k][2] / cnt[k]];
+        centF[k] = [sumF[k][0] / cnt[k], sumF[k][1] / cnt[k], sumF[k][2] / cnt[k]];
+      }
     }
     // label every pixel, then clean speckle with a 3×3 majority vote (crisp regions)
     var lab = new Uint8Array(N);
-    for (i = 0; i < N; i++) { var p2 = i * 4; lab[i] = nearest(d[p2], d[p2 + 1], d[p2 + 2]); }
+    for (i = 0; i < N; i++) lab[i] = nearest(feat(i));
     var lab2 = new Uint8Array(N), votes = new Uint8Array(K);
     for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) {
       i = y * W + x;
@@ -119,7 +135,7 @@
     order.sort(function (a, b) { return mL[a] - mL[b]; });
     var tone = new Float32Array(K);
     for (k = 0; k < K; k++) tone[order[k]] = K === 1 ? 128 : 10 + k * (235 / (K - 1));
-    s.labels = lab2; s.mL = mL; s.tone = tone; s.cent = cent; s._kDone = K;
+    s.labels = lab2; s.mL = mL; s.tone = tone; s.cent = cent; s._kDone = K; s._cDone = s.params.chroma;
     s.toneOv = {}; s.selLab = -1;                 // new clustering = new chips
   }
 
@@ -250,7 +266,7 @@
 
   function press(s) {
     if (!s.rgba) return null;
-    if (s._kDone !== s.params.k || !s.labels) clusterize(s);
+    if (s._kDone !== s.params.k || s._cDone !== s.params.chroma || !s.labels) clusterize(s);
     var fn = s.mode === 'seuil' ? pressSeuil : s.mode === 'trait' ? pressTrait : pressTrame;
     return fn(s);
   }
@@ -351,7 +367,7 @@
       stage.querySelector('.tech-drop').onclick = function () { pane.querySelector('.tech-file').click(); };
       return;
     }
-    if (s._kDone !== s.params.k || !s.labels) clusterize(s);
+    if (s._kDone !== s.params.k || s._cDone !== s.params.chroma || !s.labels) clusterize(s);
     // chips (pipette targets)
     var tones = pane.querySelector('.tech-tones');
     tones.innerHTML = '<span class="tech-tones-l">GAMME</span>' + chipsHtml(s);
@@ -482,7 +498,7 @@
         var out = pane.querySelector('[data-val="' + key + '"]');
         if (out) out.textContent = fmtVal(key, v);
         try { localStorage.setItem(LS_PAR, JSON.stringify(s.params)); } catch (e) {}
-        if (key === 'k') redraw(pane); else redrawPressSoon(pane);
+        if (key === 'k' || key === 'chroma') redraw(pane); else redrawPressSoon(pane);
       };
     });
 
