@@ -31,20 +31,21 @@
     { key: 'cast',   label: 'Cast',   sub: 'Broadcast to players', glyph: 'C', tools: { gm: ['cast-home'], player: ['cast-home'] } },
     { key: 'combat', label: 'Combat', sub: 'Encounters & gangs', glyph: 'X', tools: { gm: ['combat'],    player: ['combat'] } },
     { key: 'web',    label: 'Net',    sub: 'The Net',          glyph: 'W', tools: { gm: ['web-home'], player: ['web-home'] } },
+    { key: 'tech',   label: 'Tech',   sub: 'The image press',  glyph: 'T', tools: { gm: ['tech'],      player: ['tech'] } },
   ];
   // tool id → owning section (for the tab's icon + Shell.state().active compat)
   var TOOL_SECTION = {
     party: 'party', sheet: 'party',
     'data-home': 'data', 'data-view': 'data', 'data-db': 'data', npc: 'data', org: 'data', shop: 'data', database: 'data',
     map: 'map', cast: 'cast', 'cast-home': 'cast', clocks: 'cast',
-    combat: 'combat', 'web-home': 'web', 'web-browse': 'web', 'web-hosts': 'web', 'web-placeholder': 'web', desktop: 'desktop', log: null,
+    combat: 'combat', tech: 'tech', 'web-home': 'web', 'web-browse': 'web', 'web-hosts': 'web', 'web-placeholder': 'web', desktop: 'desktop', log: null,
   };
   // legacy tool ids (palette / cross-nav) → DATA tabs in the new system
   var LEGACY_DATA = { npc: { tool: 'data-view', dtype: 'npc' }, org: { tool: 'data-view', dtype: 'org' }, shop: { tool: 'data-view', dtype: 'shop' }, database: { tool: 'data-db' } };
   var TOOL_LABEL = {
     party: 'Party', sheet: 'My sheet', 'data-home': 'Data', 'data-view': 'Corpus', 'data-db': 'Database',
     'cast-home': 'Cast', map: 'Map', combat: 'Combat', clocks: 'Clocks', 'web-placeholder': 'Web',
-    'web-home': 'Net', 'web-browse': 'Browser', 'web-hosts': 'Hosts', desktop: 'Desktop',
+    'web-home': 'Net', 'web-browse': 'Browser', 'web-hosts': 'Hosts', desktop: 'Desktop', tech: 'Tech',
   };
 
   function role() { return (B && B.sess && B.sess.role) || 'gm'; }
@@ -281,6 +282,7 @@
     if (tool === 'sheet') return '/party/me';
     if (tool === 'map') return '/map';
     if (tool === 'combat') return '/combat';
+    if (tool === 'tech') return '/tech';
     if (tool === 'web-home') return '/web';
     if (tool === 'web-browse') return '/web/browse' + (t.addr ? '/' + t.addr : '');
     if (tool === 'web-hosts') return '/web/hosts';
@@ -488,6 +490,7 @@
     else if (t.tool === 'data-view' && window.DataSection) DataSection.renderViewPane(t, p);
     else if (t.tool === 'data-db' && window.DataSection) DataSection.renderDbPane(t, p);
     else if (t.tool === 'cast-home' && window.CastSection) CastSection.renderHome(t, p);
+    else if (t.tool === 'tech' && window.TechSection) TechSection.render(t, p);
     else if (t.kind === 'sheet') B.entityRender(t, p);
     else if ((t.kind === 'cast' || t.kind === 'clock') && window.CastSection) CastSection.renderEditor(t, p);
     else if (t.kind && window.DataSection) DataSection.renderFiche(t, p);

@@ -1,0 +1,39 @@
+/* app-tech.css — TECH section (the image press). Charter: ink on pure white,
+   2px frames, square corners, no shadows, unicode glyphs, hover-inversion. */
+
+.tech-pane { display: flex; flex-direction: column; height: 100%; background: #fff; }
+
+.tech-bar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 12px; border-bottom: 2px solid var(--ink); background: #fff;
+}
+.tech-title { font-family: var(--head); letter-spacing: 3px; font-size: 14px; color: var(--ink); margin-right: 8px; }
+.tech-bar-sp { flex: 1; }
+.tech-modes { display: flex; gap: 0; }
+.tech-modes .app-btn { border-right-width: 0; }
+.tech-modes .app-btn:last-child { border-right-width: 2px; }
+.tech-modes .app-btn.is-on { background: var(--ink); color: #fff; }
+.app-btn:disabled { opacity: 0.35; cursor: default; }
+.app-btn:disabled:hover { background: #fff; color: var(--ink); }
+
+.tech-stage { flex: 1; overflow: auto; display: flex; align-items: center; justify-content: center; padding: 18px; background: #fff; }
+
+/* empty state — the in-tray */
+.tech-drop {
+  border: 2px dashed var(--ink); padding: 48px 64px; text-align: center; cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.tech-drop:hover, .tech-pane.tech-over .tech-drop { background: var(--ink); color: #fff; }
+.tech-drop:hover .tech-drop-l, .tech-pane.tech-over .tech-drop-l { color: #fff; }
+.tech-drop:hover .tech-drop-s, .tech-pane.tech-over .tech-drop-s { color: #fff; }
+.tech-drop-g { font-size: 34px; line-height: 1; margin-bottom: 12px; }
+.tech-drop-l { font-family: var(--head); letter-spacing: 3px; font-size: 15px; color: var(--ink); }
+.tech-drop-s { font-family: var(--mono); font-size: 12px; color: var(--ink); margin-top: 6px; opacity: .75; }
+
+/* the pressed plate */
+.tech-plate { border: 2px solid var(--ink); background: #fff; }
+.tech-canvas { display: block; max-width: 100%; height: auto; image-rendering: pixelated; }
+.tech-plate-cap {
+  border-top: 2px solid var(--ink); font-family: var(--mono); font-size: 11px;
+  letter-spacing: 1px; color: var(--ink); padding: 4px 8px;
+}

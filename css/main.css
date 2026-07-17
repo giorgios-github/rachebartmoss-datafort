@@ -29,7 +29,6 @@ body { font-family:var(--mono); background:var(--bg); color:var(--text); font-si
 #cat-nav { background:#111; display:flex; flex-wrap:wrap; gap:4px; padding:2px 6px 8px; }
 .cat { flex:1 1 calc(33.33% - 3px); text-align:center; background:#1d1d1d; border:1px solid #383838; color:#8a8a8a; font-family:var(--head); font-size:13px; padding:7px 2px; cursor:pointer; text-transform:lowercase; letter-spacing:.5px; }
 .cat.cat-wide { flex:1 1 calc(50% - 2px); } /* tools + data share the 2nd row */
-.cat.cat-full { flex:1 1 100%; } /* tech gets its own full-width row */
 .cat:hover { color:#fff; border-color:#666; }
 .cat.active { color:#fff; background:#000; border-color:#fff; }
 #app.side-collapsed #brand-sub, #app.side-collapsed .cat { display:none; }
