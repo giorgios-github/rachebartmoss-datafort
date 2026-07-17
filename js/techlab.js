@@ -431,7 +431,16 @@ function renderSide() {
       for (const [key, spec] of Object.entries(m2.params || {})) {
         if (key === 'mounted' || key === 'outline' || key === 'path') continue;   // view-driven / area-driven
         const cur = g.params[key] ?? spec.def;
-        const commit = v => { g.params = { ...g.params, [key]: v }; refit(); };
+        const commit = v => {
+          g.params = { ...g.params, [key]: v };
+          // seating an antenna in the rf-transceiver port = the part goes trans-paroi
+          // (body inside, port + antenna emerging through the shell)
+          if (g.cat === 'rf-transceiver' && key === 'antenna') {
+            if (v !== 'empty') { g.mount = 'wall'; if (g.t == null) g.t = 0.25; }
+            else if (g.mount === 'wall') { delete g.mount; delete g.t; }
+          }
+          refit();
+        };
         let inp;
         if (spec.options) {
           inp = el('select', { style: inpStyle });

@@ -205,7 +205,7 @@ export function examples() {
       guts: [
         { k: 'cat', cat: 'smart-core-ic', params: { body: 7 }, at: [4, 5], w: 11, h: 11 },
         { k: 'cat', cat: 'cell', params: { format: 'coin', cap: 1 }, at: [16.5, 6], w: 9, h: 9, donor: 'pried from a parking meter' },
-        { k: 'cat', cat: 'antenna', params: { geom: 'stub', size: 12 }, mount: 'wall', t: 0.9 },
+        { k: 'cat', cat: 'rf-transceiver', params: { band: 'HB', antenna: 'stub' }, mount: 'wall', t: 0.9 },
       ],
       events: ['lived three weeks taped behind a vending machine'],
     }),
@@ -242,7 +242,7 @@ export function examples() {
       ports: [{ k: 'power', t: 0.55 }],
       guts: [
         { k: 'cat', cat: 'emitter', params: { d: 12, medium: 'ultrasonic' }, mount: 'wall', t: 0.98, push: 1, donor: 'ex-riot-wagon siren head' },
-        { k: 'cat', cat: 'rf-transceiver', params: { band: 'HB', antenna: 'stub' }, at: [9, 5], w: 20, h: 16 },
+        { k: 'cat', cat: 'rf-transceiver', params: { band: 'HB', antenna: 'stub' }, mount: 'wall', t: 0.3 },
         { k: 'cat', cat: 'cell', params: { format: 'prismatic', cap: 2 }, at: [33, 6], w: 12, h: 14 },
         { k: 'cat', cat: 'rail-clamp', params: { w: 14 }, mount: 'face', at: [17, 16], w: 22, h: 10 },
       ],

@@ -88,10 +88,13 @@ export function placePerimFeats(pts, feats) {
   });
 }
 
+// screws stay DISCREET: invisible at density 1, a fine circle at 2, full detail
+// (captive ring + drive recess) only at 3 — hardware texture is opt-in ink.
 function screwGlyph(x, y, dmm, k, origin, i, dens) {
-  const r = 0.9 * dmm * k, out = [];
-  out.push(circ(x, y, r, R.W.mid, '#fff'));
-  if (R.captive(origin)) out.push(circ(x, y, 1.25 * dmm * k, R.W.fine));
+  if (dens <= 1) return '';
+  const r = (dens >= 3 ? 0.9 : 0.6) * dmm * k, out = [];
+  out.push(circ(x, y, r, dens >= 3 ? R.W.mid : R.W.fine, '#fff'));
+  if (dens >= 3 && R.captive(origin)) out.push(circ(x, y, 1.25 * dmm * k, R.W.fine));
   if (dens >= 3) {
     const g = R.driveFor(origin, i), rr = 0.55 * r;
     if (g === 'slot') out.push(line(x - rr, y, x + rr, y, 1.2));
@@ -390,7 +393,7 @@ export function renderModule(part, view = {}) {
   const drawPorts = () => ports.map(p => {
     const [px, py] = mapP(p.x, p.y);
     let s2 = `<g transform="translate(${N(px)},${N(py)}) rotate(${N(p.ang)})">${portGlyph(p, k, dens)}</g>`;
-    if (lod !== 'thumb' && dens >= 2) {
+    if (lod !== 'thumb' && dens >= 3) {
       const off = p.spec.out + p.spec.half + 2;
       const [lx2, ly2] = mapP(p.x + p.nx * off, p.y + p.ny * off);
       s2 += txt(lx2, ly2 + 3.5, p.spec.label, 9, 'middle');
@@ -436,7 +439,7 @@ export function renderModule(part, view = {}) {
     const s = ((((g.t ?? 0.25) % 1) + 1) % 1) * P;
     const q = G.pointAt(pts, s);
     const nAng = Math.atan2(q.ny, q.nx) * 180 / Math.PI;
-    const view2 = { k, density: dens, wallMm: wall, exterior };
+    const view2 = { k, density: Math.min(dens, 2), wallMm: wall, exterior };  // no caption noise inside a build
     const params2 = exterior ? { ...g.params, mounted: 'exterior' } : { ...g.params, mounted: true };  // section = the TRAVERSANT state
     const a = catWallAnchor(g.cat, params2, view2);
     if (!a) return null;

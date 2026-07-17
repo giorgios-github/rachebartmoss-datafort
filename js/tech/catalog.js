@@ -1,7 +1,7 @@
 // js/tech/catalog.js — bridge between the DF-TO-C parts catalogue and the module
 // renderer/editor: registry lookup, natural footprint, enclosure embedding, and the
 // MOUNTING contracts (in / face / wall) with wall anchors + wire pads.
-import { BINS, BIN_ORDER, allParts } from './parts/index.js';
+import { BINS, BIN_ORDER, allParts, HIDDEN } from './parts/index.js';
 import { defsBlock } from './law.js';
 export { BINS, BIN_ORDER, allParts };
 
@@ -11,6 +11,7 @@ export const catMount = id => MOUNT[id] || 'in';
 
 export const byId = {};
 for (const p of allParts()) byId[p.meta.id] = p;
+for (const p of HIDDEN) byId[p.meta.id] = p;
 
 const FOOT_K = 8; // render scale used to measure a part's natural size
 export function catFigure(id, params, view) {
@@ -27,13 +28,18 @@ export function catFootprint(id, params) {
   return { w: Math.max(4, Math.round(f.wPx / FOOT_K)), h: Math.max(4, Math.round(f.hPx / FOOT_K)) };
 }
 // embed a part into an enclosure drawing at (xPx,yPx), scaled to wPx×hPx (+ 90° rot steps).
-// SIZE IS PRESERVED under rotation: at 90/270 the content is fitted to the UNSWAPPED
-// box (hPx×wPx) centred in the placed box, then rotated — never re-shrunk.
+// UNIFORM INK: the part is rendered at the EFFECTIVE k (so its FIXED px stroke weights
+// match the enclosure's — never drawn small and blown up, never drawn big and shrunk).
+// SIZE IS PRESERVED under rotation: content fitted to the UNSWAPPED box, then rotated.
 export function catEmbed(id, params, xPx, yPx, wPx, hPx, density, lod, rot) {
-  const f = catFigure(id, params, { k: FOOT_K, lod: lod || 'plate', density: density ?? 2 });
-  if (!f) return '';
+  const probe = catFigure(id, params, { k: FOOT_K, lod: 'thumb', density: 1 });
+  if (!probe) return '';
+  const natW = probe.wPx / FOOT_K, natH = probe.hPx / FOOT_K;              // natural size, mm
   const quarter = rot === 90 || rot === 270;
   const w2 = quarter ? hPx : wPx, h2 = quarter ? wPx : hPx;
+  const kEff = Math.max(0.8, Math.min(w2 / natW, h2 / natH));
+  const f = catFigure(id, params, { k: kEff, lod: lod || 'plate', density: Math.min(density ?? 2, 2) });
+  if (!f) return '';
   const x2 = xPx + (wPx - w2) / 2, y2 = yPx + (hPx - h2) / 2;
   const svg = f.svg.replace(/width="[\d.]+" height="[\d.]+"/,
     `x="${x2.toFixed(2)}" y="${y2.toFixed(2)}" width="${w2.toFixed(2)}" height="${h2.toFixed(2)}" preserveAspectRatio="xMidYMid meet"`);
