@@ -28,7 +28,7 @@
   ];
   function modeLabel(key) { for (var i = 0; i < MODES.length; i++) if (MODES[i].key === key) return MODES[i].label; return key; }
   function defaults() {
-    return { k: 5, chroma: 250, relief: 40, gamma: 100, bias: 0, outline: 1, fine: 88, fond: 35 };
+    return { k: 5, chroma: 250, relief: 40, gamma: 100, bias: 0, outline: 1, fine: 88, fond: 35, smooth: 1 };
   }
   // slider registry: [key, label, min, max, step, title, advancedOnly]
   var SLIDERS = [
@@ -139,7 +139,7 @@
     order.sort(function (a, b) { return mL[a] - mL[b]; });
     var tone = new Float32Array(K);
     for (k = 0; k < K; k++) tone[order[k]] = K === 1 ? 128 : 10 + k * (235 / (K - 1));
-    s.labels = lab2; s.mL = mL; s.tone = tone; s.cent = cent; s._kDone = K; s._cDone = s.params.chroma;
+    s.labels = lab2; s.mL = mL; s.tone = tone; s.cent = cent; s._kDone = K; s._cDone = s.params.chroma; s._slab = null;
     s.toneOv = {}; s.selLab = -1;                 // new clustering = new chips
   }
 
@@ -156,14 +156,47 @@
     return out;
   }
 
+  /* ── smoothed label field (outline only): blur each cluster's indicator and
+     re-vote — the boundary follows the curve, not the pixel staircase ── */
+  function smoothLabels(s) {
+    if (s._slab) return s._slab;
+    var W = s.w, H = s.h, N = W * H, K = s.params.k, lab = s.labels;
+    var best = new Float32Array(N).fill(-1), out = new Uint8Array(N);
+    var ind = new Float32Array(N), tmp = new Float32Array(N);
+    for (var c = 0; c < K; c++) {
+      for (var i = 0; i < N; i++) ind[i] = lab[i] === c ? 1 : 0;
+      for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) {         // horizontal 5-tap
+        var row = y * W, v = 0;
+        for (var o = -2; o <= 2; o++) v += ind[row + Math.max(0, Math.min(W - 1, x + o))];
+        tmp[row + x] = v;
+      }
+      for (y = 0; y < H; y++) for (x = 0; x < W; x++) {                 // vertical 5-tap
+        var v2 = 0;
+        for (o = -2; o <= 2; o++) v2 += tmp[Math.max(0, Math.min(H - 1, y + o)) * W + x];
+        var i2 = y * W + x;
+        if (v2 > best[i2]) { best[i2] = v2; out[i2] = c; }
+      }
+    }
+    s._slab = out;
+    return out;
+  }
+
   /* ── stage 3 · outline = region boundaries (labels change), dilated to px ── */
   function boundaryBits(s) {
-    var W = s.w, H = s.h, lab = s.labels, t = s.params.outline;
+    var W = s.w, H = s.h, lab = s.params.smooth ? smoothLabels(s) : s.labels, t = s.params.outline;
     var out = new Uint8Array(W * H).fill(1);
     if (!t) return out;
     for (var y = 0; y < H - 1; y++) for (var x = 0; x < W - 1; x++) {
       var i = y * W + x;
       if (lab[i] !== lab[i + 1] || lab[i] !== lab[i + W]) out[i] = 0;
+    }
+    // bridge diagonal steps: a 45° staircase is only diagonally connected and
+    // READS DOTTED — add the missing 4-neighbour so the line is continuous ink
+    var st0 = Uint8Array.from(out);
+    for (y = 0; y < H - 1; y++) for (x = 0; x < W - 1; x++) {
+      i = y * W + x;
+      if (st0[i] === 0 && st0[i + W + 1] === 0 && st0[i + 1] === 1 && st0[i + W] === 1) out[i + 1] = 0;
+      if (x > 0 && st0[i] === 0 && st0[i + W - 1] === 0 && st0[i - 1] === 1 && st0[i + W] === 1) out[i + W] = 0;
     }
     for (var pass = 1; pass < t; pass++) {           // thickness: dilate ink
       var prev = Uint8Array.from(out);
@@ -495,6 +528,7 @@
         '<button class="app-btn tech-tool-cut tech-need-img" title="draw a polygon on the SOURCE around the object — outside fades (BACKDROP)">▱ CUTOUT</button>' +
         '<button class="app-btn tech-tool-clear" title="remove the cutout">✕ CLEAR</button>' +
         '<span class="tech-bar-sp"></span>' +
+        '<button class="app-btn tech-smooth tech-need-img' + (s.params.smooth ? ' is-on' : '') + '" title="smooth the outline — the line follows the curve instead of the pixel staircase (toggle to compare)">∿ SMOOTH</button>' +
         '<button class="app-btn tech-adv' + (s.adv ? ' is-on' : '') + '" title="colour picker, gray chips, and the full slider set">⚙ ADVANCED</button>' +
         '<button class="app-btn tech-reset tech-need-img">↺ RESET</button>' +
         '<button class="app-btn tech-import">⇪ IMPORT</button>' +
@@ -533,6 +567,12 @@
         if (out) out.textContent = fmtVal(S[0], s.params[S[0]]);
       });
       redraw(pane);
+    };
+    pane.querySelector('.tech-smooth').onclick = function () {
+      s.params.smooth = s.params.smooth ? 0 : 1;
+      try { localStorage.setItem(LS_PAR, JSON.stringify(s.params)); } catch (e) {}
+      pane.querySelector('.tech-smooth').classList.toggle('is-on', !!s.params.smooth);
+      redrawPressSoon(pane);
     };
     pane.querySelector('.tech-adv').onclick = function () {
       s.adv = !s.adv;
@@ -597,7 +637,7 @@
     _press: {
       defaults: defaults, clusterize: clusterize, chanOf: chanOf, boundaryBits: boundaryBits,
       otsu: otsu, pressTrame: pressTrame, pressSeuil: pressSeuil, pressTrait: pressTrait,
-      maskOf: maskOf, applyFade: applyFade, toneOf: toneOf,
+      maskOf: maskOf, applyFade: applyFade, toneOf: toneOf, smoothLabels: smoothLabels,
     },
   };
 })();
