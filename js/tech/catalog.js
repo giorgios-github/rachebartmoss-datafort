@@ -6,7 +6,7 @@ import { defsBlock } from './law.js';
 export { BINS, BIN_ORDER, allParts };
 
 // default mount per part: 'in' (cavity) | 'face' (on the lid) | 'wall' (trans-paroi)
-export const MOUNT = { emitter: 'wall', antenna: 'wall', screen: 'face' };
+export const MOUNT = { emitter: 'wall', antenna: 'wall', screen: 'face', 'rail-clamp': 'face' };
 export const catMount = id => MOUNT[id] || 'in';
 
 export const byId = {};
@@ -26,12 +26,17 @@ export function catFootprint(id, params) {
   if (!f) return { w: 12, h: 10 };
   return { w: Math.max(4, Math.round(f.wPx / FOOT_K)), h: Math.max(4, Math.round(f.hPx / FOOT_K)) };
 }
-// embed a part into an enclosure drawing at (xPx,yPx), scaled to wPx×hPx (+ 90° rot steps)
+// embed a part into an enclosure drawing at (xPx,yPx), scaled to wPx×hPx (+ 90° rot steps).
+// SIZE IS PRESERVED under rotation: at 90/270 the content is fitted to the UNSWAPPED
+// box (hPx×wPx) centred in the placed box, then rotated — never re-shrunk.
 export function catEmbed(id, params, xPx, yPx, wPx, hPx, density, lod, rot) {
   const f = catFigure(id, params, { k: FOOT_K, lod: lod || 'plate', density: density ?? 2 });
   if (!f) return '';
+  const quarter = rot === 90 || rot === 270;
+  const w2 = quarter ? hPx : wPx, h2 = quarter ? wPx : hPx;
+  const x2 = xPx + (wPx - w2) / 2, y2 = yPx + (hPx - h2) / 2;
   const svg = f.svg.replace(/width="[\d.]+" height="[\d.]+"/,
-    `x="${xPx.toFixed(2)}" y="${yPx.toFixed(2)}" width="${wPx.toFixed(2)}" height="${hPx.toFixed(2)}" preserveAspectRatio="xMidYMid meet"`);
+    `x="${x2.toFixed(2)}" y="${y2.toFixed(2)}" width="${w2.toFixed(2)}" height="${h2.toFixed(2)}" preserveAspectRatio="xMidYMid meet"`);
   if (!rot) return svg;
   const cx = xPx + wPx / 2, cy = yPx + hPx / 2;
   return `<g transform="rotate(${rot} ${cx.toFixed(2)} ${cy.toFixed(2)})">${svg}</g>`;

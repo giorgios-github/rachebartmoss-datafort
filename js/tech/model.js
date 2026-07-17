@@ -17,6 +17,7 @@
 //  (epistemic — resolved|ghosted — is a VIEW property: what the observer knows.)
 import * as G from './geom.js';
 import * as R from './rules.js';
+import { byId as catParts } from './catalog.js';
 
 export const ORIGINS = R.ORIGINS;
 export const PORT_KINDS = Object.keys(R.PORT);
@@ -95,7 +96,14 @@ export function autoWires(p) {
   const cell = gi('cell'), mech = gi('mech'), stack = gi('stack');
   const W2 = [];
   if (cell >= 0 && board >= 0 && cell !== board) W2.push([`g${cell}`, `g${board}`]);
-  p.guts.forEach((g, i) => { if ((g.k === 'module' || g.k === 'cat') && board >= 0 && i !== board) W2.push([`g${i}`, `g${board}`]); });
+  p.guts.forEach((g, i) => {
+    if (board < 0 || i === board) return;
+    if (g.k === 'module') { W2.push([`g${i}`, `g${board}`]); return; }
+    if (g.k === 'cat') {                                     // wire only what NEEDS power/control
+      const needs = (catParts[g.cat] && catParts[g.cat].meta.functions && catParts[g.cat].meta.functions.needs) || [];
+      if (needs.length) W2.push([`g${i}`, `g${board}`]);
+    }
+  });
   p.ports.forEach((pt, i) => {
     let tgt = board;
     if (pt.k === 'power') tgt = cell >= 0 ? cell : board;
@@ -124,7 +132,12 @@ export function budgets(p) {
   for (const g of p.guts) {
     gutsG += g.w * g.h * (GUT_RHO[g.k] || 3) * depth / 10 / 1000;
     const boost = 1 + 0.35 * (g.push || 0);                               // pushed = more juice, more thirst
-    if (g.k === 'cell') supply += g.w * g.h * SUPPLY_PER_CELL_MM2 * boost;
+    if (g.k === 'cat') {                                                  // catalogue: read its functions
+      const fns = (catParts[g.cat] && catParts[g.cat].meta.functions) || {};
+      if ((fns.provides || []).includes('store-power')) supply += g.w * g.h * SUPPLY_PER_CELL_MM2 * boost;
+      else if ((fns.needs || []).length) draw += 0.5 * (1 + 0.3 * (g.push || 0));
+    }
+    else if (g.k === 'cell') supply += g.w * g.h * SUPPLY_PER_CELL_MM2 * boost;
     else if (DRAW[g.k]) draw += DRAW[g.k] * (1 + 0.3 * (g.push || 0));
   }
   for (const f of p.feats) draw += DRAW[f.k] || 0;
@@ -180,30 +193,60 @@ export function fromJSON(str) {
   });
 }
 
-// ---- examples: three registers, three shapes — the acceptance trio, ours.
+// ---- examples: four designs built FROM THE CATALOGUE — mounts, pushes, lineage, slots.
 export function examples() {
   return [
+    // 1 · the street bug — smart-core + coin cell, stub antenna through the shell
     normalize({
-      id: 'bug-01', label: 'TICK', origin: 'HANDMADE', sealed: false, heat: 0,
-      outline: G.roundedRect(20, 13, 1.5),
-      ports: [{ k: 'data', t: 0.30 }],
-      feats: [{ k: 'led', at: [5, 4] }, { k: 'antenna', t: 0.82 }],
-      guts: [{ k: 'board', at: [5.5, 4.5], w: 11, h: 6 }, { k: 'cell', at: [5.5, 11 ], w: 8, h: 3.5, label: 'COIN' }],
-      fmax: 2,
+      id: 'tick-2', label: 'TICK', origin: 'HANDMADE', heat: 0, fmax: 2,
+      outline: G.roundedRect(30, 19, 1.5),
+      ports: [{ k: 'data', t: 0.52 }],
+      feats: [{ k: 'led', at: [25.5, 5] }],
+      guts: [
+        { k: 'cat', cat: 'smart-core-ic', params: { body: 7 }, at: [4, 5], w: 11, h: 11 },
+        { k: 'cat', cat: 'cell', params: { format: 'coin', cap: 1 }, at: [16.5, 6], w: 9, h: 9, donor: 'pried from a parking meter' },
+        { k: 'cat', cat: 'antenna', params: { geom: 'stub', size: 12 }, mount: 'wall', t: 0.9 },
+      ],
+      events: ['lived three weeks taped behind a vending machine'],
     }),
+    // 2 · the corpo optic-link — sealed sliver, face optic, an unexplained organ inside
     normalize({
-      id: 'smartlink-3', label: 'KIROSHI OPTIK-LINK', origin: 'CORP PULL', sealed: true, heat: 2,
-      outline: G.chamferRect(46, 26, 4),
-      ports: [{ k: 'data', t: 0.06 }, { k: 'power', t: 0.62 }],
-      feats: [{ k: 'led', at: [8, 6] }, { k: 'rail', t: 0.42 }],
-      guts: [{ k: 'module', at: [10, 8], w: 16, h: 11, label: 'AIM CORE' }, { k: 'cell', at: [30, 9], w: 9, h: 8 }],
+      id: 'kiroshi-sl3', label: 'KIROSHI OPTIK-LINK SL-3', origin: 'CORP PULL', sealed: true, heat: 1,
+      outline: G.chamferRect(48, 27, 4),
+      ports: [{ k: 'data', t: 0.06 }, { k: 'power', t: 0.6 }],
+      guts: [
+        { k: 'cat', cat: 'optic', params: { grade: 'corpo', aperture: 8 }, mount: 'face', at: [5, 5.5], w: 15, h: 17 },
+        { k: 'cat', cat: 'smart-core-ic', params: { body: 10 }, at: [23, 7.5], w: 13, h: 13 },
+        { k: 'cat', cat: 'cell', params: { format: 'prismatic', cap: 1 }, at: [38, 6.5], w: 7, h: 14 },
+      ],
+      events: ['cracked open once — an unexplained organ found, left in place'],
     }),
+    // 3 · the scratch PSU — pushed drone cell, coolant tracé, live scope on the lid
     normalize({
-      id: 'deckmod-7', label: 'SCRATCH DECK PSU', origin: 'SALVAGE', sealed: false, heat: 4,
-      outline: G.roundedRect(72, 44, 3),
-      ports: [{ k: 'power', t: 0.05 }, { k: 'power', t: 0.55 }, { k: 'data', t: 0.70 }],
-      feats: [{ k: 'switch', at: [12, 8] }, { k: 'dial', at: [26, 10] }, { k: 'screen', at: [44, 6], w: 16, h: 10 }],
-      guts: [{ k: 'cell', at: [8, 20], w: 20, h: 14 }, { k: 'board', at: [34, 18], w: 26, h: 16 }, { k: 'mech', at: [10, 36 - 1 ], w: 14, h: 6, label: 'FAN' }],
+      id: 'psu-scratch', label: 'SCRATCH DECK PSU', origin: 'SALVAGE', heat: 3,
+      outline: G.roundedRect(76, 46, 3),
+      ports: [{ k: 'power', t: 0.03 }, { k: 'power', t: 0.5 }, { k: 'data', t: 0.68 }],
+      feats: [{ k: 'switch', at: [10, 8] }, { k: 'dial', at: [22, 10] }],
+      guts: [
+        { k: 'cat', cat: 'cell', params: { format: 'cylindrical', cap: 8 }, at: [6, 24], w: 34, h: 12, push: 2, donor: 'pulled from a downed Militech drone' },
+        { k: 'cat', cat: 'processor-board', params: { cores: 1, socket: 'occupied' }, at: [45, 24], w: 22, h: 17 },
+        { k: 'cat', cat: 'coolant-loop', params: { path: [[0, 0], [40, 0], [40, 10], [12, 10], [12, 18], [0, 18]] }, at: [5, 4], w: 32, h: 16 },
+        { k: 'cat', cat: 'screen', params: { displayType: 'scope-wave', bezel: 'raised', content: 'RAIL A' }, mount: 'face', at: [42, 5], w: 27, h: 14 },
+      ],
+      events: ['survived the Arasaka raid EMP', 'won back at the Kabuki table'],
+    }),
+    // 4 · the whisper pod — pushed wall emitter, rf brain with a seated stub, rail underside
+    normalize({
+      id: 'whisper-pod', label: 'WHISPER POD', origin: 'HANDMADE', heat: 1,
+      outline: G.pill(58, 26),
+      ports: [{ k: 'power', t: 0.55 }],
+      guts: [
+        { k: 'cat', cat: 'emitter', params: { d: 12, medium: 'ultrasonic' }, mount: 'wall', t: 0.98, push: 1, donor: 'ex-riot-wagon siren head' },
+        { k: 'cat', cat: 'rf-transceiver', params: { band: 'HB', antenna: 'stub' }, at: [9, 5], w: 20, h: 16 },
+        { k: 'cat', cat: 'cell', params: { format: 'prismatic', cap: 2 }, at: [33, 6], w: 12, h: 14 },
+        { k: 'cat', cat: 'rail-clamp', params: { w: 14 }, mount: 'face', at: [17, 16], w: 22, h: 10 },
+      ],
+      events: ['sings at 19 kHz when the cell runs low'],
     }),
   ];
 }

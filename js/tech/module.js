@@ -437,7 +437,7 @@ export function renderModule(part, view = {}) {
     const q = G.pointAt(pts, s);
     const nAng = Math.atan2(q.ny, q.nx) * 180 / Math.PI;
     const view2 = { k, density: dens, wallMm: wall, exterior };
-    const params2 = exterior ? { ...g.params, mounted: 'exterior' } : { ...g.params, mounted: false };
+    const params2 = exterior ? { ...g.params, mounted: 'exterior' } : { ...g.params, mounted: true };  // section = the TRAVERSANT state
     const a = catWallAnchor(g.cat, params2, view2);
     if (!a) return null;
     return { q, a, rot: a.axis === 'x' ? nAng : nAng + 90, view2, params2, wallMid: [q.x - q.nx * wall / 2, q.y - q.ny * wall / 2] };
@@ -478,16 +478,19 @@ export function renderModule(part, view = {}) {
       const wp = catWirePad(g.cat, g.params, { k: FOOT_K });
       if (nat && wp) {
         const natW = nat.wPx / FOOT_K, natH = nat.hPx / FOOT_K;  // natural size, mm
-        const s2 = Math.min(g.w / natW, g.h / natH);
-        const offX = (g.w - natW * s2) / 2, offY = (g.h - natH * s2) / 2;
-        let lx = (wp.x + CAT_PAD) / FOOT_K, ly = (wp.y + CAT_PAD) / FOOT_K;
-        if (g.rot) {
-          const cx2 = natW / 2, cy2 = natH / 2, r2 = g.rot * Math.PI / 180;
-          const rx3 = cx2 + (lx - cx2) * Math.cos(r2) - (ly - cy2) * Math.sin(r2);
-          const ry3 = cy2 + (lx - cx2) * Math.sin(r2) + (ly - cy2) * Math.cos(r2);
-          lx = rx3; ly = ry3;
+        const quarter = g.rot === 90 || g.rot === 270;
+        const bw = quarter ? g.h : g.w, bh = quarter ? g.w : g.h; // unrotated content box (size preserved)
+        const s2 = Math.min(bw / natW, bh / natH);
+        const ox2 = g.at[0] + (g.w - bw) / 2 + (bw - natW * s2) / 2;
+        const oy2 = g.at[1] + (g.h - bh) / 2 + (bh - natH * s2) / 2;
+        let px2 = ox2 + (wp.x + CAT_PAD) / FOOT_K * s2, py2 = oy2 + (wp.y + CAT_PAD) / FOOT_K * s2;
+        if (g.rot) {                                             // same pivot as the embed: the box centre
+          const cx2 = g.at[0] + g.w / 2, cy2 = g.at[1] + g.h / 2, r2 = g.rot * Math.PI / 180;
+          const rx3 = cx2 + (px2 - cx2) * Math.cos(r2) - (py2 - cy2) * Math.sin(r2);
+          const ry3 = cy2 + (px2 - cx2) * Math.sin(r2) + (py2 - cy2) * Math.cos(r2);
+          px2 = rx3; py2 = ry3;
         }
-        return [g.at[0] + offX + lx * s2, g.at[1] + offY + ly * s2];
+        return [px2, py2];
       }
       return gutCenterMm(g);
     }

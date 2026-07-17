@@ -327,8 +327,8 @@ function renderTools() {
     t.append(tray);
   };
   bin('bin · ports', 'port', M.PORT_KINDS, 'port');
-  bin('bin · controls', 'feat', M.FEAT_KINDS, 'feat');
-  bin('bin · guts', 'gut', M.GUT_KINDS, 'gut');
+  bin('bin · controls', 'feat', M.FEAT_KINDS.filter(k2 => !['screen', 'antenna', 'rail'].includes(k2)), 'feat');
+  bin('bin · misc', 'gut', ['module'], 'gut');               // legacy furniture superseded by the catalogue
   // THE CATALOGUE (DF-TO-C) — parametric parts, drawn by their own binGlyph
   for (const b of CAT_BIN_ORDER) {
     const B = CAT_BINS[b];

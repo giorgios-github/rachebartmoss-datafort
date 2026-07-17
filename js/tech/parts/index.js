@@ -10,6 +10,10 @@ import * as antenna from './link/antenna.js';
 import * as emitter from './act/emitter.js';
 import * as vessel from './store/vessel.js';
 import * as cloop from './overdrive/coolant-loop.js';
+import * as rfxcvr from './link/rf-transceiver.js';
+import * as optic from './sense/optic.js';
+import * as magazine from './store/magazine.js';
+import * as railClamp from './structure/rail-clamp.js';
 import * as loomMod from './loom.js';
 import * as tiersMod from './tiers.js';
 export const loom = loomMod;
@@ -20,12 +24,12 @@ export const BIN_ORDER = ['POWER', 'LOGIC', 'SENSE', 'LINK', 'ACT', 'INTERFACE',
 export const BINS = {
   POWER: { glyphOf: 'cell', parts: [cell], planned: ['psu', 'induction-coil', 'thermo-gen'] },
   LOGIC: { glyphOf: 'processor-board', parts: [procBoard, smartCore], planned: ['memory-spool', 'crypto-module'] },
-  SENSE: { glyphOf: 'optic', parts: [], planned: ['optic', 'microphone', 'chem-sniffer', 'imu', 'em-probe', 'biomonitor'] },
-  LINK: { glyphOf: 'antenna', parts: [antenna], planned: ['rf-transceiver', 'neural-jack', 'laser-link'] },
+  SENSE: { glyphOf: 'optic', parts: [optic], planned: ['microphone', 'chem-sniffer', 'imu', 'em-probe', 'biomonitor'] },
+  LINK: { glyphOf: 'antenna', parts: [rfxcvr, antenna], planned: ['neural-jack', 'laser-link'] },
   ACT: { glyphOf: 'emitter', parts: [emitter], planned: ['servo', 'linear-actuator', 'injector', 'micro-pump', 'siren'] },
   INTERFACE: { glyphOf: 'screen', parts: [screen], planned: ['keypad', 'button', 'switch', 'dial', 'led-array', 'haptic'] },
-  STORE: { glyphOf: 'vessel', parts: [vessel], planned: ['magazine', 'cartridge-bay'] },
-  STRUCTURE: { glyphOf: 'rail-clamp', parts: [], planned: ['rail-clamp', 'socket', 'strap'] },
+  STORE: { glyphOf: 'vessel', parts: [magazine, vessel], planned: ['cartridge-bay'] },
+  STRUCTURE: { glyphOf: 'rail-clamp', parts: [railClamp], planned: ['socket', 'strap'] },
   FASTEN: { glyphOf: 'clip', parts: [], planned: ['clip', 'cable-tie'] },
   OVERDRIVE: { glyphOf: 'coolant-loop', parts: [cloop], planned: ['governor', 'fuse', 'bypass-shunt', 'graft-heatsink', 'rating-stencil'] },
   GRAFT: { glyphOf: 'adapter-plate', parts: [], planned: ['adapter-plate', 'shim-set', 'reducer-bushing', 'pigtail', 'jury-rig-bracket'] }
