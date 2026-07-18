@@ -11,6 +11,7 @@
   var isKnown = function (d) { return C.isKnownDomain(d); };
   var DERIVE = function (a) { return M.derive(a, { isKnownDomain: isKnown, addonPrice: C.addonPrice }); };
   function addonEbTag(a, name) { var eb = M.addonEb(a, name, { addonPrice: C.addonPrice }); var e = C.addonPrice(name); var scaled = !!(e && e.mult != null); return '<span class="tk2-addeb" title="' + (scaled ? 'coût proportionnel à la complexité de l’objet' : 'coût de l’addon') + '">' + (scaled ? '~' : '') + eb + 'eb</span>'; }
+  function addonPriceStr(a, name) { var eb = M.addonEb(a, name, { addonPrice: C.addonPrice }); var e = C.addonPrice(name); return ((e && e.mult != null) ? '~' : '') + eb + 'eb' + ((e && e.mult != null) ? ' · ∝ complexité' : ''); }
   function allAddonCount(a) { var n = a.addons.length; a.feats.forEach(function (f) { n += (f.addons || []).length; }); return n; }
   var GATE = function (a, skills) { return M.gate(a, skills, { skillForClass: C.skillForClass, skillForDomain: C.skillForDomain }); };
   // ── the BUILDER = the current player's OWN sheet (the one shown in /party/me),
@@ -84,12 +85,20 @@
   function originBody(a) {
     return ORIGINS.map(function (o) { return '<button class="tk2-pk-row' + (o[0] === a.origin ? ' is-sel' : '') + '" data-pkorigin="' + o[0] + '"><span class="tk2-pd-h">' + o[0] + '</span> <span class="tk2-mut">· ' + esc(o[1]) + '</span></button>'; }).join('');
   }
-  // EFFECT-ADDON picker — the addon catalogue is scoped to what THIS effect does (its domain).
+  // EFFECT-ADDON picker — the addon catalogue is scoped to what THIS effect does (its
+  // domain) ; each proposed addon shows its computed price against the current object.
   function faddonBody(a, fi) {
     var f = a.feats[fi]; if (!f) return '';
     var fam = C.familyOfDomain(f.domain), list = C.addonsForDomain(f.domain);
-    var body = '<div class="tk2-pk-sec">' + esc(f.domain) + (fam ? '' : ' · générique') + '</div>' + pickGrid(list.map(function (m) { return pickCell('data-pkfaddon', m, ''); }).join(''));
-    body += '<div class="tk2-pk-sec">CUSTOM</div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="addon custom…"><button class="tk2-chip" data-pkcustom="faddon">+ ajouter</button></div>';
+    var body = '<div class="tk2-pk-sec">' + esc(f.domain) + (fam ? '' : ' · générique') + '</div>' + pickGrid(list.map(function (m) { return pickCell('data-pkfaddon', m, addonPriceStr(a, m)); }).join(''));
+    body += '<div class="tk2-pk-sec">CUSTOM <span class="tk2-mut">— défaut ' + M.TUNING.addon.eb + 'eb</span></div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="addon custom…"><button class="tk2-chip" data-pkcustom="faddon">+ ajouter</button></div>';
+    return body;
+  }
+  // GENERIC-ADDON picker — the transverse addons (miniaturisation, durci…) with their
+  // computed price (fixed, or ~proportional to the object's complexity) + a custom field.
+  function gaddonBody(a) {
+    var body = '<div class="tk2-pk-sec">ADDONS GÉNÉRIQUES</div>' + pickGrid(C.GENERIC_ADDONS.map(function (m) { return pickCell('data-pkgaddon', m, addonPriceStr(a, m)); }).join(''));
+    body += '<div class="tk2-pk-sec">CUSTOM <span class="tk2-mut">— défaut ' + M.TUNING.addon.eb + 'eb</span></div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="addon custom…"><button class="tk2-chip" data-pkcustom="gaddon">+ ajouter</button></div>';
     return body;
   }
   // WEARER-MOD picker — a bonus fed to the sheet, bound to one of the wearer's own
@@ -127,6 +136,7 @@
     if (pick.kind === 'effect') { title = 'CHOISIR UN EFFET <span class="tk2-mut">— clique un grade</span>'; body = effectBody(a); }
     else if (pick.kind === 'token') { title = 'AJOUTER <span class="tk2-mut">— ' + esc(pick.tkind) + '</span>'; body = tokenBody(a, pick.tkind); }
     else if (pick.kind === 'faddon') { title = 'ADDON <span class="tk2-mut">— lié à l’effet</span>'; body = faddonBody(a, pick.fi); }
+    else if (pick.kind === 'gaddon') { title = 'ADDON GÉNÉRIQUE <span class="tk2-mut">— transverse</span>'; body = gaddonBody(a); }
     else if (pick.kind === 'wmod') { title = 'BONUS AU PORTEUR <span class="tk2-mut">— cible une stat / un skill</span>'; body = wmodBody(a, builder); }
     else if (pick.kind === 'class') { title = 'CLASSE DE L’OBJET'; body = classBody(a); }
     else { title = 'ORIGINE'; body = originBody(a); }
@@ -267,7 +277,7 @@
         '<div class="tk2-fiche">' +
           panel('EFFETS', help('ce que l’objet FAIT — ＋ effet pioche un domaine + grade ; sous chaque effet, ses addons propres (＋ addon).') +
             (a.feats.length ? a.feats.map(function (f, i) { return featRow(f, i, a); }).join('') : '<div class="tk2-empty-sm">Aucun effet.</div>') +
-            '<div class="tk2-effbtns"><button class="tk2-add tk2-add-eff" data-openpk data-pkkind="effect">＋ effet…</button><button class="tk2-add tk2-add-gen" data-addgen title="un addon générique / transverse (miniaturisation, durci…) — texte libre">+ addon</button></div>' +
+            '<div class="tk2-effbtns"><button class="tk2-add tk2-add-eff" data-openpk data-pkkind="effect">＋ effet…</button><button class="tk2-add tk2-add-gen" data-openpk data-pkkind="gaddon" title="un addon générique / transverse (miniaturisation, durci…) avec son prix">+ addon</button></div>' +
             (a.addons.length ? '<div class="tk2-genadd"><div class="tk2-genadd-h">addons génériques</div>' + a.addons.map(function (x, i) { return '<div class="tk2-line"><input list="tk2-genaddons" data-addon="' + i + '" value="' + esc(x.name) + '" placeholder="addon générique…">' + (x.name ? addonEbTag(a, x.name) : '') + '<button class="tk2-x" data-deladdon="' + i + '">✕</button></div>'; }).join('') + '</div>' : ''), true) +
           panel('INTERFACES', help('ce que l’objet CONSOMME / ACCUEILLE / dans quoi il s’insère — pioche des jetons standards (achetables) ou tape un jeton custom.') + interfacesPanel(a)) +
           '<div class="tk2-details">' +
@@ -325,8 +335,9 @@
     pane.querySelectorAll('[data-pkorigin]').forEach(function (b) { b.onclick = function () { a.origin = b.getAttribute('data-pkorigin'); pickDone(); }; });
     var pushFaddon = function (name) { var fi = s.pick && s.pick.fi, f = a.feats[fi]; if (f) (f.addons || (f.addons = [])).push({ name: name, note: '' }); };
     pane.querySelectorAll('[data-pkfaddon]').forEach(function (b) { b.onclick = function () { pushFaddon(b.getAttribute('data-pkfaddon')); pickDone(); }; });
+    pane.querySelectorAll('[data-pkgaddon]').forEach(function (b) { b.onclick = function () { a.addons.push({ name: b.getAttribute('data-pkgaddon'), note: '' }); pickDone(); }; });
     pane.querySelectorAll('[data-pkwmod]').forEach(function (b) { b.onclick = function () { a.mods.push({ target: b.getAttribute('data-pkwmod'), value: '', when: 'when worn' }); pickDone(); }; });
-    pane.querySelectorAll('[data-pkcustom]').forEach(function (b) { b.onclick = function () { var box = b.parentNode.querySelector('.tk2-pk-cin'), v = box ? box.value.trim() : ''; if (!v) return; var kind = b.getAttribute('data-pkcustom'); if (kind === 'effect') a.feats.push({ domain: v.toUpperCase(), grade: 1 }); else if (kind === 'faddon') pushFaddon(v); else if (kind === 'wmod') a.mods.push({ target: v, value: '', when: 'when worn' }); else { var k = s.pick && s.pick.tkind; if (k === 'needs') a.ports.needs.push({ token: v, rate: '' }); else if (k === 'fits') a.ports.fits.push(v); } pickDone(); }; });
+    pane.querySelectorAll('[data-pkcustom]').forEach(function (b) { b.onclick = function () { var box = b.parentNode.querySelector('.tk2-pk-cin'), v = box ? box.value.trim() : ''; if (!v) return; var kind = b.getAttribute('data-pkcustom'); if (kind === 'effect') a.feats.push({ domain: v.toUpperCase(), grade: 1 }); else if (kind === 'faddon') pushFaddon(v); else if (kind === 'gaddon') a.addons.push({ name: v, note: '' }); else if (kind === 'wmod') a.mods.push({ target: v, value: '', when: 'when worn' }); else { var k = s.pick && s.pick.tkind; if (k === 'needs') a.ports.needs.push({ token: v, rate: '' }); else if (k === 'fits') a.ports.fits.push(v); } pickDone(); }; });
     // tokens (needs/fits/takes-accepts/holds simplified via interfacesPanel wiring)
     wireInterfaces(pane, a);
     // limits
@@ -337,8 +348,7 @@
     // mods
     pane.querySelectorAll('[data-mod]').forEach(function (inp) { inp.oninput = function () { a.mods[+inp.getAttribute('data-mod')][inp.getAttribute('data-k')] = inp.value; commit(pane); refreshDerived(pane); }; });
     pane.querySelectorAll('[data-delmod]').forEach(function (b) { b.onclick = function () { a.mods.splice(+b.getAttribute('data-delmod'), 1); commit(pane); renderBench(pane); }; });
-    // generic addons (object-level, text)
-    var addGen = pane.querySelector('[data-addgen]'); if (addGen) addGen.onclick = function () { a.addons.push({ name: '', note: '' }); commit(pane); renderBench(pane); };
+    // generic addons (object-level) — added via the gaddon popup, editable inline afterwards
     pane.querySelectorAll('[data-addon]').forEach(function (inp) { inp.oninput = function () { a.addons[+inp.getAttribute('data-addon')].name = inp.value; commit(pane); }; });
     pane.querySelectorAll('[data-deladdon]').forEach(function (b) { b.onclick = function () { a.addons.splice(+b.getAttribute('data-deladdon'), 1); commit(pane); renderBench(pane); }; });
     // per-effect addons (chips)
