@@ -188,6 +188,7 @@
   };
   var DOMAIN_FAMILY = {
     STRIKE: 'weapon', SHOCK: 'weapon', BURN: 'weapon', PROJECT: 'weapon', DEMOLISH: 'weapon', SONIC: 'weapon',
+    ROCKET: 'weapon', CHEMICAL: 'weapon', ENERGY: 'weapon', GAUSS: 'weapon', BLADE: 'weapon',   // STRIKE weapon systems
     VISION: 'optics', SENSE: 'optics', TRACK: 'optics', ANALYZE: 'optics', RECORD: 'optics', ILLUMINATE: 'optics',
     LINK: 'signal', HACK: 'signal', COMPUTE: 'signal', BROADCAST: 'signal', JAM: 'signal', CONTROL: 'signal', TRANSLATE: 'signal',
     ARMOR: 'armor', SHIELD: 'armor', SEAL: 'armor', CONCEAL: 'armor', CLOAK: 'armor', DISGUISE: 'armor',
@@ -221,8 +222,81 @@
     'miniaturization': { mult: 1.0 }, 'hardened': { mult: 0.3 }, 'waterproofed': { mult: 0.2 }, 'modular': { mult: 0.25 },
     'concealed': { mult: 0.15 }, 'lightweighted': { mult: 0.35 }, 'reinforced': { mult: 0.3 },
     'fingerprint-free': 60, 'voice control': 120, 'self-cleaning': 80,
+    // tag-class addons (unlocked by walked effect-tree nodes; each node's `tag` = an addon class)
+    'heavy barrel': 110, 'muzzle brake': 70, 'threaded muzzle': 45,
+    'quick-loader': 60, 'mixed-load selector': 120, 'tracer rounds': 40, 'rangefinder': 160,
+    'multi-lock': 280, 'decoy rejection': 240, 'datalink uplink': 200,
+    'selectable yield': 260, 'airburst fuze': 180, 'safe-arm interlock': 70,
+    'fast-feed ramp': 70, 'dual-feed selector': 140, 'belt adapter': 90,
+    'reload cassette': 80, 'soft-launch tube': 120, 'mixed rack': 100,
+    'beam focuser': 200, 'heat shroud': 150, 'pulse tuner': 170,
+    'capacitor bank': 220, 'cooling shroud': 120, 'arc suppressor': 160,
+    'mono-hone': 90, 'quick-draw sheath': 70, 'serrated spine': 60,
+    'spool guard': 60, 'tension reel': 110, 'grip loop': 40,
+    'shock cushion': 70, 'counterweight head': 90,
+    'trauma insert': 180, 'breathable liner': 60, 'stab layer': 110,
+    'matte finish': 60, 'reaction tuner': 200, 'spare tiles': 120, 'load harness': 150,
+    'spare cartridge': 40, 'positive-pressure blower': 180, 'quick-swap seal': 60,
+    'spare o2 bottle': 90, 'co2 monitor': 120,
+    'subdermal mount': 150, 'anti-tamper lock': 200, 'maintenance port': 60, 'neural sync': 300,
+    'extra ram': 150, 'co-processor': 250, 'ice buffer': 200,
+    'payload slot': 120, 'stealth wrapper': 180, 'auto-update': 80,
+    'run-flat tires': 150, 'skid plate': 100, 'all-weather tread': 120, 'nitro tank': 300,
+    'reserve chute': 120, 'altimeter': 60, 'vector nozzle': 200,
+    'sling mount': 30, 'lens cap': 20, 'spare battery': 40,
   };
   function addonPrice(name) { var e = ADDON_PRICES[String(name || '').toLowerCase().trim()]; return e === undefined ? null : e; }
+
+  // ── ADDON CLASSES — a walked effect-tree node carries a `tag` = an addon class it UNLOCKS.
+  // The per-effect picker offers the UNION of the classes unlocked by the nodes you walked,
+  // plus a minimal domain base (never empty). Unknown tags just contribute nothing (graceful),
+  // and an untagged / legacy effect falls back to its whole domain family. Seed set — grows freely.
+  var ADDON_CLASSES = {
+    // STRIKE weapon systems
+    barrel: ['long barrel', 'heavy barrel', 'muzzle brake', 'threaded muzzle'],
+    ammo: ['extended magazine', 'quick-loader', 'mixed-load selector', 'tracer rounds'],
+    optics: ['powered zoom', 'IR filter', 'low-light gain', 'HUD overlay', 'rangefinder'],
+    optic: ['powered zoom', 'IR filter', 'low-light gain', 'HUD overlay', 'rangefinder'],
+    seeker: ['multi-lock', 'decoy rejection', 'datalink uplink'],
+    warhead: ['selectable yield', 'airburst fuze', 'safe-arm interlock'],
+    feed: ['fast-feed ramp', 'dual-feed selector', 'belt adapter'],
+    munition: ['reload cassette', 'soft-launch tube', 'mixed rack'],
+    emitter: ['beam focuser', 'heat shroud', 'pulse tuner'],
+    driver: ['capacitor bank', 'cooling shroud', 'arc suppressor'],
+    core: ['high-capacity cell', 'fast-charge port', 'hot-swap module', 'solar trickle panel'],
+    edge: ['mono-hone', 'quick-draw sheath', 'serrated spine'],
+    wire: ['spool guard', 'tension reel', 'grip loop'],
+    impact: ['shock cushion', 'counterweight head'],
+    // ARMOR / SHIELD
+    plate: ['trauma insert', 'ceramic insert', 'quick-release', 'reinforced seams'],
+    weave: ['concealed cut', 'breathable liner', 'stab layer'],
+    reflec: ['matte finish', 'anti-glare coating'],
+    active: ['reaction tuner', 'spare tiles'],
+    exo: ['reinforced servos', 'load harness', 'gyro stabilizer'],
+    // FILTER-AIR
+    filter: ['spare cartridge', 'positive-pressure blower', 'quick-swap seal'],
+    closed: ['spare O2 bottle', 'CO2 monitor'],
+    // MOVE / HACK / SENSE, and chrome
+    cyberware: ['subdermal mount', 'anti-tamper lock', 'maintenance port', 'neural sync'],
+    deck: ['extra RAM', 'co-processor', 'ICE buffer', 'cooling shroud'],
+    program: ['payload slot', 'stealth wrapper', 'auto-update'],
+    drive: ['run-flat tires', 'skid plate', 'all-weather tread', 'nitro tank'],
+    flight: ['reserve chute', 'altimeter', 'vector nozzle'],
+  };
+  // a minimal "never empty" floor per family, when at least one class was unlocked
+  var DOMAIN_BASE = { weapon: ['sling mount'], optics: ['lens cap'], signal: ['spare battery'],
+    armor: ['quick-release'], mobility: ['maintenance port'], medchem: ['sterile reservoir'], core: ['fast-charge port'] };
+
+  // groups of addons for an effect: one section per unlocked class (from walked-node tags),
+  // + a minimal domain base; or the whole domain family if nothing was unlocked (legacy/untagged).
+  function addonClasses(tags, domain) {
+    tags = tags || []; var groups = [], seen = {};
+    tags.forEach(function (t) { var k = String(t || '').toLowerCase(); if (seen[k]) return; var lst = ADDON_CLASSES[k]; if (lst) { seen[k] = 1; groups.push({ tag: k, label: k.toUpperCase(), addons: lst.slice() }); } });
+    var fam = familyOfDomain(domain);
+    if (groups.length) { var base = DOMAIN_BASE[fam]; if (base) groups.push({ tag: '_base', label: 'GENERAL', addons: base.slice() }); }
+    else groups.push({ tag: '_fam', label: fam ? fam.toUpperCase() : (String(domain || '').toUpperCase() + ' · GENERIC'), addons: addonsForDomain(domain) });
+    return groups;
+  }
 
   window.TechCatalog = {
     ANCHORS: ANCHORS, DOMAINS: DOMAINS, anchorOf: anchorOf, isKnownDomain: isKnownDomain, skillForDomain: skillForDomain,
@@ -231,6 +305,7 @@
     SUGGEST: SUGGEST, suggestFor: suggestFor,
     MODS: MODS, modsFor: modsFor,
     ADDON_FAMILIES: ADDON_FAMILIES, GENERIC_ADDONS: GENERIC_ADDONS, familyOfDomain: familyOfDomain, addonsForDomain: addonsForDomain,
+    ADDON_CLASSES: ADDON_CLASSES, addonClasses: addonClasses,
     ADDON_PRICES: ADDON_PRICES, addonPrice: addonPrice,
     presets: presets, PRESETS: PRESETS,
   };

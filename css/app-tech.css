@@ -244,6 +244,7 @@
 .tk2-modal-b { overflow:auto; padding:8px 10px; }
 .tk2-pk-sec { font-family:var(--head); letter-spacing:2px; font-size:11px; color:#777; margin:10px 0 5px; border-bottom:2px solid var(--ink); padding-bottom:2px; }
 .tk2-pk-sec:first-child { margin-top:0; }
+.tk2-pk-hint { font-family:var(--head); letter-spacing:1.5px; font-size:12px; color:var(--ink); margin-bottom:2px; }
 .tk2-pd { margin-bottom:7px; }
 .tk2-pd-h { font-family:var(--head); letter-spacing:1px; font-size:12px; }
 .tk2-pd-l { display:flex; flex-wrap:wrap; gap:4px; margin-top:3px; }

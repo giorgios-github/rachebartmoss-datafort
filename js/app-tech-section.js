@@ -151,12 +151,18 @@
   function originBody(a) {
     return ORIGINS.map(function (o) { return '<button class="tk2-pk-row' + (o[0] === a.origin ? ' is-sel' : '') + '" data-pkorigin="' + o[0] + '"><span class="tk2-pd-h">' + o[0] + '</span> <span class="tk2-mut">· ' + esc(o[1]) + '</span></button>'; }).join('');
   }
-  // EFFECT-ADDON picker — the addon catalogue is scoped to what THIS effect does (its
-  // domain) ; each proposed addon shows its computed price against the current object.
+  // EFFECT-ADDON picker — the catalogue is UNLOCKED by the effect-tree nodes you walked:
+  // each node's `tag` opens an addon class, shown as its own section (+ a minimal GENERAL floor).
+  // An untagged / legacy effect falls back to its whole domain family. Each addon shows its price.
   function faddonBody(a, fi) {
     var f = a.feats[fi]; if (!f) return '';
-    var fam = C.familyOfDomain(f.domain), list = C.addonsForDomain(f.domain);
-    var body = '<div class="tk2-pk-sec">' + esc(f.domain) + (fam ? '' : ' · generic') + '</div>' + pickGrid(list.map(function (m) { return pickCell('data-pkfaddon', m, addonPriceStr(a, m)); }).join(''));
+    var tags = (f.path && f.path.length && TR.has(f.domain)) ? TR.collect(TR.get(f.domain), f.path, 'tag') : [];
+    var groups = C.addonClasses(tags, f.domain);
+    var body = '<div class="tk2-pk-hint">' + esc(f.domain) + ' <span class="tk2-mut">— unlocked by what you built</span></div>' +
+      groups.map(function (gr) {
+        return '<div class="tk2-pk-sec">' + esc(gr.label) + '</div>' +
+          pickGrid(gr.addons.map(function (m) { return pickCell('data-pkfaddon', m, addonPriceStr(a, m)); }).join(''));
+      }).join('');
     body += '<div class="tk2-pk-sec">CUSTOM <span class="tk2-mut">— default ' + M.TUNING.addon.eb + 'eb</span></div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="custom addon…"><button class="tk2-chip" data-pkcustom="faddon">+ add</button></div>';
     return body;
   }
