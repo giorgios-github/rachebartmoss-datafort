@@ -168,7 +168,8 @@
   // ══════════════ SCREEN A · LIBRARY ══════════════
   function libCard(a, kind) {
     var d = DERIVE(a), doms = a.feats.map(function (f) { return f.domain + ' g' + f.grade; }).join(' · ') || (Object.keys(a.stats).length ? 'stats only' : '—');
-    return '<button class="tk2-card" data-open="' + esc(a.id) + '" data-kind="' + kind + '">' +
+    return '<button class="tk2-card' + (a.plate ? ' has-fig' : '') + '" data-open="' + esc(a.id) + '" data-kind="' + kind + '">' +
+      (a.plate ? '<span class="tk2-card-fig">' + plateFig(a, d) + '</span>' : '') +
       '<span class="tk2-card-h"><span class="tk2-card-n">' + esc(a.name) + '</span><span class="tk2-card-c">' + esc(a.cls) + ' · t' + a.tier + '</span></span>' +
       '<span class="tk2-card-d">' + esc(doms) + '</span>' +
       '<span class="tk2-card-m">DC ' + d.dcLineage + ' · OP ' + d.op + ' · ' + d.streetEb + 'eb</span></button>';
@@ -250,7 +251,7 @@
     loadBuilder(pane); watchBuilder(pane);
     // adaptive plate: a slim strip when empty (no dead box), the image when set
     var plate = a.plate
-      ? '<img class="tk2-plate-img" src="' + a.plate.png + '" alt=""><div class="tk2-plate-cap">planche ancrée · <button class="app-btn tk2-annotate">⌖ ANNOTER' + ((a.plate.pins || []).length ? ' (' + a.plate.pins.length + ')' : '') + '</button></div>'
+      ? plateFig(a, d) + '<div class="tk2-plate-cap">planche ancrée · <button class="app-btn tk2-annotate">⌖ ANNOTER' + ((a.plate.pins || []).length ? ' (' + a.plate.pins.length + ')' : '') + '</button></div>'
       : '<div class="tk2-plate-slim"><span class="tk2-mut">PLANCHE</span><button class="app-btn tk2-press">PRESSER</button></div>';
     // lignée: a LIVE link when the parent resolves to an artifact in the library
     var linLive = '';
@@ -484,6 +485,9 @@
     var addSurface = editable ? '<rect class="tk2-pin-add" x="0" y="0" width="' + W + '" height="' + H + '" fill="transparent" style="cursor:crosshair"/>' : '';
     return '<svg class="tk2-pin-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' + addSurface + body + '</svg>';
   }
+  // the plate rendered WITH its annotations baked on — used read-only wherever the
+  // image shows (library card, bench, document). '' when there's no plate.
+  function plateFig(a, d) { return a.plate ? '<span class="tk2-plate-wrap"><img class="tk2-plate-img" src="' + a.plate.png + '" alt="">' + platePinsSvg(a, d, false, -1) + '</span>' : ''; }
 
   // ── ANNOTATE mode: full plate + draggable pins + a small editor for the selected pin ──
   function renderAnnotate(pane) {
@@ -570,7 +574,7 @@
   // ══════════════ SCREEN C · DOCUMENT (generated card) ══════════════
   function renderDocument(pane) {
     var s = sec(pane), a = s.art, d = DERIVE(a);
-    var plate = a.plate ? '<div class="tk2-plate-wrap"><img class="tk2-plate-img" src="' + a.plate.png + '" alt="">' + platePinsSvg(a, d, false, -1) + '</div>' : '<div class="tk2-plate-empty"><div>— pas de planche —</div></div>';
+    var plate = a.plate ? plateFig(a, d) : '<div class="tk2-plate-empty"><div>— pas de planche —</div></div>';
     var feats = a.feats.map(function (f) { var an = C.anchorOf(f.domain, f.grade); var ad = (f.addons || []).map(function (x) { return esc(x.name); }).join(', '); return '<div class="tk2-docfeat">' + esc(f.domain) + ' g' + f.grade + (an ? ' <span class="tk2-mut">— ' + esc(an.bar) + '</span>' : '') + (ad ? ' <span class="tk2-mut">+ ' + ad + '</span>' : '') + '</div>'; }).join('') || '<div class="tk2-mut">stats seules</div>';
     var gen = a.addons.map(function (x) { return esc(x.name); }).filter(Boolean).join(', ');
     var ifs = [];

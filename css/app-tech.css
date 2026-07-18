@@ -288,6 +288,13 @@
 /* PINS — annotations on the plate (cran 4) */
 .tk2-plate-wrap { position:relative; display:block; line-height:0; }
 .tk2-plate-wrap .tk2-plate-img { display:block; width:100%; height:auto; }
+/* read-only overlays (library/bench/document) never intercept clicks */
+.tk2-plate-wrap .tk2-pin-svg { pointer-events:none; }
+/* library thumbnail (annotated) */
+.tk2-card-fig { display:block; border:2px solid var(--ink); overflow:hidden; margin-bottom:2px; }
+.tk2-card-fig .tk2-plate-wrap { display:block; }
+.tk2-card-fig .tk2-plate-img { border:none; }
+.tk2-doc-plate .tk2-plate-wrap { max-width:420px; margin:0 auto; }
 .tk2-pin-svg { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
 .tk2-pin-lead { stroke:#111; stroke-width:2; fill:none; }
 .tk2-pin-txt { fill:#111; stroke:#fff; stroke-width:5; paint-order:stroke; font-family:var(--mono); font-weight:bold; }
