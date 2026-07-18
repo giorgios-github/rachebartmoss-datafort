@@ -10,8 +10,8 @@
   var esc = function (t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
   var isKnown = function (d) { return C.isKnownDomain(d); };
   var DERIVE = function (a) { return M.derive(a, { isKnownDomain: isKnown, addonPrice: C.addonPrice }); };
-  function addonEbTag(a, name) { var eb = M.addonEb(a, name, { addonPrice: C.addonPrice }); var e = C.addonPrice(name); var scaled = !!(e && e.mult != null); return '<span class="tk2-addeb" title="' + (scaled ? 'coût proportionnel à la complexité de l’objet' : 'coût de l’addon') + '">' + (scaled ? '~' : '') + eb + 'eb</span>'; }
-  function addonPriceStr(a, name) { var eb = M.addonEb(a, name, { addonPrice: C.addonPrice }); var e = C.addonPrice(name); return ((e && e.mult != null) ? '~' : '') + eb + 'eb' + ((e && e.mult != null) ? ' · ∝ complexité' : ''); }
+  function addonEbTag(a, name) { var eb = M.addonEb(a, name, { addonPrice: C.addonPrice }); var e = C.addonPrice(name); var scaled = !!(e && e.mult != null); return '<span class="tk2-addeb" title="' + (scaled ? 'cost scales with the object’s complexity' : 'addon cost') + '">' + (scaled ? '~' : '') + eb + 'eb</span>'; }
+  function addonPriceStr(a, name) { var eb = M.addonEb(a, name, { addonPrice: C.addonPrice }); var e = C.addonPrice(name); return ((e && e.mult != null) ? '~' : '') + eb + 'eb' + ((e && e.mult != null) ? ' · ∝ complexity' : ''); }
   function allAddonCount(a) { var n = a.addons.length; a.feats.forEach(function (f) { n += (f.addons || []).length; }); return n; }
   var GATE = function (a, skills) { return M.gate(a, skills, { skillForClass: C.skillForClass, skillForDomain: C.skillForDomain }); };
   // ── the BUILDER = the current player's OWN sheet (the one shown in /party/me),
@@ -34,22 +34,22 @@
     if (!info.sheetId || !(window.Store && window.Store.resolve)) { s.builder = { role: 'player', none: true, targets: sheetTargets(null) }; refreshGate(pane); return; }
     if (force && window.Store.invalidate) window.Store.invalidate();   // bust a stale sheet cache so skill edits are seen
     window.Store.resolve({ type: 'sheet', id: info.sheetId }).then(function (hit) {
-      s.builder = (hit && hit.json) ? { role: 'player', name: hit.json.handle || hit.json.name || 'toi', skills: skillMap(hit.json.skills), targets: sheetTargets(hit.json) } : { role: 'player', none: true, targets: sheetTargets(null) };
+      s.builder = (hit && hit.json) ? { role: 'player', name: hit.json.handle || hit.json.name || 'you', skills: skillMap(hit.json.skills), targets: sheetTargets(hit.json) } : { role: 'player', none: true, targets: sheetTargets(null) };
       refreshGate(pane);
     }).catch(function () { s.builder = { role: 'player', none: true, targets: sheetTargets(null) }; refreshGate(pane); });
   }
   function gateStrip(a, builder) {
-    if (!builder) return '<div class="tk2-gate is-load"><span class="tk2-mut">gating… (lecture de ta feuille)</span></div>';
-    if (builder.role === 'gm') return '<div class="tk2-gate is-gm"><span class="tk2-gate-v">MJ · FIAT</span> <span class="tk2-mut">construction libre — le gating s’applique aux joueurs techies</span></div>';
-    if (builder.none) return '<div class="tk2-gate is-none"><span class="tk2-gate-v">?</span> aucune feuille — <span class="tk2-mut">requiert : ' + esc(skillsRequired(a).join(' · ')) + '</span></div>';
+    if (!builder) return '<div class="tk2-gate is-load"><span class="tk2-mut">gating… (reading your sheet)</span></div>';
+    if (builder.role === 'gm') return '<div class="tk2-gate is-gm"><span class="tk2-gate-v">GM · FIAT</span> <span class="tk2-mut">free build — gating applies to techie players</span></div>';
+    if (builder.none) return '<div class="tk2-gate is-none"><span class="tk2-gate-v">?</span> no sheet — <span class="tk2-mut">requires: ' + esc(skillsRequired(a).join(' · ')) + '</span></div>';
     var g = GATE(a, builder.skills);
-    var verdict = g.buildable ? (g.pushes.length ? '⚠ PUSH' : '✓ CONSTRUCTIBLE') : '✗ VERROUILLÉ';
+    var verdict = g.buildable ? (g.pushes.length ? '⚠ PUSH' : '✓ BUILDABLE') : '✗ LOCKED';
     var rows = g.rows.map(function (r) {
       var ic = r.status === 'ok' ? '✓' : r.status === 'push' ? '⚠ +' + r.push : '✗';
-      return '<span class="tk2-gr tk2-gr-' + r.status + '">' + esc(r.skill) + ' <b>' + r.have + '</b>/' + r.need + ' ' + ic + (r.isClass ? ' <span class="tk2-mut">classe</span>' : '') + '</span>';
+      return '<span class="tk2-gr tk2-gr-' + r.status + '">' + esc(r.skill) + ' <b>' + r.have + '</b>/' + r.need + ' ' + ic + (r.isClass ? ' <span class="tk2-mut">class</span>' : '') + '</span>';
     }).join('');
-    var tail = g.locks.length ? '<span class="tk2-mut">il te manque : ' + esc(g.locks.join(', ')) + '</span>' : (g.instability ? '<span class="tk2-mut">instabilité +' + g.instability + '</span>' : '');
-    return '<div class="tk2-gate tk2-gate-' + (g.buildable ? (g.pushes.length ? 'push' : 'ok') : 'locked') + '"><span class="tk2-gate-h">' + esc(builder.name || 'toi') + '</span><span class="tk2-gate-v">' + verdict + '</span><span class="tk2-gate-rows">' + rows + '</span>' + tail + '</div>';
+    var tail = g.locks.length ? '<span class="tk2-mut">missing: ' + esc(g.locks.join(', ')) + '</span>' : (g.instability ? '<span class="tk2-mut">instability +' + g.instability + '</span>' : '');
+    return '<div class="tk2-gate tk2-gate-' + (g.buildable ? (g.pushes.length ? 'push' : 'ok') : 'locked') + '"><span class="tk2-gate-h">' + esc(builder.name || 'you') + '</span><span class="tk2-gate-v">' + verdict + '</span><span class="tk2-gate-rows">' + rows + '</span>' + tail + '</div>';
   }
   function refreshGate(pane) { var s = sec(pane); if (!s.art) return; var el = pane.querySelector('.tk2-gate-wrap'); if (el) el.innerHTML = gateStrip(s.art, s.builder); }
   // keep the gating in sync: a sheet save (skills edited) or a role/campaign change
@@ -61,22 +61,22 @@
     window.App.on('campaign', reload);
   }
   function help(t) { return '<div class="tk2-help">' + t + '</div>'; }
-  var ORIGINS = [['HANDMADE', 'bricolé — visserie dépareillée'], ['SALVAGE', 'récupéré — vis de donneur'], ['CORP PULL', 'arraché au corpo — torx'], ['FACTORY', 'usine — visserie captive']];
+  var ORIGINS = [['HANDMADE', 'handmade — mismatched screws'], ['SALVAGE', 'salvaged — donor screws'], ['CORP PULL', 'ripped from a corp — torx'], ['FACTORY', 'factory — captive screws']];
   function effectBody(a) {
     var sug = C.suggestFor(a.cls).domains, body = '';
-    if (sug.length) body += '<div class="tk2-pk-sec">SUGGÉRÉ POUR ' + esc(a.cls.toUpperCase()) + '</div>' + domainTable(sug);
-    body += '<div class="tk2-pk-sec">TOUS LES EFFETS</div>' + domainTable(C.DOMAINS);
-    body += '<div class="tk2-pk-sec">DOMAINE EXOTIQUE</div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="nom du domaine…"><button class="tk2-chip" data-pkcustom="effect">+ ajouter (g1)</button></div>';
+    if (sug.length) body += '<div class="tk2-pk-sec">SUGGESTED FOR ' + esc(a.cls.toUpperCase()) + '</div>' + domainTable(sug);
+    body += '<div class="tk2-pk-sec">ALL EFFECTS</div>' + domainTable(C.DOMAINS);
+    body += '<div class="tk2-pk-sec">EXOTIC DOMAIN</div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="domain name…"><button class="tk2-chip" data-pkcustom="effect">+ add (g1)</button></div>';
     return body;
   }
   function tokenBody(a, tkind) {
-    var T = C.TOKENS, groups = tkind === 'needs' ? [['munitions', 'ammo'], ['alimentation', 'power'], ['consommables', 'consumable']] : [['montures', 'mount'], ['munitions', 'ammo'], ['prises', 'port'], ['formats', 'format']];
+    var T = C.TOKENS, groups = tkind === 'needs' ? [['ammo', 'ammo'], ['power', 'power'], ['consumables', 'consumable']] : [['mounts', 'mount'], ['ammo', 'ammo'], ['ports', 'port'], ['formats', 'format']];
     var tcell = function (t, kind) { return pickCell('data-pktok', t, kind + (C.isStandard(t) ? ' · shop' : ' · custom')); };
     var sugT = C.suggestFor(a.cls).tokens.filter(function (t) { return groups.some(function (g) { return T[g[1]].indexOf(t) >= 0; }); });
     var body = '';
-    if (sugT.length) body += '<div class="tk2-pk-sec">SUGGÉRÉ POUR ' + esc(a.cls.toUpperCase()) + '</div>' + pickGrid(sugT.map(function (t) { return tcell(t, tokenKind(t)); }).join(''));
+    if (sugT.length) body += '<div class="tk2-pk-sec">SUGGESTED FOR ' + esc(a.cls.toUpperCase()) + '</div>' + pickGrid(sugT.map(function (t) { return tcell(t, tokenKind(t)); }).join(''));
     groups.forEach(function (g) { body += '<div class="tk2-pk-sec">' + g[0].toUpperCase() + '</div>' + pickGrid(T[g[1]].map(function (t) { return tcell(t, KIND_LABEL[g[1]]); }).join('')); });
-    body += '<div class="tk2-pk-sec">CUSTOM</div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="jeton custom…"><button class="tk2-chip" data-pkcustom="token">+ ajouter</button></div>';
+    body += '<div class="tk2-pk-sec">CUSTOM</div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="custom token…"><button class="tk2-chip" data-pkcustom="token">+ add</button></div>';
     return body;
   }
   function classBody(a) {
@@ -90,15 +90,15 @@
   function faddonBody(a, fi) {
     var f = a.feats[fi]; if (!f) return '';
     var fam = C.familyOfDomain(f.domain), list = C.addonsForDomain(f.domain);
-    var body = '<div class="tk2-pk-sec">' + esc(f.domain) + (fam ? '' : ' · générique') + '</div>' + pickGrid(list.map(function (m) { return pickCell('data-pkfaddon', m, addonPriceStr(a, m)); }).join(''));
-    body += '<div class="tk2-pk-sec">CUSTOM <span class="tk2-mut">— défaut ' + M.TUNING.addon.eb + 'eb</span></div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="addon custom…"><button class="tk2-chip" data-pkcustom="faddon">+ ajouter</button></div>';
+    var body = '<div class="tk2-pk-sec">' + esc(f.domain) + (fam ? '' : ' · generic') + '</div>' + pickGrid(list.map(function (m) { return pickCell('data-pkfaddon', m, addonPriceStr(a, m)); }).join(''));
+    body += '<div class="tk2-pk-sec">CUSTOM <span class="tk2-mut">— default ' + M.TUNING.addon.eb + 'eb</span></div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="custom addon…"><button class="tk2-chip" data-pkcustom="faddon">+ add</button></div>';
     return body;
   }
   // GENERIC-ADDON picker — the transverse addons (miniaturisation, durci…) with their
   // computed price (fixed, or ~proportional to the object's complexity) + a custom field.
   function gaddonBody(a) {
-    var body = '<div class="tk2-pk-sec">ADDONS GÉNÉRIQUES</div>' + pickGrid(C.GENERIC_ADDONS.map(function (m) { return pickCell('data-pkgaddon', m, addonPriceStr(a, m)); }).join(''));
-    body += '<div class="tk2-pk-sec">CUSTOM <span class="tk2-mut">— défaut ' + M.TUNING.addon.eb + 'eb</span></div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="addon custom…"><button class="tk2-chip" data-pkcustom="gaddon">+ ajouter</button></div>';
+    var body = '<div class="tk2-pk-sec">GENERIC ADDONS</div>' + pickGrid(C.GENERIC_ADDONS.map(function (m) { return pickCell('data-pkgaddon', m, addonPriceStr(a, m)); }).join(''));
+    body += '<div class="tk2-pk-sec">CUSTOM <span class="tk2-mut">— default ' + M.TUNING.addon.eb + 'eb</span></div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="custom addon…"><button class="tk2-chip" data-pkcustom="gaddon">+ add</button></div>';
     return body;
   }
   // WEARER-MOD picker — a bonus fed to the sheet, bound to one of the wearer's own
@@ -106,16 +106,16 @@
   function wmodBody(a, builder) {
     var T = (builder && builder.targets) || sheetTargets(null);
     var body = '<div class="tk2-pk-sec">STATS</div>' + pickGrid(T.stats.map(function (t) { return pickCell('data-pkwmod', t, 'stat'); }).join(''));
-    if (T.customStats.length) body += '<div class="tk2-pk-sec">STATS CUSTOM</div>' + pickGrid(T.customStats.map(function (t) { return pickCell('data-pkwmod', t, 'stat custom'); }).join(''));
-    if (T.skills.length) body += '<div class="tk2-pk-sec">SKILLS DE LA FEUILLE</div>' + pickGrid(T.skills.map(function (t) { return pickCell('data-pkwmod', t, 'skill'); }).join(''));
-    else body += '<div class="tk2-pk-sec">SKILLS</div><div class="tk2-help">aucune feuille lue — passe en joueur techie ou ajoute un skill custom ci-dessous.</div>';
-    body += '<div class="tk2-pk-sec">SKILL CUSTOM</div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="nom du skill…"><button class="tk2-chip" data-pkcustom="wmod">+ ajouter</button></div>';
+    if (T.customStats.length) body += '<div class="tk2-pk-sec">CUSTOM STATS</div>' + pickGrid(T.customStats.map(function (t) { return pickCell('data-pkwmod', t, 'custom stat'); }).join(''));
+    if (T.skills.length) body += '<div class="tk2-pk-sec">SHEET SKILLS</div>' + pickGrid(T.skills.map(function (t) { return pickCell('data-pkwmod', t, 'skill'); }).join(''));
+    else body += '<div class="tk2-pk-sec">SKILLS</div><div class="tk2-help">no sheet loaded — switch to a techie player or add a custom skill below.</div>';
+    body += '<div class="tk2-pk-sec">CUSTOM SKILL</div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="skill name…"><button class="tk2-chip" data-pkcustom="wmod">+ add</button></div>';
     return body;
   }
   // effect PICKER (popup): every domain with its full grade ladder — you SEE what a
   // higher grade gives, and can pick that grade directly. Suggested-for-class on top.
   function domainTable(list) {
-    var head = '<tr><th class="tk2-tcorner">DOMAINE</th>';
+    var head = '<tr><th class="tk2-tcorner">DOMAIN</th>';
     for (var g = 1; g <= 6; g++) head += '<th>g' + g + '</th>';
     head += '</tr>';
     var rows = list.map(function (dm) {
@@ -129,17 +129,17 @@
   // substantial cards (name + note) in a responsive grid — for 1-D lists (tokens/mods)
   function pickCell(attr, val, sub) { return '<button class="tk2-pk-cell" ' + attr + '="' + esc(val) + '"><span class="tk2-pk-cn">' + esc(val) + '</span>' + (sub ? '<span class="tk2-mut">' + esc(sub) + '</span>' : '') + '</button>'; }
   function pickGrid(html) { return '<div class="tk2-pk-grid">' + html + '</div>'; }
-  var KIND_LABEL = { ammo: 'munition', mount: 'monture', power: 'alimentation', port: 'prise', format: 'format', consumable: 'consommable' };
+  var KIND_LABEL = { ammo: 'ammo', mount: 'mount', power: 'power', port: 'port', format: 'format', consumable: 'consumable' };
   function tokenKind(t) { var T = C.TOKENS, k; for (k in T) if (T[k].indexOf(t) >= 0) return KIND_LABEL[k] || k; return 'custom'; }
   function pickerModal(a, pick, builder) {
     var title, body;
-    if (pick.kind === 'effect') { title = 'CHOISIR UN EFFET <span class="tk2-mut">— clique un grade</span>'; body = effectBody(a); }
-    else if (pick.kind === 'token') { title = 'AJOUTER <span class="tk2-mut">— ' + esc(pick.tkind) + '</span>'; body = tokenBody(a, pick.tkind); }
-    else if (pick.kind === 'faddon') { title = 'ADDON <span class="tk2-mut">— lié à l’effet</span>'; body = faddonBody(a, pick.fi); }
-    else if (pick.kind === 'gaddon') { title = 'ADDON GÉNÉRIQUE <span class="tk2-mut">— transverse</span>'; body = gaddonBody(a); }
-    else if (pick.kind === 'wmod') { title = 'BONUS AU PORTEUR <span class="tk2-mut">— cible une stat / un skill</span>'; body = wmodBody(a, builder); }
-    else if (pick.kind === 'class') { title = 'CLASSE DE L’OBJET'; body = classBody(a); }
-    else { title = 'ORIGINE'; body = originBody(a); }
+    if (pick.kind === 'effect') { title = 'PICK AN EFFECT <span class="tk2-mut">— click a grade</span>'; body = effectBody(a); }
+    else if (pick.kind === 'token') { title = 'ADD <span class="tk2-mut">— ' + esc(pick.tkind) + '</span>'; body = tokenBody(a, pick.tkind); }
+    else if (pick.kind === 'faddon') { title = 'ADDON <span class="tk2-mut">— tied to the effect</span>'; body = faddonBody(a, pick.fi); }
+    else if (pick.kind === 'gaddon') { title = 'GENERIC ADDON <span class="tk2-mut">— cross-cutting</span>'; body = gaddonBody(a); }
+    else if (pick.kind === 'wmod') { title = 'WEARER BONUS <span class="tk2-mut">— target a stat / a skill</span>'; body = wmodBody(a, builder); }
+    else if (pick.kind === 'class') { title = 'OBJECT CLASS'; body = classBody(a); }
+    else { title = 'ORIGIN'; body = originBody(a); }
     return '<div class="tk2-modal" data-pkscrim><div class="tk2-modal-box"><div class="tk2-modal-h">' + title + '<span class="tk2-bar-sp"></span><span class="tk2-modal-x" data-pkclose>✕</span></div><div class="tk2-modal-b">' + body + '</div></div></div>';
   }
 
@@ -178,16 +178,16 @@
     var s = sec(pane), st = s.st;
     var mine = st.order.map(function (id) { return M.fromJSON(st.parts[id]); }).filter(Boolean);
     pane.innerHTML =
-      '<div class="tk2-bar"><span class="tk2-title">ATELIER TECH</span>' +
+      '<div class="tk2-bar"><span class="tk2-title">TECH WORKSHOP</span>' +
         '<span class="tk2-bar-sp"></span>' +
-        '<input class="tk2-imp" placeholder="coller un record une-ligne…">' +
-        '<button class="app-btn tk2-imp-go">IMPORTER</button>' +
-        '<button class="app-btn tk2-new">+ NOUVEL OBJET</button></div>' +
+        '<input class="tk2-imp" placeholder="paste a one-line record…">' +
+        '<button class="app-btn tk2-imp-go">IMPORT</button>' +
+        '<button class="app-btn tk2-new">+ NEW OBJECT</button></div>' +
       '<div class="tk2-lib">' +
-        '<div class="tk2-sect">TES OBJETS <span class="tk2-count">' + mine.length + '</span></div>' +
+        '<div class="tk2-sect">YOUR OBJECTS <span class="tk2-count">' + mine.length + '</span></div>' +
         (mine.length ? '<div class="tk2-grid">' + mine.map(function (a) { return libCard(a, 'mine'); }).join('') + '</div>'
-          : '<div class="tk2-empty">Aucun objet. Pars d’un preset ci-dessous, ou crée un objet vierge.</div>') +
-        '<div class="tk2-sect">PRESETS <span class="tk2-count">' + C.PRESETS.length + '</span> <span class="tk2-hint">— ouvre-en un pour voir comment il est bâti, puis bidouille</span></div>' +
+          : '<div class="tk2-empty">No objects. Start from a preset below, or make a blank one.</div>') +
+        '<div class="tk2-sect">PRESETS <span class="tk2-count">' + C.PRESETS.length + '</span> <span class="tk2-hint">— open one to see how it’s built, then tinker</span></div>' +
         '<div class="tk2-grid">' + C.presets().map(function (a) { return libCard(a, 'preset'); }).join('') + '</div>' +
       '</div>';
     pane.querySelector('.tk2-new').onclick = function () { openArtifact(pane, M.blank()); };
@@ -215,34 +215,34 @@
   function nomenclature(a, d) {
     var rows = [];
     d.ingredients.forEach(function (g) {
-      var src = g.grade <= 2 ? 'shop / marché noir' : g.grade <= 3 ? 'marché noir (fixer)' : 'salvage / signature';
-      rows.push('<tr><td>composant ' + esc(g.domain) + ' g' + g.grade + '</td><td>' + src + (g.exotic ? ' · <b>exotique</b>' : '') + '</td><td class="tk2-r">☐</td></tr>');
+      var src = g.grade <= 2 ? 'shop / black market' : g.grade <= 3 ? 'black market (fixer)' : 'salvage / signature';
+      rows.push('<tr><td>component ' + esc(g.domain) + ' g' + g.grade + '</td><td>' + src + (g.exotic ? ' · <b>exotic</b>' : '') + '</td><td class="tk2-r">☐</td></tr>');
     });
     a.ports.needs.forEach(function (n) {
       if (!n.token) return;
-      rows.push('<tr><td>' + esc(n.token) + (n.rate ? ' <span class="tk2-mut">/' + esc(n.rate) + '</span>' : '') + '</td><td>' + (C.isStandard(n.token) ? 'shop <span class="tk2-mut">standard</span>' : 'custom · craft/salvage') + '</td><td class="tk2-r">' + (C.isStandard(n.token) ? '☐ ' + linkPend('commander', 'commande vers un shop épinglé — cran DATA') : '—') + '</td></tr>');
+      rows.push('<tr><td>' + esc(n.token) + (n.rate ? ' <span class="tk2-mut">/' + esc(n.rate) + '</span>' : '') + '</td><td>' + (C.isStandard(n.token) ? 'shop <span class="tk2-mut">standard</span>' : 'custom · craft/salvage') + '</td><td class="tk2-r">' + (C.isStandard(n.token) ? '☐ ' + linkPend('order', 'order from a pinned shop — DATA cran') : '—') + '</td></tr>');
     });
-    if (d.addonsEb > 0) rows.push('<tr><td>addons <span class="tk2-mut">×' + allAddonCount(a) + '</span></td><td>pièces / greffes <span class="tk2-mut">(inclus ci-dessus)</span></td><td class="tk2-r">+' + d.addonsEb + 'eb' + (d.addonDc ? ' · +' + d.addonDc + ' DC' : '') + '</td></tr>');
-    rows.push('<tr><td>matériaux + addons</td><td>shop <span class="tk2-mut">épinglé</span></td><td class="tk2-r">' + d.prodEb + 'eb</td></tr>');
+    if (d.addonsEb > 0) rows.push('<tr><td>addons <span class="tk2-mut">×' + allAddonCount(a) + '</span></td><td>parts / grafts <span class="tk2-mut">(included above)</span></td><td class="tk2-r">+' + d.addonsEb + 'eb' + (d.addonDc ? ' · +' + d.addonDc + ' DC' : '') + '</td></tr>');
+    rows.push('<tr><td>materials + addons</td><td>shop <span class="tk2-mut">pinned</span></td><td class="tk2-r">' + d.prodEb + 'eb</td></tr>');
     return rows.join('');
   }
   function featRow(f, i, a) {
     var an = C.anchorOf(f.domain, f.grade);
-    var chips = (f.addons || []).map(function (x, ai) { return '<span class="tk2-addchip">' + esc(x.name) + (a ? ' ' + addonEbTag(a, x.name) : '') + '<button class="tk2-addchip-x" data-delfaddon="' + i + '" data-ai="' + ai + '" title="retirer">✕</button></span>'; }).join('');
+    var chips = (f.addons || []).map(function (x, ai) { return '<span class="tk2-addchip">' + esc(x.name) + (a ? ' ' + addonEbTag(a, x.name) : '') + '<button class="tk2-addchip-x" data-delfaddon="' + i + '" data-ai="' + ai + '" title="remove">✕</button></span>'; }).join('');
     return '<div class="tk2-feat" data-fi="' + i + '">' +
       '<div class="tk2-feat-top">' +
         '<input class="tk2-fd" data-fi="' + i + '" list="tk2-domains" value="' + esc(f.domain) + '">' +
         '<span class="tk2-meter" data-fi="' + i + '">' + gradeMeter(f.grade) + '</span>' +
         '<span class="tk2-fg">g' + f.grade + '</span>' +
         '<span class="tk2-feat-sp"></span>' +
-        '<button class="tk2-x" data-delfeat="' + i + '" title="retirer">✕</button>' +
+        '<button class="tk2-x" data-delfeat="' + i + '" title="remove">✕</button>' +
       '</div>' +
-      '<div class="tk2-feat-cap">' + (an ? '<span class="tk2-cap">' + esc(an.bar) + '</span> <span class="tk2-mut">·</span> ' + skillLink(an.skill) : '<span class="tk2-mut">domaine libre (exotique) · Basic Tech</span>') + '</div>' +
-      '<div class="tk2-feat-addons">' + chips + '<button class="tk2-addchip-add" data-openpk data-pkkind="faddon" data-pkfi="' + i + '" title="addons liés à ' + esc(f.domain) + '">+ addon</button></div>' +
+      '<div class="tk2-feat-cap">' + (an ? '<span class="tk2-cap">' + esc(an.bar) + '</span> <span class="tk2-mut">·</span> ' + skillLink(an.skill) : '<span class="tk2-mut">free domain (exotic) · Basic Tech</span>') + '</div>' +
+      '<div class="tk2-feat-addons">' + chips + '<button class="tk2-addchip-add" data-openpk data-pkkind="faddon" data-pkfi="' + i + '" title="addons tied to ' + esc(f.domain) + '">+ addon</button></div>' +
     '</div>';
   }
   function tokenRow(kind, i, val, extra) {
-    return '<span class="tk2-tok"><input list="tk2-tokens" data-tok="' + kind + '" data-ti="' + i + '" value="' + esc(val) + '" placeholder="jeton…">' +
+    return '<span class="tk2-tok"><input list="tk2-tokens" data-tok="' + kind + '" data-ti="' + i + '" value="' + esc(val) + '" placeholder="token…">' +
       (extra || '') + '<button class="tk2-x" data-deltok="' + kind + '" data-ti="' + i + '">✕</button></span>';
   }
 
@@ -251,47 +251,47 @@
     loadBuilder(pane); watchBuilder(pane);
     // adaptive plate: a slim strip when empty (no dead box), the image when set
     var plate = a.plate
-      ? plateFig(a, d) + '<div class="tk2-plate-cap">planche ancrée · <button class="app-btn tk2-annotate">⌖ ANNOTER' + ((a.plate.pins || []).length ? ' (' + a.plate.pins.length + ')' : '') + '</button></div>'
-      : '<div class="tk2-plate-slim"><span class="tk2-mut">PLANCHE</span><button class="app-btn tk2-press">PRESSER</button></div>';
+      ? plateFig(a, d) + '<div class="tk2-plate-cap">plate anchored · <button class="app-btn tk2-annotate">⌖ ANNOTATE' + ((a.plate.pins || []).length ? ' (' + a.plate.pins.length + ')' : '') + '</button></div>'
+      : '<div class="tk2-plate-slim"><span class="tk2-mut">PLATE</span><button class="app-btn tk2-press">PRESS</button></div>';
     // lignée: a LIVE link when the parent resolves to an artifact in the library
     var linLive = '';
     if (a.lineage && a.lineage.refines) {
       var ref = a.lineage.refines.toLowerCase();
-      for (var li = 0; li < s.st.order.length; li++) { var pa = M.fromJSON(s.st.parts[s.st.order[li]]); if (pa && pa.id !== a.id && (pa.id.toLowerCase() === ref || pa.name.toLowerCase() === ref)) { linLive = ' ' + linkLive('artifact', pa.id, '→ ouvrir'); break; } }
+      for (var li = 0; li < s.st.order.length; li++) { var pa = M.fromJSON(s.st.parts[s.st.order[li]]); if (pa && pa.id !== a.id && (pa.id.toLowerCase() === ref || pa.name.toLowerCase() === ref)) { linLive = ' ' + linkLive('artifact', pa.id, '→ open'); break; } }
     }
     pane.innerHTML =
       '<datalist id="tk2-domains">' + C.DOMAINS.map(function (x) { return '<option value="' + x + '">'; }).join('') + '</datalist>' +
       '<datalist id="tk2-tokens">' + C.allTokens().map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist>' +
       '<datalist id="tk2-genaddons">' + (C.GENERIC_ADDONS || []).map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist>' +
       '<div class="tk2-bar">' +
-        '<button class="app-btn tk2-back">← BIBLIOTHÈQUE</button>' +
+        '<button class="app-btn tk2-back">← LIBRARY</button>' +
         '<input class="tk2-name" data-f="name" value="' + esc(a.name) + '">' +
-        '<button class="app-btn tk2-pill" data-openpk data-pkkind="class" title="classe → skill de craft">' + esc(a.cls) + '</button>' +
-        '<button class="app-btn tk2-pill" data-openpk data-pkkind="origin" title="langage de fabrication">' + esc(a.origin) + '</button>' +
+        '<button class="app-btn tk2-pill" data-openpk data-pkkind="class" title="class → crafting skill">' + esc(a.cls) + '</button>' +
+        '<button class="app-btn tk2-pill" data-openpk data-pkkind="origin" title="build language">' + esc(a.origin) + '</button>' +
         '<label class="tk2-tier">tier <input type="number" min="1" max="6" data-f="tier" value="' + a.tier + '"></label>' +
         '<span class="tk2-bar-sp"></span>' +
         '<button class="app-btn tk2-doc">DOCUMENT</button>' +
         '<button class="app-btn tk2-copy">⧉ RECORD</button>' +
-        '<button class="app-btn app-btn-danger tk2-del">SUPPRIMER</button>' +
+        '<button class="app-btn app-btn-danger tk2-del">DELETE</button>' +
       '</div>' +
       '<div class="tk2-body">' +
         '<div class="tk2-plate' + (a.plate ? '' : ' is-empty') + '">' + plate + '</div>' +
         '<div class="tk2-fiche">' +
-          panel('EFFETS', help('ce que l’objet FAIT — ＋ effet pioche un domaine + grade ; sous chaque effet, ses addons propres (＋ addon).') +
-            (a.feats.length ? a.feats.map(function (f, i) { return featRow(f, i, a); }).join('') : '<div class="tk2-empty-sm">Aucun effet.</div>') +
-            '<div class="tk2-effbtns"><button class="tk2-add tk2-add-eff" data-openpk data-pkkind="effect">＋ effet…</button><button class="tk2-add tk2-add-gen" data-openpk data-pkkind="gaddon" title="un addon générique / transverse (miniaturisation, durci…) avec son prix">+ addon</button></div>' +
-            (a.addons.length ? '<div class="tk2-genadd"><div class="tk2-genadd-h">addons génériques</div>' + a.addons.map(function (x, i) { return '<div class="tk2-line"><input list="tk2-genaddons" data-addon="' + i + '" value="' + esc(x.name) + '" placeholder="addon générique…">' + (x.name ? addonEbTag(a, x.name) : '') + '<button class="tk2-x" data-deladdon="' + i + '">✕</button></div>'; }).join('') + '</div>' : ''), true) +
-          panel('INTERFACES', help('ce que l’objet CONSOMME / ACCUEILLE / dans quoi il s’insère — pioche des jetons standards (achetables) ou tape un jeton custom.') + interfacesPanel(a)) +
+          panel('EFFECTS', help('what the object DOES — ＋ effect picks a domain + grade; under each effect, its own addons (＋ addon).') +
+            (a.feats.length ? a.feats.map(function (f, i) { return featRow(f, i, a); }).join('') : '<div class="tk2-empty-sm">No effect.</div>') +
+            '<div class="tk2-effbtns"><button class="tk2-add tk2-add-eff" data-openpk data-pkkind="effect">＋ effect…</button><button class="tk2-add tk2-add-gen" data-openpk data-pkkind="gaddon" title="a generic / cross-cutting addon (miniaturization, hardened…) with its price">+ addon</button></div>' +
+            (a.addons.length ? '<div class="tk2-genadd"><div class="tk2-genadd-h">generic addons</div>' + a.addons.map(function (x, i) { return '<div class="tk2-line"><input list="tk2-genaddons" data-addon="' + i + '" value="' + esc(x.name) + '" placeholder="generic addon…">' + (x.name ? addonEbTag(a, x.name) : '') + '<button class="tk2-x" data-deladdon="' + i + '">✕</button></div>'; }).join('') + '</div>' : ''), true) +
+          panel('INTERFACES', help('what the object CONSUMES / HOSTS / what it slots into — pick standard tokens (buyable) or type a custom token.') + interfacesPanel(a)) +
           '<div class="tk2-details">' +
-            '<div class="tk2-details-h">DÉTAILS</div>' +
-            sub('flavor', '<textarea class="tk2-flavor" data-f="flavor" placeholder="le mot du maker — aucun effet mécanique…">' + esc(a.flavor) + '</textarea>') +
+            '<div class="tk2-details-h">DETAILS</div>' +
+            sub('flavor', '<textarea class="tk2-flavor" data-f="flavor" placeholder="the maker’s word — no mechanical effect…">' + esc(a.flavor) + '</textarea>') +
             '<div class="tk2-two">' +
-              sub('limites', help('ce qui le bride — chaque limite baisse l’OP') + a.limits.map(function (l, i) { return '<div class="tk2-line"><input data-lim="' + i + '" value="' + esc(l.text) + '" placeholder="ex. 30 min d’autonomie"><button class="tk2-x" data-dellim="' + i + '">✕</button></div>'; }).join('') + '<button class="tk2-add" data-addlim>+ limite</button>') +
-              sub('wearer mods', help('un bonus qui rejaillit sur la feuille du porteur quand l’objet est équipé') + a.mods.map(function (m, i) { return '<div class="tk2-line"><input class="tk2-mt" data-mod="' + i + '" data-k="target" value="' + esc(m.target) + '" placeholder="REF / Handgun…"><input class="tk2-mv" data-mod="' + i + '" data-k="value" value="' + esc(m.value) + '" placeholder="+3"><button class="tk2-x" data-delmod="' + i + '">✕</button></div>'; }).join('') + '<button class="tk2-add" data-openpk data-pkkind="wmod">＋ mod…</button>') +
+              sub('limits', help('what holds it back — each limit lowers OP') + a.limits.map(function (l, i) { return '<div class="tk2-line"><input data-lim="' + i + '" value="' + esc(l.text) + '" placeholder="e.g. 30 min runtime"><button class="tk2-x" data-dellim="' + i + '">✕</button></div>'; }).join('') + '<button class="tk2-add" data-addlim>+ limit</button>') +
+              sub('wearer mods', help('a bonus that flows onto the wearer’s sheet when the object is equipped') + a.mods.map(function (m, i) { return '<div class="tk2-line"><input class="tk2-mt" data-mod="' + i + '" data-k="target" value="' + esc(m.target) + '" placeholder="REF / Handgun…"><input class="tk2-mv" data-mod="' + i + '" data-k="value" value="' + esc(m.value) + '" placeholder="+3"><button class="tk2-x" data-delmod="' + i + '">✕</button></div>'; }).join('') + '<button class="tk2-add" data-openpk data-pkkind="wmod">＋ mod…</button>') +
             '</div>' +
             '<div class="tk2-two">' +
-              sub('lignée', help('raffine un objet existant → le DC baisse à chaque itération') + '<div class="tk2-line"><input data-f="lin-ref" value="' + esc(a.lineage ? a.lineage.refines : '') + '" placeholder="raffine… (nom/ID)"><label class="tk2-tier">itér <input type="number" min="0" max="6" data-f="lin-steps" value="' + (a.lineage ? a.lineage.steps : 0) + '"></label></div><div class="tk2-mut">bonus DC −' + d.lineBonus + linLive + '</div>') +
-              sub('latent · qui sait', help('un secret caché dedans — coche qui est au courant') + a.latent.map(latentRow).join('') + '<button class="tk2-add" data-addlat>+ latent</button>') +
+              sub('lineage', help('refine an existing object → DC drops each iteration') + '<div class="tk2-line"><input data-f="lin-ref" value="' + esc(a.lineage ? a.lineage.refines : '') + '" placeholder="refine… (name/ID)"><label class="tk2-tier">iter <input type="number" min="0" max="6" data-f="lin-steps" value="' + (a.lineage ? a.lineage.steps : 0) + '"></label></div><div class="tk2-mut">DC bonus −' + d.lineBonus + linLive + '</div>') +
+              sub('latent · who knows', help('a secret hidden inside — check who’s in the know') + a.latent.map(latentRow).join('') + '<button class="tk2-add" data-addlat>+ latent</button>') +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -374,16 +374,16 @@
   // dashed + ◇, target arrives in a later cran (tooltip says which). ──
   function linkLive(kind, id, label) { return '<a class="tk2-link" data-lk="' + kind + '" data-lid="' + esc(id) + '">' + esc(label) + '</a>'; }
   function linkPend(label, note) { return '<span class="tk2-link pending" title="' + esc(note) + '">' + esc(label) + '</span>'; }
-  function skillLink(name) { return linkPend(name, 'lien vers la feuille du perso — cran 2'); }
+  function skillLink(name) { return linkPend(name, 'link to the character sheet — cran 2'); }
   function latentRow(x, i) {
     var who = M.WHO;
-    return '<div class="tk2-line"><input data-lat="' + i + '" value="' + esc(x.text) + '" placeholder="secret caché dedans…"><span class="tk2-who">' +
+    return '<div class="tk2-line"><input data-lat="' + i + '" value="' + esc(x.text) + '" placeholder="secret hidden inside…"><span class="tk2-who">' +
       who.map(function (w) { return '<label><input type="checkbox" data-lat="' + i + '" data-latwho="' + w + '"' + (x.who.indexOf(w) >= 0 ? ' checked' : '') + '>' + w + '</label>'; }).join('') + '</span><button class="tk2-x" data-dellat="' + i + '">✕</button></div>';
   }
   function interfacesPanel(a) {
     var p = a.ports, out = '';
-    out += '<div class="tk2-if"><span class="tk2-if-l" title="consommables + prérequis">needs</span>' + p.needs.map(function (n, i) { return tokenRow('needs', i, n.token, '<input class="tk2-rate" data-tok="needs-rate" data-ti="' + i + '" value="' + esc(n.rate) + '" placeholder="/40h">'); }).join('') + '<button class="tk2-add" data-openpk data-pkkind="token" data-pktkind="needs">＋ jeton</button></div>';
-    out += '<div class="tk2-if"><span class="tk2-if-l" title="ce dans quoi CET objet s’insère">fits</span>' + p.fits.map(function (t, i) { return tokenRow('fits', i, t); }).join('') + '<button class="tk2-add" data-openpk data-pkkind="token" data-pktkind="fits">＋ jeton</button></div>';
+    out += '<div class="tk2-if"><span class="tk2-if-l" title="consumables + prerequisites">needs</span>' + p.needs.map(function (n, i) { return tokenRow('needs', i, n.token, '<input class="tk2-rate" data-tok="needs-rate" data-ti="' + i + '" value="' + esc(n.rate) + '" placeholder="/40h">'); }).join('') + '<button class="tk2-add" data-openpk data-pkkind="token" data-pktkind="needs">＋ token</button></div>';
+    out += '<div class="tk2-if"><span class="tk2-if-l" title="what THIS object slots into">fits</span>' + p.fits.map(function (t, i) { return tokenRow('fits', i, t); }).join('') + '<button class="tk2-add" data-openpk data-pkkind="token" data-pktkind="fits">＋ token</button></div>';
     out += '<div class="tk2-if"><span class="tk2-if-l">holds</span>' + p.holds.map(function (hd, i) { return '<span class="tk2-tok"><input data-tok="holds-kind" data-ti="' + i + '" value="' + esc(hd.kind) + '" placeholder="data/patients…"><input data-tok="holds-cap" data-ti="' + i + '" value="' + esc(hd.cap) + '" placeholder="40MU"><button class="tk2-x" data-deltok="holds" data-ti="' + i + '">✕</button></span>'; }).join('') + '<button class="tk2-add" data-addtok="holds">+</button></div>';
     out += '<div class="tk2-if"><span class="tk2-if-l">takes</span>' + p.takes.map(function (t, i) { return '<span class="tk2-tok"><input data-tok="takes-slot" data-ti="' + i + '" value="' + esc(t.slot) + '" placeholder="tube"><input data-tok="takes-accepts" data-ti="' + i + '" value="' + esc(t.accepts.join(', ')) + '" placeholder="he-84, thermo-84"><button class="tk2-x" data-deltok="takes" data-ti="' + i + '">✕</button></span>'; }).join('') + '<button class="tk2-add" data-addtok="takes">+</button></div>';
     return out;
@@ -442,8 +442,8 @@
   // source of truth: resolvePin() just looks a key up here.
   function pinFields(a, d) {
     var out = [
-      { key: 'name', label: 'NOM', val: a.name },
-      { key: 'cls', label: 'CLASSE', val: a.cls },
+      { key: 'name', label: 'NAME', val: a.name },
+      { key: 'cls', label: 'CLASS', val: a.cls },
       { key: 'tier', label: 'TIER', val: 'T' + a.tier },
       { key: 'd:street', label: 'STREET', val: d.streetEb + 'eb' },
       { key: 'd:prod', label: 'PROD', val: d.prodEb + 'eb' },
@@ -453,10 +453,10 @@
     a.feats.forEach(function (f, i) {
       var an = C.anchorOf(f.domain, f.grade);
       out.push({ key: 'feat:' + i + ':g', label: f.domain + ' · grade', val: 'g' + f.grade });
-      if (an) out.push({ key: 'feat:' + i + ':bar', label: f.domain + ' · barre', val: an.bar });
+      if (an) out.push({ key: 'feat:' + i + ':bar', label: f.domain + ' · bar', val: an.bar });
     });
     a.mods.forEach(function (m, i) { if (m.target) out.push({ key: 'mod:' + i, label: 'mod ' + m.target, val: (m.value || '') + ' ' + m.target }); });
-    a.ports.needs.forEach(function (n, i) { if (n.token) out.push({ key: 'need:' + i, label: 'consomme', val: n.token }); });
+    a.ports.needs.forEach(function (n, i) { if (n.token) out.push({ key: 'need:' + i, label: 'consumes', val: n.token }); });
     return out;
   }
   function resolvePin(a, d, field) { var hit = pinFields(a, d).filter(function (x) { return x.key === field; })[0]; return hit ? String(hit.val) : ''; }
@@ -498,22 +498,22 @@
     var fields = pinFields(a, d);
     var editor;
     if (!pin) {
-      editor = '<div class="tk2-annot-ed tk2-mut">Clique l’image pour poser une épingle.</div>';
+      editor = '<div class="tk2-annot-ed tk2-mut">Click the image to drop a pin.</div>';
     } else {
-      var opts = '<option value=""' + (pin.field ? '' : ' selected') + '>— texte libre —</option>' +
+      var opts = '<option value=""' + (pin.field ? '' : ' selected') + '>— free text —</option>' +
         fields.map(function (f) { return '<option value="' + esc(f.key) + '"' + (pin.field === f.key ? ' selected' : '') + '>' + esc(f.label) + ' (' + esc(String(f.val)) + ')</option>'; }).join('');
       editor = '<div class="tk2-annot-ed">' +
-        '<div class="tk2-annot-ed-h">ÉPINGLE ' + (sel + 1) + '/' + a.plate.pins.length + '</div>' +
+        '<div class="tk2-annot-ed-h">PIN ' + (sel + 1) + '/' + a.plate.pins.length + '</div>' +
         '<label class="tk2-annot-f">label <input class="tk2-annot-lab" value="' + esc(pin.label) + '" placeholder="ex. DMG"></label>' +
-        '<label class="tk2-annot-f">valeur <select class="tk2-annot-bind">' + opts + '</select></label>' +
-        (pin.field ? '<div class="tk2-mut">→ ' + esc(resolvePin(a, d, pin.field) || '—') + ' <span class="tk2-mut">(vivant)</span></div>'
-                   : '<label class="tk2-annot-f">texte <input class="tk2-annot-txt" value="' + esc(pin.text) + '" placeholder="valeur libre"></label>') +
-        '<div class="tk2-annot-btns"><button class="app-btn tk2-annot-align" title="remettre le label droit face au point">⇔ aligner</button><button class="app-btn app-btn-danger tk2-annot-del">retirer</button></div>' +
+        '<label class="tk2-annot-f">value <select class="tk2-annot-bind">' + opts + '</select></label>' +
+        (pin.field ? '<div class="tk2-mut">→ ' + esc(resolvePin(a, d, pin.field) || '—') + ' <span class="tk2-mut">(live)</span></div>'
+                   : '<label class="tk2-annot-f">text <input class="tk2-annot-txt" value="' + esc(pin.text) + '" placeholder="free value"></label>') +
+        '<div class="tk2-annot-btns"><button class="app-btn tk2-annot-align" title="straighten the label onto the point row">⇔ align</button><button class="app-btn app-btn-danger tk2-annot-del">remove</button></div>' +
       '</div>';
     }
     pane.innerHTML =
-      '<div class="tk2-bar"><button class="app-btn tk2-annot-back">← FICHE</button><span class="tk2-title">ANNOTER</span>' +
-        '<span class="tk2-bar-sp"></span><span class="tk2-mut">clic = poser · glisse le point ● ou le label ▪ (indépendants) · aligner = remettre droit</span></div>' +
+      '<div class="tk2-bar"><button class="app-btn tk2-annot-back">← SHEET</button><span class="tk2-title">ANNOTATE</span>' +
+        '<span class="tk2-bar-sp"></span><span class="tk2-mut">click = drop · drag the point ● or the label ▪ (independent) · align = straighten</span></div>' +
       '<div class="tk2-annot">' +
         '<div class="tk2-annot-stage"><img class="tk2-annot-img" src="' + a.plate.png + '" alt="">' + platePinsSvg(a, d, true, sel) + '</div>' +
         editor +
@@ -526,9 +526,11 @@
     return px.toFixed(1) + ',' + py.toFixed(1) + ' ' + ax.toFixed(1) + ',' + py.toFixed(1) + ' ' + bx.toFixed(1) + ',' + ly.toFixed(1) + ' ' + lx.toFixed(1) + ',' + ly.toFixed(1);
   }
   function wireAnnotate(pane) {
-    var s = sec(pane), a = s.art;
+    var s = sec(pane), a = s.art, d = DERIVE(a);
     var back = pane.querySelector('.tk2-annot-back'); if (back) back.onclick = function () { s.mode = null; commit(pane); render(null, pane); };
     var svg = pane.querySelector('.tk2-pin-svg'); if (!svg) return;
+    // repaint just the selected pin's label text in place (keeps input focus while typing)
+    var repaintText = function () { var p = a.plate.pins[s.pinSel]; if (!p) return; var t = svg.querySelector('text[data-pintxt="' + s.pinSel + '"]'); if (t) t.textContent = pinText(a, d, p) || '⋯'; };
     // always read the LIVE svg (it survives the drag; robust to zero-size rects in tests)
     var normEv = function (e) { var el = pane.querySelector('.tk2-pin-svg'); if (!el) return { x: 0, y: 0 }; var r = el.getBoundingClientRect(), w = r.width || 1, h = r.height || 1, c = function (v) { return v < 0 ? 0 : v > 1 ? 1 : v; }; return { x: c((e.clientX - r.left) / w), y: c((e.clientY - r.top) / h) }; };
     // generic drag: move fn mutates the pin from event coords + repaints the affected els; commit on release
@@ -556,10 +558,11 @@
         if (text) { var right = lx >= px; text.setAttribute('x', (lx + (right ? 1 : -1) * fs * 0.4).toFixed(1)); text.setAttribute('y', (ly + fs * 0.34).toFixed(1)); text.setAttribute('text-anchor', right ? 'start' : 'end'); }
       });
     });
-    var lab = pane.querySelector('.tk2-annot-lab'); if (lab) lab.oninput = function () { a.plate.pins[s.pinSel].label = lab.value; commit(pane); };
+    var lab = pane.querySelector('.tk2-annot-lab'); if (lab) lab.oninput = function () { a.plate.pins[s.pinSel].label = lab.value; repaintText(); commit(pane); };
     var bind = pane.querySelector('.tk2-annot-bind'); if (bind) bind.onchange = function () { a.plate.pins[s.pinSel].field = bind.value; commit(pane); renderAnnotate(pane); };
-    var txt = pane.querySelector('.tk2-annot-txt'); if (txt) txt.oninput = function () { a.plate.pins[s.pinSel].text = txt.value; commit(pane); };
-    var alg = pane.querySelector('.tk2-annot-align'); if (alg) alg.onclick = function () { var p = a.plate.pins[s.pinSel]; if (!p) return; p.lx = defaultLabelX(p.x); p.ly = p.y; commit(pane); renderAnnotate(pane); };
+    var txt = pane.querySelector('.tk2-annot-txt'); if (txt) txt.oninput = function () { a.plate.pins[s.pinSel].text = txt.value; repaintText(); commit(pane); };
+    // "align" straightens only Y (label back onto the point's row), keeping its X
+    var alg = pane.querySelector('.tk2-annot-align'); if (alg) alg.onclick = function () { var p = a.plate.pins[s.pinSel]; if (!p) return; p.ly = p.y; commit(pane); renderAnnotate(pane); };
     var del = pane.querySelector('.tk2-annot-del'); if (del) del.onclick = function () { a.plate.pins.splice(s.pinSel, 1); s.pinSel = a.plate.pins.length ? 0 : -1; commit(pane); renderAnnotate(pane); };
   }
 
@@ -574,8 +577,8 @@
   // ══════════════ SCREEN C · DOCUMENT (generated card) ══════════════
   function renderDocument(pane) {
     var s = sec(pane), a = s.art, d = DERIVE(a);
-    var plate = a.plate ? plateFig(a, d) : '<div class="tk2-plate-empty"><div>— pas de planche —</div></div>';
-    var feats = a.feats.map(function (f) { var an = C.anchorOf(f.domain, f.grade); var ad = (f.addons || []).map(function (x) { return esc(x.name); }).join(', '); return '<div class="tk2-docfeat">' + esc(f.domain) + ' g' + f.grade + (an ? ' <span class="tk2-mut">— ' + esc(an.bar) + '</span>' : '') + (ad ? ' <span class="tk2-mut">+ ' + ad + '</span>' : '') + '</div>'; }).join('') || '<div class="tk2-mut">stats seules</div>';
+    var plate = a.plate ? plateFig(a, d) : '<div class="tk2-plate-empty"><div>— no plate —</div></div>';
+    var feats = a.feats.map(function (f) { var an = C.anchorOf(f.domain, f.grade); var ad = (f.addons || []).map(function (x) { return esc(x.name); }).join(', '); return '<div class="tk2-docfeat">' + esc(f.domain) + ' g' + f.grade + (an ? ' <span class="tk2-mut">— ' + esc(an.bar) + '</span>' : '') + (ad ? ' <span class="tk2-mut">+ ' + ad + '</span>' : '') + '</div>'; }).join('') || '<div class="tk2-mut">stats only</div>';
     var gen = a.addons.map(function (x) { return esc(x.name); }).filter(Boolean).join(', ');
     var ifs = [];
     a.ports.needs.forEach(function (n) { if (n.token) ifs.push('consumes: ' + esc(n.token) + (n.rate ? ' /' + esc(n.rate) : '')); });
@@ -584,15 +587,15 @@
     a.ports.holds.forEach(function (hd) { ifs.push('holds: ' + esc(hd.kind) + ' ' + esc(hd.cap)); });
     var pub = a.latent.filter(function (x) { return x.who.indexOf('public') >= 0; });
     pane.innerHTML =
-      '<div class="tk2-bar"><button class="app-btn tk2-back">← FICHE</button><span class="tk2-title">DOCUMENT</span>' +
-        '<span class="tk2-bar-sp"></span><span class="tk2-mut">vue joueur — champs non-publics masqués</span></div>' +
+      '<div class="tk2-bar"><button class="app-btn tk2-back">← SHEET</button><span class="tk2-title">DOCUMENT</span>' +
+        '<span class="tk2-bar-sp"></span><span class="tk2-mut">player view — non-public fields hidden</span></div>' +
       '<div class="tk2-doc-card">' +
         '<div class="tk2-doc-head"><span>' + esc(a.name) + '</span><span>' + esc(a.cls) + ' · tier ' + a.tier + '</span></div>' +
         '<div class="tk2-doc-plate">' + plate + '</div>' +
         (a.flavor ? '<div class="tk2-doc-flavor">' + esc(a.flavor) + '</div>' : '') +
-        (gen ? '<div class="tk2-doc-flavor tk2-mut">addons : ' + gen + '</div>' : '') +
+        (gen ? '<div class="tk2-doc-flavor tk2-mut">addons: ' + gen + '</div>' : '') +
         '<div class="tk2-doc-body"><div class="tk2-doc-col">' + feats + '</div>' +
-          '<div class="tk2-doc-col">' + (ifs.length ? ifs.map(function (x) { return '<div>' + x + '</div>'; }).join('') : '<span class="tk2-mut">aucune interface</span>') +
+          '<div class="tk2-doc-col">' + (ifs.length ? ifs.map(function (x) { return '<div>' + x + '</div>'; }).join('') : '<span class="tk2-mut">no interface</span>') +
           (pub.length ? pub.map(function (x) { return '<div>latent: ' + esc(x.text) + '</div>'; }).join('') : '') + '</div></div>' +
         '<div class="tk2-doc-foot">DC ' + d.dcLineage + ' · OP ' + d.op + ' · PROD ' + d.prodEb + 'eb · STREET ' + d.streetEb + 'eb</div>' +
       '</div>';

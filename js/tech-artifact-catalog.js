@@ -27,35 +27,35 @@
     'STORE':      { skill: 'Electronics', bars: ['note', 'shard 10MU', 'shard 40MU', 'deck 200MU', 'array 1GU', 'vault', 'living archive'] },
     'HEAL':       { skill: 'Basic Tech', bars: ['bandage', 'first aid', 'stabilize', 'trauma field', 'surgery bay', 'nano-repair', 'full regen'] },
     'POWER':      { skill: 'Electronics', bars: ['cell', 'pack', 'high-density', 'fuel cell', 'micro-fusion', 'plant', 'exotic core'] },
-    'BOOST':      { skill: 'Cyber Tech', bars: ['—', '+1 attribut', '+2', 'réflexes câblés', '+3 combat', 'milspec', 'surhumain'] },
-    'SHOCK':      { skill: 'Electronics', bars: ['statique', 'décharge taser', 'assomme', 'champ de stun', 'grille le cyber', 'salve EMP', 'EMP de zone'] },
-    'BURN':       { skill: 'Weaponsmith', bars: ['flamme', 'chalumeau', 'thermite', 'découpe plasma', 'lance thermique', 'torche à arc', 'mono chauffée'] },
-    'PROJECT':    { skill: 'Electronics', bars: ['holo plat', 'leurre statique', 'leurre mobile', 'double crédible', 'illusion complète', 'fantôme sensoriel', 'indétectable'] },
-    'HACK':       { skill: 'Electronic Security', bars: ['crochète une serrure', 'spoofe des accès', 'perce un appareil', 'prend le contrôle', 'crack un fort', 'possède le réseau', 'invisible au sysop'] },
-    'INJECT':     { skill: 'Pharmaceuticals', bars: ['piqûre', 'auto-dose', 'cocktail de combat', 'régime minuté', 'fléchette ciblée', 'aérosol de zone', 'contact cutané'] },
-    'DISGUISE':   { skill: 'Cyber Tech', bars: ['masque', 'voix maquillée', 'face-off', 'traits morphables', 'spoof biométrique', 'ADN de façade', 'indétectable'] },
-    'SHIELD':     { skill: 'Electronics', bars: ['durci EMP', 'champ amortisseur', 'tampon cinétique', 'bouclier d’énergie', 'barrière milspec', 'champ dense', 'impénétrable'] },
-    'TRACK':      { skill: 'Electronics', bars: ['ping GPS', 'tag et suit', 'à travers les murs', 'à l’échelle ville', 'prédictif', 'satellite', 'inéluctable'] },
-    'CONTROL':    { skill: 'Electronics', bars: ['télécommande filaire', 'remote courte', 'pirate le non-sécurisé', 'saisit le sécurisé', 'contrôle de masse', 'essaim autonome', 'asservit tout'] },
-    'REPAIR':     { skill: 'Basic Tech', bars: ['rustine', 'réparation de terrain', 'auto-réparation', 'nanites', 'reconstruction', 'régénère', 'inusable'] },
-    'COMPUTE':    { skill: 'Programming', bars: ['calculette', 'co-processeur', 'smartlink', 'système expert', 'pseudo-IA', 'IA véritable', 'esprit ruche'] },
-    'SONIC':      { skill: 'Sonar Tech', bars: ['amplificateur', 'ping sonar', 'ultrason', 'stun sonique', 'brise-résonance', 'sonique létal', 'onde de choc'] },
-    'RESTRAIN':   { skill: 'Weaponsmith', bars: ['collier', 'filet', 'toile gluante', 'mousse adhésive', 'poigne de stase', 'champ de contention', 'inéluctable'] },
-    'FABRICATE':  { skill: 'Basic Tech', bars: ['multitool', 'kit de terrain', 'imprimante portable', 'fab de munitions', 'imprimante matière', 'nano-forge', 'fab universelle'] },
+    'BOOST':      { skill: 'Cyber Tech', bars: ['—', '+1 attribute', '+2', 'wired reflexes', '+3 combat', 'milspec', 'superhuman'] },
+    'SHOCK':      { skill: 'Electronics', bars: ['static', 'taser jolt', 'knockdown', 'stun field', 'fries cyber', 'EMP burst', 'area EMP'] },
+    'BURN':       { skill: 'Weaponsmith', bars: ['flame', 'blowtorch', 'thermite', 'plasma cutter', 'thermal lance', 'arc torch', 'heated mono'] },
+    'PROJECT':    { skill: 'Electronics', bars: ['flat holo', 'static decoy', 'moving decoy', 'convincing double', 'full illusion', 'sensory phantom', 'undetectable'] },
+    'HACK':       { skill: 'Electronic Security', bars: ['picks a lock', 'spoofs access', 'cracks a device', 'takes control', 'cracks a fort', 'owns the network', 'invisible to sysop'] },
+    'INJECT':     { skill: 'Pharmaceuticals', bars: ['jab', 'auto-dose', 'combat cocktail', 'timed regimen', 'targeted dart', 'area aerosol', 'skin contact'] },
+    'DISGUISE':   { skill: 'Cyber Tech', bars: ['mask', 'disguised voice', 'face-off', 'morphable features', 'biometric spoof', 'false DNA', 'undetectable'] },
+    'SHIELD':     { skill: 'Electronics', bars: ['EMP-hardened', 'damping field', 'kinetic buffer', 'energy shield', 'milspec barrier', 'dense field', 'impenetrable'] },
+    'TRACK':      { skill: 'Electronics', bars: ['GPS ping', 'tag and follow', 'through walls', 'city-scale', 'predictive', 'satellite', 'inescapable'] },
+    'CONTROL':    { skill: 'Electronics', bars: ['wired remote', 'short remote', 'hijacks unsecured', 'seizes secured', 'mass control', 'autonomous swarm', 'enslaves all'] },
+    'REPAIR':     { skill: 'Basic Tech', bars: ['patch', 'field repair', 'self-repair', 'nanites', 'rebuild', 'regenerates', 'never wears'] },
+    'COMPUTE':    { skill: 'Programming', bars: ['calculator', 'co-processor', 'smartlink', 'expert system', 'pseudo-AI', 'true AI', 'hive mind'] },
+    'SONIC':      { skill: 'Sonar Tech', bars: ['amplifier', 'sonar ping', 'ultrasound', 'sonic stun', 'resonance breaker', 'lethal sonic', 'shockwave'] },
+    'RESTRAIN':   { skill: 'Weaponsmith', bars: ['collar', 'net', 'sticky web', 'adhesive foam', 'stasis grip', 'containment field', 'inescapable'] },
+    'FABRICATE':  { skill: 'Basic Tech', bars: ['multitool', 'field kit', 'portable printer', 'ammo fab', 'matter printer', 'nano-forge', 'universal fab'] },
     // ── harvested from the Ultra Chrome catalogue (breadth of CP2020 gear) ──
-    'RECORD':     { skill: 'Electronics', bars: ['note', 'photo', 'audio', 'vidéo', 'multi-cam', 'braindance', 'archive plein-sens'] },
-    'VISION':     { skill: 'Cyber Tech', bars: ['lunettes', 'zoom', 'bas-niveau', 'infrarouge', 'thermographique', 'multi-spectral', 'vision totale'] },
-    'ANALYZE':    { skill: 'Electronics', bars: ['jauge', 'détecteur simple', 'analyse chimique', 'diagnostic médical', 'détecteur de mensonge', 'scan profond', 'omniscient'] },
-    'CLOAK':      { skill: 'Electronics', bars: ['peinture mate', 'anti-reflet', 'absorbe le radar', 'baffle IR', 'ablatif laser', 'furtif multi-spectral', 'signature nulle'] },
-    'SEAL':       { skill: 'Basic Tech', bars: ['coupe-vent', 'étanche', 'masque à air', 'combi NBC', 'scaphandre', 'anti-pression', 'cycle fermé'] },
-    'FLY':        { skill: 'AV Tech', bars: ['saut plané', 'glisse', 'jetpack court', 'hover', 'vol soutenu', 'supersonique', 'orbital'] },
-    'HAUL':       { skill: 'Basic Tech', bars: ['sangle', 'sac de charge', 'treuil', 'grue', 'remorque', 'portique', 'levage lourd'] },
-    'ILLUMINATE': { skill: 'Basic Tech', bars: ['lueur', 'lampe', 'torche', 'projecteur', 'illuminateur IR', 'strobe aveuglant', 'soleil portatif'] },
-    'DEMOLISH':   { skill: 'Demolitions', bars: ['pétard', 'charge', 'C6', 'brèche dirigée', 'démolition', 'charge sculptée', 'rase un bloc'] },
-    'BROADCAST':  { skill: 'Electronics', bars: ['talkie', 'radio', 'TV', 'faisceau serré', 'relais', 'maillage', 'couverture satellite'] },
-    'TRANSLATE':  { skill: 'Electronics', bars: ['lexique', 'phrases', 'temps réel', 'argot', 'toutes langues', 'intention', 'façade télépathique'] },
-    'STYLE':      { skill: 'Wardrobe & Style', bars: ['propre', 'soigné', 'urban flash', 'edgerunner', 'haute couture', 'icône', 'légende vivante'] },
-    'SURVIVE':    { skill: 'Basic Tech', bars: ['briquet', 'kit de survie', 'abri', 'eau potable', 'autonomie longue', 'base mobile', 'écosystème'] },
+    'RECORD':     { skill: 'Electronics', bars: ['note', 'photo', 'audio', 'video', 'multi-cam', 'braindance', 'full-sense archive'] },
+    'VISION':     { skill: 'Cyber Tech', bars: ['goggles', 'zoom', 'low-light', 'infrared', 'thermographic', 'multi-spectral', 'total vision'] },
+    'ANALYZE':    { skill: 'Electronics', bars: ['gauge', 'simple detector', 'chemical analysis', 'medical diagnosis', 'lie detector', 'deep scan', 'omniscient'] },
+    'CLOAK':      { skill: 'Electronics', bars: ['matte paint', 'anti-glare', 'radar-absorbing', 'IR baffle', 'laser ablative', 'multi-spectral stealth', 'null signature'] },
+    'SEAL':       { skill: 'Basic Tech', bars: ['windbreak', 'waterproof', 'air mask', 'NBC suit', 'hardsuit', 'pressure-proof', 'closed cycle'] },
+    'FLY':        { skill: 'AV Tech', bars: ['glide jump', 'glide', 'short jetpack', 'hover', 'sustained flight', 'supersonic', 'orbital'] },
+    'HAUL':       { skill: 'Basic Tech', bars: ['strap', 'load bag', 'winch', 'crane', 'trailer', 'gantry', 'heavy lift'] },
+    'ILLUMINATE': { skill: 'Basic Tech', bars: ['glow', 'lamp', 'torch', 'floodlight', 'IR illuminator', 'blinding strobe', 'portable sun'] },
+    'DEMOLISH':   { skill: 'Demolitions', bars: ['firecracker', 'charge', 'C6', 'breaching charge', 'demolition', 'shaped charge', 'levels a block'] },
+    'BROADCAST':  { skill: 'Electronics', bars: ['walkie', 'radio', 'TV', 'tight beam', 'relay', 'mesh', 'satellite coverage'] },
+    'TRANSLATE':  { skill: 'Electronics', bars: ['lexicon', 'phrases', 'real-time', 'slang', 'all languages', 'intent', 'telepathic front'] },
+    'STYLE':      { skill: 'Wardrobe & Style', bars: ['clean', 'sharp', 'urban flash', 'edgerunner', 'haute couture', 'icon', 'living legend'] },
+    'SURVIVE':    { skill: 'Basic Tech', bars: ['lighter', 'survival kit', 'shelter', 'clean water', 'long endurance', 'mobile base', 'ecosystem'] },
   };
   var DOMAINS = Object.keys(ANCHORS);
   function isKnownDomain(d) { return !!ANCHORS[String(d || '').toUpperCase()]; }
@@ -91,58 +91,58 @@
   // ── presets: full records, hand-coted (the calibration set) ──
   var RAW = [
     { id: 'preset-filter-mask', name: 'SCAVENGER FILTER MASK', cls: 'gear', tier: 2, origin: 'HANDMADE',
-      flavor: 'Rebreather bricolé pour les fouilleurs du Dump — tient 40 heures, la voix grésille.',
+      flavor: 'Rebreather kludged for Dump scavengers — lasts 40 hours, voice crackles.',
       feats: [{ domain: 'FILTER-AIR', grade: 1 }],
       ports: { needs: [{ token: 'cartridge filter-std', rate: '40h' }], fits: ['face-std'] },
-      limits: [{ text: 'nez-bouche seul · voix −1' }], mods: [{ target: 'wearer.voice', value: '-1', when: 'when worn' }] },
+      limits: [{ text: 'nose-mouth only · voice −1' }], mods: [{ target: 'wearer.voice', value: '-1', when: 'when worn' }] },
 
     { id: 'preset-thermoptic-cape', name: 'CHAMELEON CLOAK', cls: 'gear', tier: 4, origin: 'CORP PULL',
-      flavor: 'Thermoptique — le camo grésille au sprint, mais on te rate.',
+      flavor: 'Thermoptic — the camo flickers at a sprint, but they miss you.',
       feats: [{ domain: 'CONCEAL', grade: 4, when: 'while powered' }, { domain: 'ARMOR', grade: 2 }],
       ports: { needs: [{ token: 'cell power-c', rate: '30min' }], fits: ['torso-std'] },
-      limits: [{ text: 'shimmer au sprint (grade −1 en courant)' }], mods: [{ target: 'wearer.Stealth', value: '+2', when: 'while powered' }],
+      limits: [{ text: 'shimmer at a sprint (grade −1 while running)' }], mods: [{ target: 'wearer.Stealth', value: '+2', when: 'while powered' }],
       lineage: { refines: '', steps: 1 } },
 
     { id: 'preset-jump-boots', name: 'KANGAROO JUMP BOOTS', cls: 'gear', tier: 2, origin: 'FACTORY',
-      flavor: 'Actionneurs mollets — +3 au saut, atterris comme tu peux.',
+      flavor: 'Calf actuators — +3 to jump, land how you can.',
       feats: [{ domain: 'MOVE', grade: 2 }], mods: [{ target: 'wearer.MA.jump', value: '+3', when: 'when worn' }],
-      limits: [{ text: 'atterrissage brutal : REF check ou 1d6' }] },
+      limits: [{ text: 'hard landing: REF check or 1d6' }] },
 
     { id: 'preset-combat-drone', name: 'WATCHDOG COMBAT DRONE', cls: 'carrier', tier: 4, origin: 'CORP PULL',
-      flavor: 'Drone quadrotor de sécurité — mitraille légère, optiques multi-spectrales.',
+      flavor: 'Security quadrotor drone — light autofire, multi-spectral optics.',
       feats: [{ domain: 'SENSE', grade: 3 }, { domain: 'STRIKE', grade: 3 }],
       ports: { takes: [{ slot: 'gadget-bay', accepts: ['rail-std'], n: 2 }], needs: [{ token: 'control-link', service: true }, { token: 'cell power-d', rate: '2h' }] },
-      limits: [{ text: 'bande passante : 1 opérateur à la fois' }],
-      stats: { sdp: 20, sp: 8 }, latent: [{ text: 'balise télémétrie usine', domain: 'LINK', grade: 2, who: ['maker', 'GM'] }] },
+      limits: [{ text: 'bandwidth: 1 operator at a time' }],
+      stats: { sdp: 20, sp: 8 }, latent: [{ text: 'factory telemetry beacon', domain: 'LINK', grade: 2, who: ['maker', 'GM'] }] },
 
     { id: 'preset-cyber-dog', name: 'CERBERUS CYBER-MASTIFF', cls: 'carrier', tier: 4, origin: 'FACTORY',
-      flavor: 'Molosse cybernétique de garde — mâchoires hydrauliques, museau chimio.',
+      flavor: 'Cyber guard mastiff — hydraulic jaws, chem-sniffer muzzle.',
       feats: [{ domain: 'STRIKE', grade: 4 }, { domain: 'SENSE', grade: 3 }],
       ports: { needs: [{ token: 'control-link', service: true }], holds: [{ kind: 'payload', cap: '1 module' }] },
-      limits: [{ text: 'loyauté câblée : perd le contrôle si CONTROL est cracké' }], stats: { sdp: 30, sp: 6 } },
+      limits: [{ text: 'hardwired loyalty: loses control if CONTROL is cracked' }], stats: { sdp: 30, sp: 6 } },
 
     { id: 'preset-rpg', name: 'MILITECH ARROW RPG', cls: 'weapon', tier: 3, origin: 'CORP PULL',
-      flavor: 'Lance-roquette dépaulé — accepte trois têtes, s’alèse pour une quatrième si tu oses.',
+      flavor: 'Shoulder-fired launcher — takes three warheads, re-bores for a fourth if you dare.',
       feats: [{ domain: 'STRIKE', grade: 4 }],
       ports: { takes: [{ slot: 'tube', accepts: ['he-84', 'thermo-84', 'smart-84'], n: 1 }] },
       stats: { range: '400m', shots: 1 },
       mods: [{ target: 're-bore chamber', value: '+accepts he-100 · dmg+2d6 · instab+2', when: 'modded' }] },
 
     { id: 'preset-smart-rocket', name: 'SMART ROCKET 84MM', cls: 'ammo', tier: 3, origin: 'CORP PULL',
-      flavor: 'Roquette téléguidée — verrouille après désignation, pour tout tube 84.',
+      flavor: 'Guided rocket — locks on after designation, for any 84 tube.',
       feats: [{ domain: 'GUIDE', grade: 3 }],
       ports: { fits: ['tube-84'], needs: [{ token: 'designator-link' }] } },
 
     { id: 'preset-datashard', name: 'FULL DATASHARD', cls: 'data', tier: 1, origin: 'FACTORY',
-      flavor: 'Shard scellé — 40 mégaunités, coordonnées d’extraction dedans.',
-      feats: [], ports: { fits: ['shard-std'], holds: [{ kind: 'data', cap: '40MU', contents: 'coordonnées d’extraction' }] } },
+      flavor: 'Sealed shard — 40 megaunits, extraction coordinates inside.',
+      feats: [], ports: { fits: ['shard-std'], holds: [{ kind: 'data', cap: '40MU', contents: 'extraction coordinates' }] } },
 
     { id: 'preset-neural-cable', name: 'INTERFACE CABLE', cls: 'electronics', tier: 2, origin: 'FACTORY',
-      flavor: 'Câble de plongée — relie une prise neurale à toute interface numérique.',
+      flavor: 'Dive cable — links a neural port to any digital interface.',
       feats: [{ domain: 'LINK', grade: 2 }], ports: { fits: ['neural-port'], feeds: ['data-port'] } },
 
     { id: 'preset-ambulance', name: 'ARMORED TRAUMA VAN', cls: 'vehicle', tier: 5, origin: 'FACTORY',
-      flavor: 'Ambulance blindée — baie de stabilisation à bord, tôle qui encaisse.',
+      flavor: 'Armored ambulance — onboard stabilization bay, sheet metal that takes hits.',
       feats: [{ domain: 'HEAL', grade: 3 }, { domain: 'ARMOR', grade: 4 }],
       ports: { holds: [{ kind: 'patients', cap: '2' }] }, stats: { sdp: 75, sp: 20, seats: 2 } },
   ];
@@ -165,26 +165,26 @@
 
   // ── common MODIFICATIONS (harvested from Ultra Chrome), grouped ──
   var MODS = {
-    firearm: ['silencieux', 'viseur laser', 'lunette', 'red-dot', 'smartgun link', 'chargeur étendu', 'chargeur tambour', 'crosse pliante', 'compensateur de recul', 'lance-grenade sous-canon', 'bipied', 'conversion full-auto', 'détente à cheveu', 'munition perce-armure', 'munition HE', 'munition électrothermique', 'canon sans étui', 'finition sans empreintes'],
-    armor: ['plaques d’insert (+SP)', 'couche ablative laser', 'déplacement thermique', 'absorbant radar', 'ignifugé', 'anti-stun (signal-retardant)', 'panneau vidéo/polychromique', 'stockage dissimulé'],
-    cyber: ['smartgun link', 'option bas-niveau/IR/thermo', 'anti-éblouissement', 'blindage EMP', 'peau réaliste (realskin)', 'articulations verrouillables', 'portée étendue', 'pop-up/rétractable', 'os indétectable', 'compartiment creux', 'coût d’humanité réduit'],
-    vehicle: ['blindage (+SP)', 'tourelle', 'plaques réactives', 'revêtement furtif', 'pneus increvables', 'vitres blindées', 'treuil', 'bélier renforcé', 'kit amphibie', 'pod d’armes', 'soute cargo', 'pilote auto', 'siège éjectable'],
-    electronics: ['mémoire +MU', 'processeur rapide', 'blindage EMP', 'datashielding', 'chiffrement', 'uplink satellite', 'portée étendue', 'dead man’s handle', 'brouillage-proof'],
-    general: ['finition custom', 'sans empreintes', 'qualité supérieure', 'miniaturisation', 'commande vocale', 'module GPS', 'abonnement de mise à jour', 'revêtement auto-nettoyant'],
+    firearm: ['silencer', 'laser sight', 'scope', 'red-dot', 'smartgun link', 'extended magazine', 'drum magazine', 'folding stock', 'recoil compensator', 'underbarrel grenade launcher', 'bipod', 'full-auto conversion', 'hair trigger', 'armor-piercing ammo', 'HE ammo', 'electrothermal ammo', 'caseless barrel', 'fingerprint-free finish'],
+    armor: ['insert plates (+SP)', 'laser ablative layer', 'thermal displacement', 'radar-absorbing', 'fireproofed', 'anti-stun (signal-retardant)', 'video/polychromic panel', 'concealed storage'],
+    cyber: ['smartgun link', 'low-light/IR/thermo option', 'anti-glare', 'EMP shielding', 'realskin', 'lockable joints', 'extended range', 'pop-up/retractable', 'undetectable bone', 'hollow compartment', 'reduced humanity cost'],
+    vehicle: ['armor (+SP)', 'turret', 'reactive plates', 'stealth coating', 'run-flat tires', 'armored windows', 'winch', 'reinforced ram', 'amphibious kit', 'weapon pod', 'cargo hold', 'autopilot', 'ejection seat'],
+    electronics: ['+MU memory', 'fast processor', 'EMP shielding', 'datashielding', 'encryption', 'satellite uplink', 'extended range', 'dead man’s handle', 'jam-proof'],
+    general: ['custom finish', 'fingerprint-free', 'superior quality', 'miniaturization', 'voice control', 'GPS module', 'update subscription', 'self-cleaning coating'],
   };
   var MOD_GROUPS = { weapon: ['firearm', 'general'], ammo: ['firearm'], cyberware: ['cyber', 'general'], vehicle: ['vehicle', 'general'], carrier: ['vehicle', 'electronics'], electronics: ['electronics', 'general'], data: ['electronics'], gear: ['armor', 'general'], drug: ['general'] };
   function modsFor(cls) { return (MOD_GROUPS[cls] || ['general']).map(function (g) { return { group: g, list: MODS[g] || [] }; }); }
 
-  // ── ADDONS liés aux EFFETS — chaque domaine hérite d'un catalogue par famille ──
-  // (les addons génériques, transverses, passent par le champ texte GENERIC_ADDONS).
+  // ── EFFECT-tied ADDONS — each domain inherits a catalogue by family ──
+  // (generic, cross-cutting addons go through the GENERIC_ADDONS text field).
   var ADDON_FAMILIES = {
-    weapon:   ['silencieux', 'canon long', 'bipied', 'compensateur de recul', 'chargeur étendu', 'rail sous-canon', 'crosse pliante', 'détente à cheveu'],
-    optics:   ['monture casque', 'téléobjectif', 'filtre IR', 'gain bas-niveau', 'zoom motorisé', 'incrustation HUD', 'traitement anti-reflet', 'stabilisateur gyro'],
-    signal:   ['antenne boostée', 'module de chiffrement', 'amplificateur de signal', 'routage furtif', 'ports data supplémentaires', 'émetteur en rafale', 'antenne directionnelle'],
-    armor:    ['plaques trauma', 'doublure scellée', 'revêtement ablatif', 'insert céramique', 'largage rapide', 'coutures renforcées', 'coupe dissimulée'],
-    mobility: ['stabilisateur gyro', 'servos renforcés', 'rack cargo', 'harnais à largage rapide', 'amortisseurs', 'chenilles adhérentes'],
-    medchem:  ['régulateur de dose', 'réservoir stérile', 'auto-injecteur', 'doublure chaîne du froid', 'valve de trop-plein'],
-    core:     ['cellule haute capacité', 'port charge rapide', 'panneau solaire d’appoint', 'module hot-swap', 'boîtier durci'],
+    weapon:   ['silencer', 'long barrel', 'bipod', 'recoil compensator', 'extended magazine', 'underbarrel rail', 'folding stock', 'hair trigger'],
+    optics:   ['helmet mount', 'telephoto lens', 'IR filter', 'low-light gain', 'powered zoom', 'HUD overlay', 'anti-glare coating', 'gyro stabilizer'],
+    signal:   ['boosted antenna', 'encryption module', 'signal amp', 'stealth routing', 'extra data ports', 'burst transmitter', 'directional antenna'],
+    armor:    ['trauma plates', 'sealed liner', 'ablative coating', 'ceramic insert', 'quick-release', 'reinforced seams', 'concealed cut'],
+    mobility: ['gyro stabilizer', 'reinforced servos', 'cargo rack', 'quick-release harness', 'shock dampers', 'grip treads'],
+    medchem:  ['dose regulator', 'sterile reservoir', 'auto-injector', 'cold-chain liner', 'overflow valve'],
+    core:     ['high-capacity cell', 'fast-charge port', 'solar trickle panel', 'hot-swap module', 'hardened housing'],
   };
   var DOMAIN_FAMILY = {
     STRIKE: 'weapon', SHOCK: 'weapon', BURN: 'weapon', PROJECT: 'weapon', DEMOLISH: 'weapon', SONIC: 'weapon',
@@ -195,7 +195,7 @@
     HEAL: 'medchem', INJECT: 'medchem', 'FILTER-AIR': 'medchem', REPAIR: 'medchem', FABRICATE: 'medchem',
     POWER: 'core', STORE: 'core', GUIDE: 'core', STYLE: 'core',
   };
-  var GENERIC_ADDONS = ['miniaturisation', 'durci', 'étanche', 'modulaire', 'dissimulé', 'allégé', 'sans empreintes', 'renforcé', 'commande vocale', 'auto-nettoyant'];
+  var GENERIC_ADDONS = ['miniaturization', 'hardened', 'waterproofed', 'modular', 'concealed', 'lightweighted', 'fingerprint-free', 'reinforced', 'voice control', 'self-cleaning'];
   function familyOfDomain(dom) { return DOMAIN_FAMILY[String(dom || '').toUpperCase()] || null; }
   function addonsForDomain(dom) { var f = familyOfDomain(dom); return f ? ADDON_FAMILIES[f].slice() : GENERIC_ADDONS.slice(); }
 
@@ -204,23 +204,23 @@
   // Anything absent falls to the flat TUNING.addon.eb default.
   var ADDON_PRICES = {
     // weapon
-    'silencieux': 150, 'canon long': 100, 'bipied': 75, 'compensateur de recul': 120, 'chargeur étendu': 50, 'rail sous-canon': 40, 'crosse pliante': 80, 'détente à cheveu': 100,
+    'silencer': 150, 'long barrel': 100, 'bipod': 75, 'recoil compensator': 120, 'extended magazine': 50, 'underbarrel rail': 40, 'folding stock': 80, 'hair trigger': 100,
     // optics
-    'monture casque': 60, 'téléobjectif': 200, 'filtre ir': 150, 'gain bas-niveau': 250, 'zoom motorisé': 180, 'incrustation hud': 300, 'traitement anti-reflet': 50, 'stabilisateur gyro': 220,
+    'helmet mount': 60, 'telephoto lens': 200, 'ir filter': 150, 'low-light gain': 250, 'powered zoom': 180, 'hud overlay': 300, 'anti-glare coating': 50, 'gyro stabilizer': 220,
     // signal
-    'antenne boostée': 120, 'module de chiffrement': 300, 'amplificateur de signal': 150, 'routage furtif': 400, 'ports data supplémentaires': 80, 'émetteur en rafale': 180, 'antenne directionnelle': 100,
+    'boosted antenna': 120, 'encryption module': 300, 'signal amp': 150, 'stealth routing': 400, 'extra data ports': 80, 'burst transmitter': 180, 'directional antenna': 100,
     // armor
-    'plaques trauma': 200, 'doublure scellée': 250, 'revêtement ablatif': 300, 'insert céramique': 180, 'largage rapide': 60, 'coutures renforcées': 40, 'coupe dissimulée': 90,
+    'trauma plates': 200, 'sealed liner': 250, 'ablative coating': 300, 'ceramic insert': 180, 'quick-release': 60, 'reinforced seams': 40, 'concealed cut': 90,
     // mobility
-    'servos renforcés': 300, 'rack cargo': 80, 'harnais à largage rapide': 60, 'amortisseurs': 120, 'chenilles adhérentes': 150,
+    'reinforced servos': 300, 'cargo rack': 80, 'quick-release harness': 60, 'shock dampers': 120, 'grip treads': 150,
     // medchem
-    'régulateur de dose': 150, 'réservoir stérile': 90, 'auto-injecteur': 200, 'doublure chaîne du froid': 250, 'valve de trop-plein': 60,
+    'dose regulator': 150, 'sterile reservoir': 90, 'auto-injector': 200, 'cold-chain liner': 250, 'overflow valve': 60,
     // core
-    'cellule haute capacité': 200, 'port charge rapide': 80, 'panneau solaire d’appoint': 150, 'module hot-swap': 120, 'boîtier durci': 100,
+    'high-capacity cell': 200, 'fast-charge port': 80, 'solar trickle panel': 150, 'hot-swap module': 120, 'hardened housing': 100,
     // generic — mostly complexity-scaled (they touch the whole object)
-    'miniaturisation': { mult: 1.0 }, 'durci': { mult: 0.3 }, 'étanche': { mult: 0.2 }, 'modulaire': { mult: 0.25 },
-    'dissimulé': { mult: 0.15 }, 'allégé': { mult: 0.35 }, 'renforcé': { mult: 0.3 },
-    'sans empreintes': 60, 'commande vocale': 120, 'auto-nettoyant': 80,
+    'miniaturization': { mult: 1.0 }, 'hardened': { mult: 0.3 }, 'waterproofed': { mult: 0.2 }, 'modular': { mult: 0.25 },
+    'concealed': { mult: 0.15 }, 'lightweighted': { mult: 0.35 }, 'reinforced': { mult: 0.3 },
+    'fingerprint-free': 60, 'voice control': 120, 'self-cleaning': 80,
   };
   function addonPrice(name) { var e = ADDON_PRICES[String(name || '').toLowerCase().trim()]; return e === undefined ? null : e; }
 
