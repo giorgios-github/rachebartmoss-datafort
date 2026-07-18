@@ -21,65 +21,82 @@
         { l: 'Warhead compat', add: true, cap: 'accepts HE / thermo / gas / smart heads' },
         { l: 'Bay caliber', sc: { max: 3, per: 'round size' }, cap: 'bigger rounds' },
         { l: 'Autoloader', add: true, cap: 'rotary magazine, fast reload', kids: [
-          { l: 'Smart-select', act: 'lock-on', cap: 'choose the round per shot' }] },
-        { l: 'Guided bus', add: true, act: 'lock-on', cap: 'fire-and-forget, retarget in flight', kids: [
-          { l: 'Cross-payload', need: 'node:SENSE', cap: 'delivers another effect: SENSE / HACK / INJECT / HEAL' }] },
+          { l: 'Smart-select', act: 'lock-on', cap: 'choose the round per shot', kids: [
+            { l: 'Deployables', act: 'seed', cap: 'launch mines / sensors / a micro-drone', kids: [
+              { l: 'Cross-payload', need: 'node:SENSE', cap: 'delivers another effect: SENSE / HACK / INJECT / HEAL' }] }] }] },
+        { l: 'Guided bus', add: true, act: 'lock-on', cap: 'fire-and-forget, retarget in flight' },
         { l: 'Modular bus', needsAll: ['payload-bay.autoloader', 'payload-bay.guided-bus'], arch: 'corpo', cap: 'any onboard system rides it — corpo logistics, OP' }] },
       { l: 'Warhead & fuze', cap: 'HE warhead + impact fuze — detonates on contact', kids: [
         { l: 'Blast radius', sc: { max: 3, per: 'area' }, cap: 'bigger area' },
         { l: 'Prox fuze', add: true, cap: 'airburst near the target' },
         { l: 'Shaped', add: true, cap: 'sculpt the blast: cone / ring / wall', kids: [
-          { l: 'Cluster', cap: 'submunitions saturate a footprint' },
-          { l: 'Persistent field', act: 'deny-zone', cap: 'fire / gas / EMP lingers' }] },
+          { l: 'Cluster', cap: 'submunitions saturate a footprint', kids: [
+            { l: 'Sequenced', cap: 'timed multi-blast — walk the fire' }] },
+          { l: 'Persistent field', act: 'deny-zone', cap: 'fire / gas / EMP lingers', kids: [
+            { l: 'Thermobaric', cap: 'over-pressure fills a room' }] }] },
         { l: 'Programmable airburst', needsAll: ['warhead-fuze.prox-fuze', 'warhead-fuze.shaped'], act: 'airburst', arch: 'corpo', cap: 'paint a volume, script it — corpo fire-control, OP' }] },
       { l: 'Heavy rail', cap: 'reinforced rail + dense core — heavy/fast rounds, beats light cover', kids: [
         { l: 'HEAT jet', sc: { max: 3, per: 'penetration' }, cap: 'deeper penetration' },
-        { l: 'Tandem charge', cap: 'beats reactive armor' },
-        { l: 'Kinetic dart', cap: 'no explosive — pure physics', kids: [
-          { l: 'Fortress-killer', arch: 'corpo', cap: 'one shot beats anything — exotic mfg, OP' }] }] },
+        { l: 'Tandem charge', add: true, cap: 'beats reactive armor' },
+        { l: 'Kinetic dart', add: true, cap: 'no explosive — pure physics', kids: [
+          { l: 'Material exotica', cap: 'depleted-U / monocrystal / thermic-lance warhead', kids: [
+            { l: 'Overpressure-through', cap: 'punches the wall AND everything behind it' }] }] },
+        { l: 'Fortress-killer', needsAll: ['heavy-rail.tandem-charge', 'heavy-rail.kinetic-dart'], arch: 'corpo', cap: 'one shot beats anything — exotic mfg, OP' }] },
       { l: 'Seeker head', cap: 'basic seeker — lock and it flies to the mark', kids: [
-        { l: 'Fire-and-forget', add: true, act: 'lock-on', cap: 'launch and forget' },
-        { l: 'Top-attack', cap: 'strikes from above' },
-        { l: 'Predictive', add: true, need: 'node:COMPUTE', cap: 'leads an evading mark', kids: [
-          { l: 'Hunter-killer', needsAll: ['seeker-head.fire-and-forget'], act: 'hunt', arch: 'corpo', cap: 'loiters, picks its own target — corpo, OP' }] }] }] },
+        { l: 'IR lock', add: true, cap: 'infra-red / contrast lock' },
+        { l: 'Fire-and-forget', add: true, act: 'lock-on', cap: 'launch and forget', kids: [
+          { l: 'Top-attack', cap: 'strikes from above', kids: [
+            { l: 'Swarm-link', need: 'node:LINK', cap: 'a volley coordinates, splits targets' }] }] },
+        { l: 'Predictive', add: true, need: 'node:COMPUTE', cap: 'leads an evading mark' },
+        { l: 'Hunter-killer', needsAll: ['seeker-head.fire-and-forget', 'seeker-head.predictive'], act: 'hunt', arch: 'corpo', cap: 'loiters, picks its own target — corpo, OP' }] }] },
 
     CHEMICAL: { l: 'Chemical', cap: 'propellant slug-thrower — the classic gun', kids: [
       { l: 'Barrel & bore', cap: 'rifled barrel + chamber — accurate single shots', kids: [
         { l: 'Match bore', sc: { max: 3, per: 'accuracy' }, cap: 'tighter groups' },
-        { l: 'Optic', add: true, cap: 'magnified / ranged sight' },
+        { l: 'Optic', add: true, cap: 'magnified / ranged sight', kids: [
+          { l: 'Guided rounds', need: 'node:GUIDE', cap: 'fin-stabilized, course-correct' }] },
         { l: 'Long barrel', add: true, cap: 'more velocity & range', kids: [
-          { l: 'Bull barrel', cap: 'anti-materiel precision' }] },
+          { l: 'Bull barrel', cap: 'anti-materiel precision', kids: [
+            { l: 'Reach-beyond', cap: 'top-attack / curves past cover' }] }] },
         { l: 'Curve fire-control', needsAll: ['barrel-bore.optic', 'barrel-bore.long-barrel'], act: 'overwatch', arch: 'corpo', cap: 'hits past cover — corpo, OP' }] },
       { l: 'Feed & action', cap: 'box mag + auto action — lay down fire', kids: [
         { l: 'Cyclic rate', sc: { max: 3, per: 'rof' }, cap: 'faster fire' },
-        { l: 'Belt feed', add: true, cap: 'sustained volume' },
-        { l: 'Select-fire', add: true, cap: 'semi / burst / auto' },
+        { l: 'Belt feed', add: true, cap: 'sustained volume', kids: [
+          { l: 'Rotary', cap: 'multi-barrel firehose' }] },
+        { l: 'Select-fire', add: true, cap: 'semi / burst / auto', kids: [
+          { l: 'Recoilless', cap: 'hold the volume on target' }] },
         { l: 'Area-suppression', needsAll: ['feed-action.belt-feed', 'feed-action.select-fire'], act: 'suppress', arch: 'corpo', cap: 'pins a zone — corpo, OP' }] },
       { l: 'Ammunition', cap: 'ball ammo — cheap, works', kids: [
         { l: 'AP', add: true, cap: 'armor-piercing rounds' },
-        { l: 'Smart rounds', add: true, cap: 'airburst / programmable' },
+        { l: 'Smart rounds', add: true, cap: 'airburst / programmable', kids: [
+          { l: 'Homing micro-rounds', need: 'node:GUIDE', cap: 'each round steers to the mark' }] },
         { l: 'Payload rounds', act: 'inject', need: 'node:INJECT', cap: 'gas / EMP / inject on hit' },
         { l: 'Exotic magazine', needsAll: ['ammunition.smart-rounds', 'ammunition.ap'], arch: 'corpo', cap: 'any effect per round — corpo, OP' }] },
       { l: 'Signature', cap: 'suppressor mount — hides the shot', kids: [
         { l: 'Suppressed', sc: { max: 3, per: 'quiet' }, cap: 'quieter' },
-        { l: 'Non-metallic', add: true, cap: 'passes scanners' },
+        { l: 'Non-metallic', add: true, cap: 'passes scanners', kids: [
+          { l: 'Disguised form', need: 'node:DISGUISE', cap: 'reads as a phone / umbrella' }] },
         { l: 'Flashless', add: true, cap: 'no muzzle flash' },
         { l: 'Ghost gun', needsAll: ['signature.non-metallic', 'signature.flashless'], act: 'silent-kill', arch: 'corpo', cap: 'untraceable, subsonic — corpo, OP' }] }] },
 
     ENERGY: { l: 'Directed energy', cap: 'directed-energy weapon (needs power)', need: 'power', kids: [
       { l: 'Emitter', cap: 'laser diode — a coherent beam that burns', kids: [
         { l: 'Focus', sc: { max: 3, per: 'tight/hot' }, cap: 'tighter, hotter' },
-        { l: 'Sustained lase', add: true, act: 'burn', cap: 'burns through over time' },
-        { l: 'Phased array', add: true, cap: 'several beams converge' },
+        { l: 'Sustained lase', add: true, act: 'burn', cap: 'burns through over time', kids: [
+          { l: 'Wavelength tuning', cap: 'cut metal / flesh / cook chips selectively' }] },
+        { l: 'Phased array', add: true, cap: 'several beams converge', kids: [
+          { l: 'Relayed beam', cap: 'mirror-drones bounce it around cover' }] },
         { l: 'Coherent lance', needsAll: ['emitter.sustained-lase', 'emitter.phased-array'], arch: 'corpo', cap: 'industrial cutter, slices vehicles — corpo, OP' }] },
       { l: 'Discharge', cap: 'capacitor + arc gap — an electric shock', kids: [
         { l: 'Overcharge', sc: { max: 3, per: 'jolt' }, cap: 'bigger jolt' },
         { l: 'EMP mode', add: true, need: 'node:SHOCK', cap: 'fries electronics & cyber' },
-        { l: 'Chained arc', add: true, sc: { max: 3, per: 'targets' }, cap: 'jumps between targets' },
+        { l: 'Chained arc', add: true, sc: { max: 3, per: 'targets' }, cap: 'jumps between targets', kids: [
+          { l: 'Ion field', cap: 'continuous electrical discharge' }] },
         { l: 'Ion storm', needsAll: ['discharge.emp-mode', 'discharge.chained-arc'], act: 'deny-zone', arch: 'corpo', cap: 'area electrical denial — corpo, OP' }] },
       { l: 'Reactor feed', cap: 'cell + regulator — how long & hot it runs', kids: [
         { l: 'High-density cell', sc: { max: 3, per: 'shots' }, cap: 'more shots' },
-        { l: 'Micro-fusion', add: true, need: 'power', cap: 'near-unlimited' },
+        { l: 'Micro-fusion', add: true, need: 'power', cap: 'near-unlimited', kids: [
+          { l: 'Heat sink', cap: 'sustained fire without cook-off' }] },
         { l: 'Overdrive tap', add: true, cap: 'dump the reactor for one huge shot' },
         { l: 'Exotic core', needsAll: ['reactor-feed.micro-fusion', 'reactor-feed.overdrive-tap'], arch: 'corpo', cap: 'plasma / particle output — corpo, OP' }] }] },
 
@@ -88,11 +105,13 @@
         { l: 'Velocity', sc: { max: 3, per: 'muzzle' }, cap: 'faster slug' },
         { l: 'Rail cooling', add: true, cap: 'sustained fire' },
         { l: 'Hypervelocity', add: true, cap: 'ignores most armor', kids: [
-          { l: 'Superconducting', cap: 'massive energy, silent' }] },
+          { l: 'Superconducting', cap: 'massive energy, silent', kids: [
+            { l: 'Kinetic overmatch', cap: 'defeats anything by sheer speed' }] }] },
         { l: 'Mass driver', needsAll: ['rail-assembly.hypervelocity', 'rail-assembly.rail-cooling'], arch: 'corpo', cap: 'anti-vehicle rail cannon — corpo, OP' }] },
       { l: 'Coil stack', cap: 'induction coils — smooth accel, low signature', kids: [
         { l: 'Stages', sc: { max: 3, per: 'velocity' }, cap: 'more velocity' },
-        { l: 'Silent op', add: true, cap: 'no report, no flash' },
+        { l: 'Silent op', add: true, cap: 'no report, no flash', kids: [
+          { l: 'Recoil-nulled', cap: 'perfectly stable' }] },
         { l: 'Guided ferro', add: true, need: 'node:GUIDE', cap: 'ferro-rounds steer' },
         { l: 'Assassin coilgun', needsAll: ['coil-stack.silent-op', 'coil-stack.guided-ferro'], act: 'silent-kill', arch: 'corpo', cap: 'untraceable, curves the round — corpo, OP' }] },
       { l: 'Capacitor bank', cap: 'charge store — how much punch you dump', kids: [
@@ -104,18 +123,21 @@
     BLADE: { l: 'Kinetic', cap: 'edged / blunt / flexible — silent, hand-to-hand', kids: [
       { l: 'Edge', cap: 'a hardened blade — cuts and stabs', kids: [
         { l: 'Mono-edge', sc: { max: 3, per: 'sharp' }, cap: 'sharper' },
-        { l: 'Vibro', add: true, cap: 'powered oscillation, cuts armor' },
+        { l: 'Vibro', add: true, cap: 'powered oscillation, cuts armor', kids: [
+          { l: 'Superconductor edge', cap: 'cuts almost anything' }] },
         { l: 'Retractable', add: true, need: 'node:CONCEAL', cap: 'concealed deploy' },
         { l: 'Mantis blades', needsAll: ['edge.vibro', 'edge.retractable'], arch: 'corpo', cap: 'cyber-arm blades, cut vehicles — corpo, OP' }] },
       { l: 'Mass', cap: 'a weighted head — blunt force, staggers', kids: [
         { l: 'Impact', sc: { max: 3, per: 'force' }, cap: 'harder hits' },
         { l: 'Shock head', add: true, need: 'node:SHOCK', cap: 'stun on hit' },
-        { l: 'Powered swing', add: true, cap: 'hydraulic force' },
+        { l: 'Powered swing', add: true, cap: 'hydraulic force', kids: [
+          { l: 'Kinetic amplifier', cap: 'multiplies the blow' }] },
         { l: 'Powered maul', needsAll: ['mass.shock-head', 'mass.powered-swing'], act: 'stagger', arch: 'corpo', cap: 'one-swing demolition — corpo, OP' }] },
       { l: 'Tether', cap: 'a flexible line — reach, entangle, pull', kids: [
         { l: 'Reach', sc: { max: 3, per: 'length' }, cap: 'longer' },
         { l: 'Monowire', add: true, act: 'dismember', cap: 'monofilament, dismembers' },
-        { l: 'Motorized reel', add: true, cap: 'whip and retract' },
+        { l: 'Motorized reel', add: true, cap: 'whip and retract', kids: [
+          { l: 'Electrified line', need: 'node:SHOCK', cap: 'shocks on contact' }] },
         { l: 'Monowhip array', needsAll: ['tether.monowire', 'tether.motorized-reel'], act: 'dismember', arch: 'corpo', cap: 'cuts a crowd — corpo, OP' }] }] },
 
     ARMOR: { l: 'Cover', cap: 'a thing that stops a hit', kids: [
@@ -178,34 +200,40 @@
     'FILTER-AIR': { l: 'Filter air', cap: 'breathe in bad conditions', kids: [
       { l: 'Particulate cartridge', cap: 'mechanical filter — dust, sand, smoke', kids: [
         { l: 'Fineness', sc: { max: 3, per: 'fine particles' }, cap: 'finer filtration' },
-        { l: 'Positive pressure', add: true, cap: 'keeps grit out even torn' },
+        { l: 'Positive pressure', add: true, cap: 'keeps grit out even torn', kids: [
+          { l: 'Auto-reload', cap: 'multi-cartridge rotation, lasts longer' }] },
         { l: 'Beacon', add: true, sc: { max: 3, per: 'perimeter' }, need: 'power', act: 'emit-zone', cap: 'a shared clean-air zone' },
         { l: 'Atmosphere processor', needsAll: ['particulate-cartridge.positive-pressure', 'particulate-cartridge.beacon'], arch: 'corpo', cap: 'cleans a whole street — corpo, OP' }] },
       { l: 'Chemical scrubber', cap: 'sorbent bed — neutralizes toxic gases', kids: [
         { l: 'Broad-spectrum', sc: { max: 3, per: 'toxins' }, cap: 'more toxins covered' },
-        { l: 'Catalytic', add: true, cap: 'neutralizes, never saturates' },
+        { l: 'Catalytic', add: true, cap: 'neutralizes, never saturates', kids: [
+          { l: 'Regenerating bed', cap: 'bakes itself clean between exposures' }] },
         { l: 'Chem beacon', add: true, sc: { max: 3, per: 'perimeter' }, need: 'power', act: 'emit-zone', cap: 'a shared clean-air zone' },
         { l: 'CBRN dome', needsAll: ['chemical-scrubber.catalytic', 'chemical-scrubber.chem-beacon'], arch: 'corpo', cap: 'area chem / bio denial — corpo, OP' }] },
       { l: 'Sealed rebreather', cap: 'closed O₂ loop — carry your own air', kids: [
         { l: 'Duration', sc: { max: 3, per: 'hours' }, cap: 'lasts longer' },
-        { l: 'Closed-cycle', add: true, cap: 'scrubs CO₂, recycles O₂' },
+        { l: 'Closed-cycle', add: true, cap: 'scrubs CO₂, recycles O₂', kids: [
+          { l: 'Mixed-gas', cap: 'trimix — depth-rated' }] },
         { l: 'Bioreactor', add: true, need: 'power', cap: 'makes O₂ on the go' },
         { l: 'Indefinite life-support', needsAll: ['sealed-rebreather.closed-cycle', 'sealed-rebreather.bioreactor'], arch: 'corpo', cap: 'days sealed — corpo deep-env, OP' }] }] },
 
     SHIELD: { l: 'Shield', cap: 'ward off a hit', kids: [
       { l: 'Reactive plating', cap: 'hard plates that brace an impact', kids: [
         { l: 'Trauma plates', add: true, cap: 'stacks with treatments' },
-        { l: 'Reactive tiles', add: true, cap: 'pop out, beat HEAT' },
+        { l: 'Reactive tiles', add: true, cap: 'pop out, beat HEAT', kids: [
+          { l: 'Adaptive', cap: 'hardens where hit, flexible elsewhere' }] },
         { l: 'Self-repairing', add: true, cap: 'nanite lattice re-knits cracks' },
         { l: 'Moving fortress', needsAll: ['reactive-plating.reactive-tiles', 'reactive-plating.self-repairing'], arch: 'corpo', cap: 'a walking bunker — corpo powered-armor, OP' }] },
       { l: 'EM field', cap: 'energy field that slows projectiles (needs power)', need: 'power', kids: [
         { l: 'Kinetic buffer', sc: { max: 3, per: 'coverage' }, cap: 'stops bullets' },
         { l: 'Bubble', add: true, cap: 'extends to allies nearby' },
-        { l: 'Phased', add: true, cap: 'tuned per threat type' },
+        { l: 'Phased', add: true, cap: 'tuned per threat type', kids: [
+          { l: 'Overcharge dump', cap: 'absorb a big hit, then reboot' }] },
         { l: 'Deflector dome', needsAll: ['em-field.bubble', 'em-field.phased'], act: 'ward-zone', arch: 'corpo', cap: 'an area shield — corpo, OP' }] },
       { l: 'Datafort ward', cap: 'NET barrier — equip a fort, defends net-space', bridge: 'net', kids: [
         { l: 'Firewall level', sc: { max: 4, per: 'strength' }, cap: 'stronger wall' },
-        { l: 'Active ICE', add: true, cap: 'strikes back at hackers' },
+        { l: 'Active ICE', add: true, cap: 'strikes back at hackers', kids: [
+          { l: 'Blackwall shard', cap: 'lethal counter-intrusion' }] },
         { l: 'Self-healing net', add: true, cap: 're-locks breached nodes' },
         { l: 'AI sentinel', needsAll: ['datafort-ward.active-ice', 'datafort-ward.self-healing-net'], arch: 'corpo', cap: 'autonomous fort defense — corpo, OP' }] }] },
 
@@ -213,16 +241,19 @@
       { l: 'Actuators', cap: 'powered limb actuators — faster, higher jump (+1 MA)', kids: [
         { l: 'Reflex boost', sc: { max: 3, per: 'reaction' }, cap: 'faster reactions' },
         { l: 'Wall-run', add: true, act: 'climb', cap: 'vertical surfaces' },
-        { l: 'Gyro-stable', add: true, cap: 'no fall damage' },
+        { l: 'Gyro-stable', add: true, cap: 'no fall damage', kids: [
+          { l: 'Silent servos', need: 'node:CONCEAL', cap: 'fast AND quiet' }] },
         { l: 'Spider frame', needsAll: ['actuators.wall-run', 'actuators.gyro-stable'], arch: 'corpo', cap: 'any surface, any angle — corpo infiltration, OP' }] },
       { l: 'Drive system', cap: 'wheels / treads / thrust — sustained ground speed (+2 MA)', kids: [
         { l: 'Sprint', sc: { max: 3, per: 'top speed' }, cap: 'faster' },
         { l: 'Boost', add: true, act: 'dash', cap: 'burst on demand' },
-        { l: 'Predictive traction', add: true, cap: 'never loses grip' },
+        { l: 'Predictive traction', add: true, cap: 'never loses grip', kids: [
+          { l: 'All-terrain', cap: 'treads / legs hybrid, amphibious' }] },
         { l: 'Leopard drive', needsAll: ['drive-system.boost', 'drive-system.predictive-traction'], arch: 'corpo', cap: 'outruns vehicles — corpo pursuit, OP' }] },
       { l: 'Lift', cap: 'lift surface / micro-thrust — glide & hop (needs power)', need: 'power', kids: [
         { l: 'Glide', sc: { max: 3, per: 'range' }, cap: 'farther glide' },
-        { l: 'Sustained flight', add: true, cap: 'true flight, heavy draw' },
+        { l: 'Sustained flight', add: true, cap: 'true flight, heavy draw', kids: [
+          { l: 'Hover', cap: 'sustained low altitude, VTOL' }] },
         { l: 'High-altitude', add: true, cap: 'supersonic ceiling' },
         { l: 'Orbital lift', needsAll: ['lift.sustained-flight', 'lift.high-altitude'], arch: 'corpo', cap: 'a suborbital hop — corpo AV, OP' }] }] },
   };
