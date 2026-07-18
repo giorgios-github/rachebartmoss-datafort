@@ -27,6 +27,21 @@
     'STORE':      { skill: 'Electronics', bars: ['note', 'shard 10MU', 'shard 40MU', 'deck 200MU', 'array 1GU', 'vault', 'living archive'] },
     'HEAL':       { skill: 'Basic Tech', bars: ['bandage', 'first aid', 'stabilize', 'trauma field', 'surgery bay', 'nano-repair', 'full regen'] },
     'POWER':      { skill: 'Electronics', bars: ['cell', 'pack', 'high-density', 'fuel cell', 'micro-fusion', 'plant', 'exotic core'] },
+    'BOOST':      { skill: 'Cyber Tech', bars: ['—', '+1 attribut', '+2', 'réflexes câblés', '+3 combat', 'milspec', 'surhumain'] },
+    'SHOCK':      { skill: 'Electronics', bars: ['statique', 'décharge taser', 'assomme', 'champ de stun', 'grille le cyber', 'salve EMP', 'EMP de zone'] },
+    'BURN':       { skill: 'Weaponsmith', bars: ['flamme', 'chalumeau', 'thermite', 'découpe plasma', 'lance thermique', 'torche à arc', 'mono chauffée'] },
+    'PROJECT':    { skill: 'Electronics', bars: ['holo plat', 'leurre statique', 'leurre mobile', 'double crédible', 'illusion complète', 'fantôme sensoriel', 'indétectable'] },
+    'HACK':       { skill: 'Electronic Security', bars: ['crochète une serrure', 'spoofe des accès', 'perce un appareil', 'prend le contrôle', 'crack un fort', 'possède le réseau', 'invisible au sysop'] },
+    'INJECT':     { skill: 'Pharmaceuticals', bars: ['piqûre', 'auto-dose', 'cocktail de combat', 'régime minuté', 'fléchette ciblée', 'aérosol de zone', 'contact cutané'] },
+    'DISGUISE':   { skill: 'Cyber Tech', bars: ['masque', 'voix maquillée', 'face-off', 'traits morphables', 'spoof biométrique', 'ADN de façade', 'indétectable'] },
+    'SHIELD':     { skill: 'Electronics', bars: ['durci EMP', 'champ amortisseur', 'tampon cinétique', 'bouclier d’énergie', 'barrière milspec', 'champ dense', 'impénétrable'] },
+    'TRACK':      { skill: 'Electronics', bars: ['ping GPS', 'tag et suit', 'à travers les murs', 'à l’échelle ville', 'prédictif', 'satellite', 'inéluctable'] },
+    'CONTROL':    { skill: 'Electronics', bars: ['télécommande filaire', 'remote courte', 'pirate le non-sécurisé', 'saisit le sécurisé', 'contrôle de masse', 'essaim autonome', 'asservit tout'] },
+    'REPAIR':     { skill: 'Basic Tech', bars: ['rustine', 'réparation de terrain', 'auto-réparation', 'nanites', 'reconstruction', 'régénère', 'inusable'] },
+    'COMPUTE':    { skill: 'Programming', bars: ['calculette', 'co-processeur', 'smartlink', 'système expert', 'pseudo-IA', 'IA véritable', 'esprit ruche'] },
+    'SONIC':      { skill: 'Sonar Tech', bars: ['amplificateur', 'ping sonar', 'ultrason', 'stun sonique', 'brise-résonance', 'sonique létal', 'onde de choc'] },
+    'RESTRAIN':   { skill: 'Weaponsmith', bars: ['collier', 'filet', 'toile gluante', 'mousse adhésive', 'poigne de stase', 'champ de contention', 'inéluctable'] },
+    'FABRICATE':  { skill: 'Basic Tech', bars: ['multitool', 'kit de terrain', 'imprimante portable', 'fab de munitions', 'imprimante matière', 'nano-forge', 'fab universelle'] },
   };
   var DOMAINS = Object.keys(ANCHORS);
   function isKnownDomain(d) { return !!ANCHORS[String(d || '').toUpperCase()]; }
@@ -122,15 +137,15 @@
 
   // ── what a given class usually needs — the "smart parts bin" per class ──
   var SUGGEST = {
-    weapon:      { domains: ['STRIKE', 'GUIDE'], tokens: ['tube-84', 'he-84', 'smart-84', 'rail-std'] },
-    ammo:        { domains: ['STRIKE', 'GUIDE'], tokens: ['tube-84'] },
-    gear:        { domains: ['CONCEAL', 'ARMOR', 'MOVE', 'FILTER-AIR'], tokens: ['torso-std', 'face-std', 'cell power-c', 'cartridge filter-std'] },
-    cyberware:   { domains: ['SENSE', 'LINK', 'MOVE', 'STRIKE'], tokens: ['neural-port', 'borg-frame-std'] },
-    vehicle:     { domains: ['ARMOR', 'MOVE', 'STRIKE', 'SENSE'], tokens: ['fuel-cell'] },
-    electronics: { domains: ['LINK', 'STORE', 'SENSE', 'JAM'], tokens: ['data-port', 'interface-plug', 'cell power-c'] },
-    drug:        { domains: ['HEAL'], tokens: [] },
-    carrier:     { domains: ['SENSE', 'STRIKE', 'LINK'], tokens: ['control-link', 'cell power-d'] },
-    data:        { domains: ['STORE'], tokens: ['shard-std', 'chip-std'] },
+    weapon:      { domains: ['STRIKE', 'GUIDE', 'BURN', 'SHOCK', 'RESTRAIN'], tokens: ['9mm', '5.56', '12ga', 'he-84', 'smart-84', 'tube-84', 'rail-std', 'cell power-c'] },
+    ammo:        { domains: ['STRIKE', 'GUIDE', 'BURN'], tokens: ['9mm', '5.56', '7.62', '12ga', 'he-84', 'tube-84'] },
+    gear:        { domains: ['CONCEAL', 'ARMOR', 'MOVE', 'FILTER-AIR', 'SHIELD', 'DISGUISE'], tokens: ['torso-std', 'face-std', 'cell power-c', 'cartridge filter-std'] },
+    cyberware:   { domains: ['BOOST', 'SENSE', 'LINK', 'MOVE', 'DISGUISE'], tokens: ['neural-port', 'borg-frame-std'] },
+    vehicle:     { domains: ['ARMOR', 'MOVE', 'STRIKE', 'SHIELD', 'CONTROL'], tokens: ['fuel-cell', 'turret-mount-b'] },
+    electronics: { domains: ['LINK', 'HACK', 'PROJECT', 'TRACK', 'STORE', 'SENSE'], tokens: ['data-port', 'interface-plug', 'cell power-c'] },
+    drug:        { domains: ['HEAL', 'BOOST', 'INJECT'], tokens: [] },
+    carrier:     { domains: ['SENSE', 'STRIKE', 'CONTROL', 'TRACK', 'LINK'], tokens: ['control-link', 'cell power-d'] },
+    data:        { domains: ['STORE', 'COMPUTE', 'HACK'], tokens: ['shard-std', 'chip-std'] },
   };
   function suggestFor(cls) { var s = SUGGEST[cls] || { domains: [], tokens: [] }; return { domains: s.domains.filter(isKnownDomain), tokens: s.tokens.slice() }; }
 

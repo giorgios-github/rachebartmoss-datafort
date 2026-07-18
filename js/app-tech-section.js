@@ -21,7 +21,7 @@
   }
   function tokChip(t) { return '<button class="tk2-rung" data-pktok="' + esc(t) + '"><b>' + esc(t) + '</b>' + (C.isStandard(t) ? ' <span class="tk2-mut">shop</span>' : '') + '</button>'; }
   function tokenBody(a, tkind) {
-    var T = C.TOKENS, groups = tkind === 'needs' ? [['alimentation', 'power'], ['consommables', 'consumable']] : [['montures', 'mount'], ['prises', 'port'], ['formats', 'format']];
+    var T = C.TOKENS, groups = tkind === 'needs' ? [['munitions', 'ammo'], ['alimentation', 'power'], ['consommables', 'consumable']] : [['montures', 'mount'], ['munitions', 'ammo'], ['prises', 'port'], ['formats', 'format']];
     var sugT = C.suggestFor(a.cls).tokens.filter(function (t) { return groups.some(function (g) { return T[g[1]].indexOf(t) >= 0; }); });
     var body = '';
     if (sugT.length) body += '<div class="tk2-pk-sec">SUGGÉRÉ POUR ' + esc(a.cls.toUpperCase()) + '</div><div class="tk2-pd-l">' + sugT.map(tokChip).join('') + '</div>';
