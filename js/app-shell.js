@@ -503,7 +503,7 @@
     var stage = el('tab-stage'); if (!stage) return;
     var act = activeTab();
     var live = {}; state.tabs.forEach(function (t) { live[t.id] = 1; });
-    if (act && act.tool === 'combat') { var pc = ensurePane(act); if (pc) pc._rendered = false; }   // combat reflects live state
+    if (act && (act.tool === 'combat' || act.tool === 'tech')) { var pc = ensurePane(act); if (pc) pc._rendered = false; }   // combat + tech reflect live state (tech re-reads the player's sheet for gating)
     if (act) { var p = ensurePane(act); if (p && (!p._rendered || p._tool !== paneKey(act))) renderPane(act, p); }
     Array.prototype.slice.call(stage.children).forEach(function (c) {
       var pid = c.getAttribute('data-pane'); if (!pid) return;

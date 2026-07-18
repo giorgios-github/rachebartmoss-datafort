@@ -15,11 +15,12 @@
   // picked up automatically from the session — no manual linking. GM = fiat. ──
   function builderInfo() { var B = window.Shell && window.Shell.bridge && window.Shell.bridge(); var sess = B && B.sess; return { role: (sess && sess.role) || 'gm', sheetId: sess && sess.sheetId }; }
   function skillMap(sk) { var m = {}; if (Array.isArray(sk)) sk.forEach(function (x) { if (x && x.name) m[x.name] = +(x.val != null ? x.val : x.level) || 0; }); else if (sk && typeof sk === 'object') for (var k in sk) m[k] = +sk[k] || 0; return m; }
-  function loadBuilder(pane) {
-    var s = sec(pane); if (s.builderLoaded) return; s.builderLoaded = true;
+  function loadBuilder(pane, force) {
+    var s = sec(pane); if (s.builderLoaded && !force) return; s.builderLoaded = true;
     var info = builderInfo();
-    if (info.role === 'gm') { s.builder = { role: 'gm' }; return; }
-    if (!info.sheetId || !(window.Store && window.Store.resolve)) { s.builder = { role: 'player', none: true }; return; }
+    if (info.role === 'gm') { s.builder = { role: 'gm' }; refreshGate(pane); return; }
+    if (!info.sheetId || !(window.Store && window.Store.resolve)) { s.builder = { role: 'player', none: true }; refreshGate(pane); return; }
+    if (force && window.Store.invalidate) window.Store.invalidate();   // bust a stale sheet cache so skill edits are seen
     window.Store.resolve({ type: 'sheet', id: info.sheetId }).then(function (hit) {
       s.builder = (hit && hit.json) ? { role: 'player', name: hit.json.handle || hit.json.name || 'toi', skills: skillMap(hit.json.skills) } : { role: 'player', none: true };
       refreshGate(pane);
@@ -43,7 +44,7 @@
   // re-reads the builder and refreshes the verdict — no manual reload.
   function watchBuilder(pane) {
     if (pane._techGateWatch || !(window.App && window.App.on)) return; pane._techGateWatch = 1;
-    var reload = function () { var s = sec(pane); if (!document.body.contains(pane)) return; s.builderLoaded = false; s.builder = null; loadBuilder(pane); refreshGate(pane); };
+    var reload = function () { if (!document.body.contains(pane)) return; loadBuilder(pane, true); };
     window.App.on('entity:saved', function (e) { if (e && e.type === 'sheet') reload(); });
     window.App.on('campaign', reload);
   }
@@ -123,7 +124,7 @@
     var s = sec(pane);
     if (s.mode === 'plate') return renderPlate(pane);
     var view = s.st.view || 'library';
-    if (view === 'bench' && s.art) return renderBench(pane);
+    if (view === 'bench' && s.art) { loadBuilder(pane, true); return renderBench(pane); }
     if (view === 'document' && s.art) return renderDocument(pane);
     return renderLibrary(pane);
   }
