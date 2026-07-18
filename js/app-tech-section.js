@@ -158,6 +158,7 @@
     pane.className = 'tab-content tk2-pane';
     var s = sec(pane);
     if (s.mode === 'plate') return renderPlate(pane);
+    if (s.mode === 'annotate') return renderAnnotate(pane);
     var view = s.st.view || 'library';
     if (view === 'bench' && s.art) { loadBuilder(pane, true); return renderBench(pane); }
     if (view === 'document' && s.art) return renderDocument(pane);
@@ -249,7 +250,7 @@
     loadBuilder(pane); watchBuilder(pane);
     // adaptive plate: a slim strip when empty (no dead box), the image when set
     var plate = a.plate
-      ? '<img class="tk2-plate-img" src="' + a.plate.png + '" alt=""><div class="tk2-plate-cap">planche ancrée · annotations cran 5</div>'
+      ? '<img class="tk2-plate-img" src="' + a.plate.png + '" alt=""><div class="tk2-plate-cap">planche ancrée · <button class="app-btn tk2-annotate">⌖ ANNOTER' + ((a.plate.pins || []).length ? ' (' + a.plate.pins.length + ')' : '') + '</button></div>'
       : '<div class="tk2-plate-slim"><span class="tk2-mut">PLANCHE</span><button class="app-btn tk2-press">PRESSER</button></div>';
     // lignée: a LIVE link when the parent resolves to an artifact in the library
     var linLive = '';
@@ -305,6 +306,7 @@
     pane.querySelector('.tk2-copy').onclick = function () { try { navigator.clipboard.writeText(M.toJSON(a)); } catch (e) {} };
     pane.querySelector('.tk2-del').onclick = function () { var i = s.st.order.indexOf(a.id); if (i >= 0) s.st.order.splice(i, 1); delete s.st.parts[a.id]; backToLibrary(pane); };
     var pb = pane.querySelector('.tk2-press'); if (pb) pb.onclick = function () { s.mode = 'plate'; render(null, pane); };
+    var ab = pane.querySelector('.tk2-annotate'); if (ab) ab.onclick = function () { s.mode = 'annotate'; s.pinSel = (a.plate && a.plate.pins && a.plate.pins.length) ? 0 : -1; render(null, pane); };
 
     // scalar fields (text) — update state + refresh derived only (keep focus)
     pane.querySelectorAll('[data-f]').forEach(function (inp) {
@@ -434,6 +436,114 @@
   }
 
   // ══════════════ MODE · PLATE (the press) ══════════════
+  // ══════════════ PINS (cran 4) — annotations anchored on the plate, live-bound to the record ══════════════
+  // The curated set of record fields a pin can bind to (the presse↔fiche bridge). Single
+  // source of truth: resolvePin() just looks a key up here.
+  function pinFields(a, d) {
+    var out = [
+      { key: 'name', label: 'NOM', val: a.name },
+      { key: 'cls', label: 'CLASSE', val: a.cls },
+      { key: 'tier', label: 'TIER', val: 'T' + a.tier },
+      { key: 'd:street', label: 'STREET', val: d.streetEb + 'eb' },
+      { key: 'd:prod', label: 'PROD', val: d.prodEb + 'eb' },
+      { key: 'd:dc', label: 'DC', val: d.dcLineage },
+      { key: 'd:op', label: 'OP', val: d.op },
+    ];
+    a.feats.forEach(function (f, i) {
+      var an = C.anchorOf(f.domain, f.grade);
+      out.push({ key: 'feat:' + i + ':g', label: f.domain + ' · grade', val: 'g' + f.grade });
+      if (an) out.push({ key: 'feat:' + i + ':bar', label: f.domain + ' · barre', val: an.bar });
+    });
+    a.mods.forEach(function (m, i) { if (m.target) out.push({ key: 'mod:' + i, label: 'mod ' + m.target, val: (m.value || '') + ' ' + m.target }); });
+    a.ports.needs.forEach(function (n, i) { if (n.token) out.push({ key: 'need:' + i, label: 'consomme', val: n.token }); });
+    return out;
+  }
+  function resolvePin(a, d, field) { var hit = pinFields(a, d).filter(function (x) { return x.key === field; })[0]; return hit ? String(hit.val) : ''; }
+  function pinValue(a, d, pin) { return pin.field ? resolvePin(a, d, pin.field) : pin.text; }
+  function pinText(a, d, pin) { var v = pinValue(a, d, pin); return (pin.label ? pin.label + (v ? ' · ' : '') : '') + v; }
+
+  // layout: margin labels (same side as the point) with a greedy vertical de-overlap
+  function pinLayout(a) {
+    var pins = (a.plate && a.plate.pins) || [];
+    var W = 1000, ar = ((a.plate && a.plate.h) || 1) / ((a.plate && a.plate.w) || 1), H = Math.max(200, Math.round(W * ar));
+    var order = pins.map(function (_, i) { return i; });
+    var gap = H * 0.055, pos = {};
+    ['left', 'right'].forEach(function (side) {
+      var list = order.filter(function (i) { return side === 'left' ? pins[i].x < 0.5 : pins[i].x >= 0.5; })
+        .sort(function (i, j) { return pins[i].y - pins[j].y; });
+      var prev = -1e9;
+      list.forEach(function (i) { var ly = Math.max(pins[i].y * H, prev + gap); prev = ly; pos[i] = { side: side, lx: side === 'left' ? W * 0.02 : W * 0.98, ly: ly }; });
+    });
+    return { W: W, H: H, pos: pos };
+  }
+  function platePinsSvg(a, d, editable, sel) {
+    if (!a.plate) return '';
+    var pins = a.plate.pins || [], L = pinLayout(a), W = L.W, H = L.H, fs = Math.round(W * 0.026), r = W * 0.008;
+    var body = '';
+    pins.forEach(function (p, i) {
+      var px = p.x * W, py = p.y * H, pp = L.pos[i], anchor = pp.side === 'left' ? 'start' : 'end';
+      var txt = esc(pinText(a, d, p)) || '⋯';
+      body += '<line class="tk2-pin-lead" x1="' + px.toFixed(1) + '" y1="' + py.toFixed(1) + '" x2="' + pp.lx.toFixed(1) + '" y2="' + pp.ly.toFixed(1) + '"/>';
+      body += '<text class="tk2-pin-txt" x="' + pp.lx.toFixed(1) + '" y="' + (pp.ly - fs * 0.2).toFixed(1) + '" font-size="' + fs + '" text-anchor="' + anchor + '">' + txt + '</text>';
+      body += '<circle class="tk2-pin-dot' + (editable && i === sel ? ' is-sel' : '') + '" cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="' + r.toFixed(1) + '"' + (editable ? ' data-pin="' + i + '" style="cursor:grab"' : '') + '/>';
+    });
+    var addSurface = editable ? '<rect class="tk2-pin-add" x="0" y="0" width="' + W + '" height="' + H + '" fill="transparent" style="cursor:crosshair"/>' : '';
+    return '<svg class="tk2-pin-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' + addSurface + body + '</svg>';
+  }
+
+  // ── ANNOTATE mode: full plate + draggable pins + a small editor for the selected pin ──
+  function renderAnnotate(pane) {
+    var s = sec(pane), a = s.art, d = DERIVE(a);
+    if (!a.plate) { s.mode = null; return render(null, pane); }
+    if (s.pinSel == null || s.pinSel >= (a.plate.pins || []).length) s.pinSel = (a.plate.pins || []).length ? 0 : -1;
+    var sel = s.pinSel, pin = sel >= 0 ? a.plate.pins[sel] : null;
+    var fields = pinFields(a, d);
+    var editor;
+    if (!pin) {
+      editor = '<div class="tk2-annot-ed tk2-mut">Clique l’image pour poser une épingle.</div>';
+    } else {
+      var opts = '<option value=""' + (pin.field ? '' : ' selected') + '>— texte libre —</option>' +
+        fields.map(function (f) { return '<option value="' + esc(f.key) + '"' + (pin.field === f.key ? ' selected' : '') + '>' + esc(f.label) + ' (' + esc(String(f.val)) + ')</option>'; }).join('');
+      editor = '<div class="tk2-annot-ed">' +
+        '<div class="tk2-annot-ed-h">ÉPINGLE ' + (sel + 1) + '/' + a.plate.pins.length + '</div>' +
+        '<label class="tk2-annot-f">label <input class="tk2-annot-lab" value="' + esc(pin.label) + '" placeholder="ex. DMG"></label>' +
+        '<label class="tk2-annot-f">valeur <select class="tk2-annot-bind">' + opts + '</select></label>' +
+        (pin.field ? '<div class="tk2-mut">→ ' + esc(resolvePin(a, d, pin.field) || '—') + ' <span class="tk2-mut">(vivant)</span></div>'
+                   : '<label class="tk2-annot-f">texte <input class="tk2-annot-txt" value="' + esc(pin.text) + '" placeholder="valeur libre"></label>') +
+        '<button class="app-btn app-btn-danger tk2-annot-del">retirer</button>' +
+      '</div>';
+    }
+    pane.innerHTML =
+      '<div class="tk2-bar"><button class="app-btn tk2-annot-back">← FICHE</button><span class="tk2-title">ANNOTER</span>' +
+        '<span class="tk2-bar-sp"></span><span class="tk2-mut">clic = poser · glisser le point = déplacer</span></div>' +
+      '<div class="tk2-annot">' +
+        '<div class="tk2-annot-stage"><img class="tk2-annot-img" src="' + a.plate.png + '" alt="">' + platePinsSvg(a, d, true, sel) + '</div>' +
+        editor +
+      '</div>';
+    wireAnnotate(pane);
+  }
+  function wireAnnotate(pane) {
+    var s = sec(pane), a = s.art;
+    var back = pane.querySelector('.tk2-annot-back'); if (back) back.onclick = function () { s.mode = null; commit(pane); render(null, pane); };
+    var svg = pane.querySelector('.tk2-pin-svg'); if (!svg) return;
+    var norm = function (e) { var r = svg.getBoundingClientRect(), w = r.width || 1, h = r.height || 1, c = function (v) { return v < 0 ? 0 : v > 1 ? 1 : v; }; return { x: c((e.clientX - r.left) / w), y: c((e.clientY - r.top) / h) }; };
+    var addS = svg.querySelector('.tk2-pin-add');
+    if (addS) addS.onclick = function (e) { var n = norm(e); a.plate.pins.push({ x: n.x, y: n.y, label: '', field: '', text: '' }); s.pinSel = a.plate.pins.length - 1; commit(pane); renderAnnotate(pane); };
+    svg.querySelectorAll('[data-pin]').forEach(function (dot) {
+      var i = +dot.getAttribute('data-pin');
+      dot.onmousedown = function (e) {
+        e.preventDefault(); s.pinSel = i; var moved = false;
+        var mv = function (ev) { moved = true; var n = norm(ev); a.plate.pins[i].x = n.x; a.plate.pins[i].y = n.y; dot.setAttribute('cx', (n.x * 1000).toFixed(1)); dot.setAttribute('cy', (n.y * pinLayout(a).H).toFixed(1)); };
+        var up = function () { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); commit(pane); renderAnnotate(pane); };
+        document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+      };
+    });
+    var lab = pane.querySelector('.tk2-annot-lab'); if (lab) lab.oninput = function () { a.plate.pins[s.pinSel].label = lab.value; commit(pane); };
+    var bind = pane.querySelector('.tk2-annot-bind'); if (bind) bind.onchange = function () { a.plate.pins[s.pinSel].field = bind.value; commit(pane); renderAnnotate(pane); };
+    var txt = pane.querySelector('.tk2-annot-txt'); if (txt) txt.oninput = function () { a.plate.pins[s.pinSel].text = txt.value; commit(pane); };
+    var del = pane.querySelector('.tk2-annot-del'); if (del) del.onclick = function () { a.plate.pins.splice(s.pinSel, 1); s.pinSel = a.plate.pins.length ? 0 : -1; commit(pane); renderAnnotate(pane); };
+  }
+
   function renderPlate(pane) {
     var s = sec(pane), a = s.art;
     P.mount(pane, {
@@ -445,7 +555,7 @@
   // ══════════════ SCREEN C · DOCUMENT (generated card) ══════════════
   function renderDocument(pane) {
     var s = sec(pane), a = s.art, d = DERIVE(a);
-    var plate = a.plate ? '<img class="tk2-plate-img" src="' + a.plate.png + '" alt="">' : '<div class="tk2-plate-empty"><div>— pas de planche —</div></div>';
+    var plate = a.plate ? '<div class="tk2-plate-wrap"><img class="tk2-plate-img" src="' + a.plate.png + '" alt="">' + platePinsSvg(a, d, false, -1) + '</div>' : '<div class="tk2-plate-empty"><div>— pas de planche —</div></div>';
     var feats = a.feats.map(function (f) { var an = C.anchorOf(f.domain, f.grade); var ad = (f.addons || []).map(function (x) { return esc(x.name); }).join(', '); return '<div class="tk2-docfeat">' + esc(f.domain) + ' g' + f.grade + (an ? ' <span class="tk2-mut">— ' + esc(an.bar) + '</span>' : '') + (ad ? ' <span class="tk2-mut">+ ' + ad + '</span>' : '') + '</div>'; }).join('') || '<div class="tk2-mut">stats seules</div>';
     var gen = a.addons.map(function (x) { return esc(x.name); }).filter(Boolean).join(', ');
     var ifs = [];

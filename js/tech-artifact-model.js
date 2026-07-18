@@ -50,6 +50,8 @@
     return (prefix || 'art') + '-' + _n.toString(36) + '-' + (('' + (_n * 2654435761 % 1e9)).slice(-4));
   }
   function clampGrade(g) { g = Math.round(+g || 0); return Math.max(TUNING.grade.min, Math.min(TUNING.grade.max, g)); }
+  function clamp01(v) { v = +v || 0; return v < 0 ? 0 : v > 1 ? 1 : v; }
+  function normPin(x) { x = x || {}; return { x: clamp01(x.x), y: clamp01(x.y), label: str(x.label || ''), field: x.field ? str(x.field) : '', text: str(x.text || '') }; }
   function arr(x) { return Array.isArray(x) ? x : []; }
   function str(x) { return x == null ? '' : String(x); }
 
@@ -118,6 +120,7 @@
     p.latent = arr(p.latent).map(function (x) { return { text: str(x.text || x), domain: str(x.domain || '').toUpperCase(), grade: x.grade != null ? clampGrade(x.grade) : null, who: normWho(x.who) }; });
     p.stats = (p.stats && typeof p.stats === 'object') ? p.stats : {};
     if (p.plate && !(p.plate.png)) p.plate = null;
+    if (p.plate) p.plate.pins = arr(p.plate.pins).map(normPin);   // annotations anchored on the plate (cran 4)
     return p;
   }
 
