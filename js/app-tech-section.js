@@ -86,7 +86,7 @@
     });
     a.ports.needs.forEach(function (n) {
       if (!n.token) return;
-      rows.push('<tr><td>' + esc(n.token) + (n.rate ? ' <span class="tk2-mut">/' + esc(n.rate) + '</span>' : '') + '</td><td>' + (C.isStandard(n.token) ? 'shop <span class="tk2-mut">standard</span>' : 'custom · craft/salvage') + '</td><td class="tk2-r">' + (C.isStandard(n.token) ? '☐ commander' : '—') + '</td></tr>');
+      rows.push('<tr><td>' + esc(n.token) + (n.rate ? ' <span class="tk2-mut">/' + esc(n.rate) + '</span>' : '') + '</td><td>' + (C.isStandard(n.token) ? 'shop <span class="tk2-mut">standard</span>' : 'custom · craft/salvage') + '</td><td class="tk2-r">' + (C.isStandard(n.token) ? '☐ ' + linkPend('commander', 'commande vers un shop épinglé — cran DATA') : '—') + '</td></tr>');
     });
     rows.push('<tr><td>matériaux</td><td>shop <span class="tk2-mut">épinglé</span></td><td class="tk2-r">' + d.prodEb + 'eb</td></tr>');
     return rows.join('');
@@ -96,7 +96,7 @@
     return '<div class="tk2-feat" data-fi="' + i + '">' +
       '<input class="tk2-fd" data-fi="' + i + '" list="tk2-domains" value="' + esc(f.domain) + '">' +
       '<span class="tk2-meter" data-fi="' + i + '">' + gradeMeter(f.grade) + '</span>' +
-      '<span class="tk2-anchor">' + (an ? esc(an.bar) + ' <span class="tk2-mut">· ' + esc(an.skill) + '</span>' : '<span class="tk2-mut">domaine libre (exotique)</span>') + '</span>' +
+      '<span class="tk2-anchor">' + (an ? esc(an.bar) + ' <span class="tk2-mut">· </span>' + skillLink(an.skill) : '<span class="tk2-mut">domaine libre (exotique)</span>') + '</span>' +
       '<button class="tk2-x" data-delfeat="' + i + '" title="retirer">✕</button></div>';
   }
   function tokenRow(kind, i, val, extra) {
@@ -106,7 +106,16 @@
 
   function renderBench(pane) {
     var s = sec(pane), a = s.art, d = DERIVE(a);
-    var plate = a.plate ? '<img class="tk2-plate-img" src="' + a.plate.png + '" alt="">' : '<div class="tk2-plate-empty"><div>PLANCHE</div><button class="app-btn tk2-press">PRESSER UNE IMAGE</button></div>';
+    // adaptive plate: a slim strip when empty (no dead box), the image when set
+    var plate = a.plate
+      ? '<img class="tk2-plate-img" src="' + a.plate.png + '" alt=""><div class="tk2-plate-cap">planche ancrée · annotations cran 5</div>'
+      : '<div class="tk2-plate-slim"><span class="tk2-mut">PLANCHE</span><button class="app-btn tk2-press">PRESSER</button></div>';
+    // lignée: a LIVE link when the parent resolves to an artifact in the library
+    var linLive = '';
+    if (a.lineage && a.lineage.refines) {
+      var ref = a.lineage.refines.toLowerCase();
+      for (var li = 0; li < s.st.order.length; li++) { var pa = M.fromJSON(s.st.parts[s.st.order[li]]); if (pa && pa.id !== a.id && (pa.id.toLowerCase() === ref || pa.name.toLowerCase() === ref)) { linLive = ' ' + linkLive('artifact', pa.id, '→ ouvrir'); break; } }
+    }
     pane.innerHTML =
       '<datalist id="tk2-domains">' + C.DOMAINS.map(function (x) { return '<option value="' + x + '">'; }).join('') + '</datalist>' +
       '<datalist id="tk2-tokens">' + C.allTokens().map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist>' +
@@ -122,22 +131,25 @@
         '<button class="app-btn app-btn-danger tk2-del">SUPPRIMER</button>' +
       '</div>' +
       '<div class="tk2-body">' +
-        '<div class="tk2-plate">' + plate + '<div class="tk2-plate-cap">planche ancrée · on annotera dessus (cran 5)</div></div>' +
+        '<div class="tk2-plate' + (a.plate ? '' : ' is-empty') + '">' + plate + '</div>' +
         '<div class="tk2-fiche">' +
-          '<textarea class="tk2-flavor" data-f="flavor" placeholder="texte libre — le mot du maker, aucun effet mécanique…">' + esc(a.flavor) + '</textarea>' +
-          panel('EFFETS', a.feats.map(featRow).join('') + '<button class="app-btn tk2-addfeat">+ effet</button>') +
+          panel('EFFETS', a.feats.map(featRow).join('') + '<button class="app-btn tk2-addfeat">+ effet</button>', true) +
           panel('INTERFACES', interfacesPanel(a)) +
-          '<div class="tk2-two">' +
-            panel('LIMITES', a.limits.map(function (l, i) { return '<div class="tk2-line"><input data-lim="' + i + '" value="' + esc(l.text) + '"><button class="tk2-x" data-dellim="' + i + '">✕</button></div>'; }).join('') + '<button class="app-btn tk2-addlim">+ limite</button>') +
-            panel('MODS', a.mods.map(function (m, i) { return '<div class="tk2-line"><input class="tk2-mt" data-mod="' + i + '" data-k="target" value="' + esc(m.target) + '" placeholder="cible (wearer.MA.jump)"><input class="tk2-mv" data-mod="' + i + '" data-k="value" value="' + esc(m.value) + '" placeholder="+3"><button class="tk2-x" data-delmod="' + i + '">✕</button></div>'; }).join('') + '<button class="app-btn tk2-addmod">+ mod</button>') +
-          '</div>' +
-          '<div class="tk2-two">' +
-            panel('LIGNÉE', '<div class="tk2-line"><input data-f="lin-ref" value="' + esc(a.lineage ? a.lineage.refines : '') + '" placeholder="raffine… (nom/ID)"><label class="tk2-tier">itér <input type="number" min="0" max="6" data-f="lin-steps" value="' + (a.lineage ? a.lineage.steps : 0) + '"></label></div><div class="tk2-mut">bonus lignée : DC −' + d.lineBonus + '</div>') +
-            panel('LATENT · qui sait', a.latent.map(latentRow).join('') + '<button class="app-btn tk2-addlat">+ latent</button>') +
+          '<div class="tk2-details">' +
+            '<div class="tk2-details-h">DÉTAILS</div>' +
+            sub('flavor', '<textarea class="tk2-flavor" data-f="flavor" placeholder="le mot du maker — aucun effet mécanique…">' + esc(a.flavor) + '</textarea>') +
+            '<div class="tk2-two">' +
+              sub('limites', a.limits.map(function (l, i) { return '<div class="tk2-line"><input data-lim="' + i + '" value="' + esc(l.text) + '"><button class="tk2-x" data-dellim="' + i + '">✕</button></div>'; }).join('') + '<button class="tk2-add" data-addlim>+ limite</button>') +
+              sub('mods', a.mods.map(function (m, i) { return '<div class="tk2-line"><input class="tk2-mt" data-mod="' + i + '" data-k="target" value="' + esc(m.target) + '" placeholder="wearer.MA.jump"><input class="tk2-mv" data-mod="' + i + '" data-k="value" value="' + esc(m.value) + '" placeholder="+3"><button class="tk2-x" data-delmod="' + i + '">✕</button></div>'; }).join('') + '<button class="tk2-add" data-addmod>+ mod</button>') +
+            '</div>' +
+            '<div class="tk2-two">' +
+              sub('lignée', '<div class="tk2-line"><input data-f="lin-ref" value="' + esc(a.lineage ? a.lineage.refines : '') + '" placeholder="raffine… (nom/ID)"><label class="tk2-tier">itér <input type="number" min="0" max="6" data-f="lin-steps" value="' + (a.lineage ? a.lineage.steps : 0) + '"></label></div><div class="tk2-mut">bonus DC −' + d.lineBonus + linLive + '</div>') +
+              sub('latent · qui sait', a.latent.map(latentRow).join('') + '<button class="tk2-add" data-addlat>+ latent</button>') +
+            '</div>' +
           '</div>' +
         '</div>' +
       '</div>' +
-      '<div class="tk2-nomen"><div class="tk2-nomen-h">NOMENCLATURE — approvisionnement</div><table class="tk2-nomen-t"><tbody>' + nomenclature(a, d) + '</tbody></table></div>' +
+      '<div class="tk2-nomen"><div class="tk2-nomen-h">NOMENCLATURE</div><table class="tk2-nomen-t"><tbody>' + nomenclature(a, d) + '</tbody></table></div>' +
       productionBar(a, d);
 
     // ── wiring ──
@@ -170,19 +182,31 @@
     wireInterfaces(pane, a);
     // limits
     pane.querySelectorAll('[data-lim]').forEach(function (inp) { inp.oninput = function () { a.limits[+inp.getAttribute('data-lim')].text = inp.value; commit(pane); refreshDerived(pane); }; });
-    pane.querySelector('.tk2-addlim').onclick = function () { a.limits.push({ text: '' }); M.normalize(a); commit(pane); renderBench(pane); };
+    pane.querySelector('[data-addlim]').onclick = function () { a.limits.push({ text: '' }); M.normalize(a); commit(pane); renderBench(pane); };
     pane.querySelectorAll('[data-dellim]').forEach(function (b) { b.onclick = function () { a.limits.splice(+b.getAttribute('data-dellim'), 1); commit(pane); renderBench(pane); }; });
     // mods
     pane.querySelectorAll('[data-mod]').forEach(function (inp) { inp.oninput = function () { a.mods[+inp.getAttribute('data-mod')][inp.getAttribute('data-k')] = inp.value; commit(pane); refreshDerived(pane); }; });
-    pane.querySelector('.tk2-addmod').onclick = function () { a.mods.push({ target: '', value: '', when: 'when worn' }); M.normalize(a); commit(pane); renderBench(pane); };
+    pane.querySelector('[data-addmod]').onclick = function () { a.mods.push({ target: '', value: '', when: 'when worn' }); M.normalize(a); commit(pane); renderBench(pane); };
     pane.querySelectorAll('[data-delmod]').forEach(function (b) { b.onclick = function () { a.mods.splice(+b.getAttribute('data-delmod'), 1); commit(pane); renderBench(pane); }; });
     // latent
     pane.querySelectorAll('[data-lat]').forEach(function (inp) { inp.oninput = function () { a.latent[+inp.getAttribute('data-lat')].text = inp.value; commit(pane); }; });
     pane.querySelectorAll('[data-latwho]').forEach(function (cb) { cb.onchange = function () { var li = +cb.getAttribute('data-lat'), who = cb.getAttribute('data-latwho'), arrw = a.latent[li].who, k = arrw.indexOf(who); if (cb.checked && k < 0) arrw.push(who); if (!cb.checked && k >= 0) arrw.splice(k, 1); commit(pane); }; });
-    pane.querySelector('.tk2-addlat').onclick = function () { a.latent.push({ text: '', who: ['maker', 'GM'] }); M.normalize(a); commit(pane); renderBench(pane); };
+    pane.querySelector('[data-addlat]').onclick = function () { a.latent.push({ text: '', who: ['maker', 'GM'] }); M.normalize(a); commit(pane); renderBench(pane); };
+    // hyperlink navigation — LIVE links (data-lk) resolve now; pending ones are inert
+    pane.querySelectorAll('.tk2-link[data-lk]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        if (el.getAttribute('data-lk') === 'artifact') { var pa = M.fromJSON(s.st.parts[el.getAttribute('data-lid')]); if (pa) { commit(pane); openArtifact(pane, pa); } }
+      });
+    });
   }
 
-  function panel(title, inner) { return '<div class="tk2-panel"><div class="tk2-panel-h">' + title + '</div><div class="tk2-panel-b">' + inner + '</div></div>'; }
+  function panel(title, inner, hero) { return '<div class="tk2-panel' + (hero ? ' hero' : '') + '"><div class="tk2-panel-h">' + title + '</div><div class="tk2-panel-b">' + inner + '</div></div>'; }
+  function sub(title, inner) { return '<div class="tk2-sub"><div class="tk2-sub-h">' + title + '</div><div class="tk2-sub-b">' + inner + '</div></div>'; }
+  // ── hyperlink system: two states. LIVE = solid + ↗, navigates now. PENDING =
+  // dashed + ◇, target arrives in a later cran (tooltip says which). ──
+  function linkLive(kind, id, label) { return '<a class="tk2-link" data-lk="' + kind + '" data-lid="' + esc(id) + '">' + esc(label) + '</a>'; }
+  function linkPend(label, note) { return '<span class="tk2-link pending" title="' + esc(note) + '">' + esc(label) + '</span>'; }
+  function skillLink(name) { return linkPend(name, 'lien vers la feuille du perso — cran 2'); }
   function latentRow(x, i) {
     var who = M.WHO;
     return '<div class="tk2-line"><input data-lat="' + i + '" value="' + esc(x.text) + '" placeholder="secret caché dedans…"><span class="tk2-who">' +
@@ -235,7 +259,7 @@
       '<span class="tk2-stat">PROD ' + d.prodEb + 'eb + ' + d.prodHours + 'h</span>' +
       '<span class="tk2-stat">STREET ' + d.streetEb + 'eb</span>' +
       '<span class="tk2-bar-sp"></span>' +
-      '<span class="tk2-req">requiert : ' + esc(skillsRequired(a).join(' · ')) + ' <span class="tk2-mut">(gating live : cran 2)</span></span></div>';
+      '<span class="tk2-req">requiert : ' + skillsRequired(a).map(skillLink).join(' <span class="tk2-mut">·</span> ') + '</span></div>';
   }
   function refreshDerived(pane) {
     var s = sec(pane), a = s.art; if (!a) return;

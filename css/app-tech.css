@@ -182,3 +182,43 @@
 .tk2-doc-col { flex:1; display:flex; flex-direction:column; gap:3px; }
 .tk2-doc-foot { border-top:2px solid var(--ink); padding:4px 10px; font-size:11px; }
 @media (max-width:900px){ .tk2-body{flex-direction:column;} .tk2-plate{flex-basis:auto;border-right:none;border-bottom:2px solid var(--ink);} .tk2-two{grid-template-columns:1fr;} }
+
+/* ══ cran-1 UI pass: hierarchy + adaptive plate + hyperlink system ══ */
+/* adaptive plate — slim strip when empty (kills the dead box), image when set */
+.tk2-plate.is-empty { flex:0 0 auto; min-width:118px; }
+.tk2-plate-slim { border:2px dashed var(--ink); padding:14px 10px; display:flex; flex-direction:column; align-items:center; gap:10px; color:#888; }
+.tk2-plate-slim .tk2-mut { font-family:var(--head); letter-spacing:2px; font-size:11px; }
+
+/* PRIMARY panels get the loud inverted header; EFFETS is the hero (biggest) */
+.tk2-panel.hero .tk2-panel-h { font-size:14px; letter-spacing:3px; padding:3px 10px; }
+.tk2-panel.hero .tk2-panel-b { padding:9px 10px; gap:7px; }
+.tk2-panel.hero .tk2-meter { font-size:18px; }
+.tk2-panel.hero .tk2-feat { padding:3px 0; border-bottom:1px solid #e2e2e2; }
+.tk2-panel.hero .tk2-feat:last-of-type { border-bottom:none; }
+
+/* SECONDARY: the DÉTAILS cluster is visibly quieter — muted label, no inverted bars */
+.tk2-details { border:2px solid var(--ink); }
+.tk2-details-h { font-family:var(--head); letter-spacing:2px; font-size:11px; color:#777; padding:2px 8px; border-bottom:2px solid var(--ink); }
+.tk2-details .tk2-two { padding:0; gap:0; }
+.tk2-sub { padding:6px 8px; border-top:1px solid #e2e2e2; }
+.tk2-details > .tk2-two > .tk2-sub { border-right:1px solid #e2e2e2; }
+.tk2-sub-h { font-family:var(--mono); font-size:10px; letter-spacing:1px; color:#999; text-transform:uppercase; margin-bottom:3px; }
+.tk2-sub-b { display:flex; flex-direction:column; gap:4px; }
+.tk2-flavor { min-height:30px; font-style:italic; color:#444; }
+.tk2-details .tk2-who { font-size:9px; }
+
+/* INSTRUMENTATION: production is the dominant persistent readout */
+.tk2-prod { padding:7px 12px; font-size:13px; }
+.tk2-prod .tk2-prod-l { font-size:13px; }
+.tk2-prod .tk2-stat { font-family:var(--head); letter-spacing:1px; }
+.tk2-nomen-h { font-size:11px; letter-spacing:2px; }
+
+/* hyperlink system — two states */
+.tk2-link { color:var(--ink); text-decoration:underline; cursor:pointer; }
+.tk2-link::after { content:' \2197'; font-size:0.82em; }         /* ↗ */
+.tk2-link:hover { background:var(--ink); color:#fff; }
+.tk2-link.pending { color:#8a8a8a; text-decoration-style:dashed; cursor:help; }
+.tk2-link.pending::after { content:' \25C7'; font-size:0.82em; } /* ◇ */
+.tk2-link.pending:hover { background:none; color:#8a8a8a; }
+.tk2-prod .tk2-link.pending { color:#bbb; }
+.tk2-prod .tk2-link.pending:hover { color:#bbb; }
