@@ -222,3 +222,13 @@
 .tk2-link.pending:hover { background:none; color:#8a8a8a; }
 .tk2-prod .tk2-link.pending { color:#bbb; }
 .tk2-prod .tk2-link.pending:hover { color:#bbb; }
+
+/* ══ parts-bins + inline hints (guidance without a wizard) ══ */
+.tk2-help { font-size:11px; color:#777; font-style:italic; margin-bottom:5px; }
+.tk2-empty-sm { font-size:11px; color:#888; padding:4px 0; }
+.tk2-bin { display:flex; flex-wrap:wrap; align-items:center; gap:5px; margin-top:6px; padding-top:6px; border-top:1px solid #e2e2e2; }
+.tk2-bin-l { font-size:10px; letter-spacing:1px; color:#999; text-transform:uppercase; margin-right:2px; }
+.tk2-chip { font-family:var(--mono); font-size:11px; background:#fff; color:var(--ink); border:2px solid var(--ink); border-radius:0; padding:1px 7px; cursor:pointer; transition:background .1s,color .1s; }
+.tk2-chip:hover { background:var(--ink); color:#fff; }
+.tk2-chip-free { border-style:dashed; }
+.tk2-sub .tk2-help { margin-bottom:3px; }
