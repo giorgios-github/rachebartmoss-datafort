@@ -51,7 +51,14 @@
   }
   function clampGrade(g) { g = Math.round(+g || 0); return Math.max(TUNING.grade.min, Math.min(TUNING.grade.max, g)); }
   function clamp01(v) { v = +v || 0; return v < 0 ? 0 : v > 1 ? 1 : v; }
-  function normPin(x) { x = x || {}; return { x: clamp01(x.x), y: clamp01(x.y), label: str(x.label || ''), field: x.field ? str(x.field) : '', text: str(x.text || '') }; }
+  function normPin(x) {
+    x = x || {};
+    var px = clamp01(x.x), py = clamp01(x.y);
+    // label anchor is independent from the point; default to a side offset on the same row
+    var lx = x.lx != null ? clamp01(x.lx) : clamp01(px + (px < 0.5 ? 0.16 : -0.16));
+    var ly = x.ly != null ? clamp01(x.ly) : py;
+    return { x: px, y: py, lx: lx, ly: ly, label: str(x.label || ''), field: x.field ? str(x.field) : '', text: str(x.text || '') };
+  }
   function arr(x) { return Array.isArray(x) ? x : []; }
   function str(x) { return x == null ? '' : String(x); }
 

@@ -462,30 +462,24 @@
   function pinValue(a, d, pin) { return pin.field ? resolvePin(a, d, pin.field) : pin.text; }
   function pinText(a, d, pin) { var v = pinValue(a, d, pin); return (pin.label ? pin.label + (v ? ' · ' : '') : '') + v; }
 
-  // layout: margin labels (same side as the point) with a greedy vertical de-overlap
-  function pinLayout(a) {
-    var pins = (a.plate && a.plate.pins) || [];
-    var W = 1000, ar = ((a.plate && a.plate.h) || 1) / ((a.plate && a.plate.w) || 1), H = Math.max(200, Math.round(W * ar));
-    var order = pins.map(function (_, i) { return i; });
-    var gap = H * 0.055, pos = {};
-    ['left', 'right'].forEach(function (side) {
-      var list = order.filter(function (i) { return side === 'left' ? pins[i].x < 0.5 : pins[i].x >= 0.5; })
-        .sort(function (i, j) { return pins[i].y - pins[j].y; });
-      var prev = -1e9;
-      list.forEach(function (i) { var ly = Math.max(pins[i].y * H, prev + gap); prev = ly; pos[i] = { side: side, lx: side === 'left' ? W * 0.02 : W * 0.98, ly: ly }; });
-    });
-    return { W: W, H: H, pos: pos };
-  }
+  // Point and label move independently. The leader is a cranked line — horizontal
+  // stubs at each end, the slant confined to the MIDDLE THIRD (technical-callout look).
+  var PIN_W = 1000;
+  function plateH(a) { var ar = ((a.plate && a.plate.h) || 1) / ((a.plate && a.plate.w) || 1); return Math.max(200, Math.round(PIN_W * ar)); }
   function platePinsSvg(a, d, editable, sel) {
     if (!a.plate) return '';
-    var pins = a.plate.pins || [], L = pinLayout(a), W = L.W, H = L.H, fs = Math.round(W * 0.026), r = W * 0.008;
+    var pins = a.plate.pins || [], W = PIN_W, H = plateH(a), fs = Math.round(W * 0.026), r = W * 0.008, g = W * 0.007;
     var body = '';
     pins.forEach(function (p, i) {
-      var px = p.x * W, py = p.y * H, pp = L.pos[i], anchor = pp.side === 'left' ? 'start' : 'end';
-      var txt = esc(pinText(a, d, p)) || '⋯';
-      body += '<line class="tk2-pin-lead" x1="' + px.toFixed(1) + '" y1="' + py.toFixed(1) + '" x2="' + pp.lx.toFixed(1) + '" y2="' + pp.ly.toFixed(1) + '"/>';
-      body += '<text class="tk2-pin-txt" x="' + pp.lx.toFixed(1) + '" y="' + (pp.ly - fs * 0.2).toFixed(1) + '" font-size="' + fs + '" text-anchor="' + anchor + '">' + txt + '</text>';
-      body += '<circle class="tk2-pin-dot' + (editable && i === sel ? ' is-sel' : '') + '" cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="' + r.toFixed(1) + '"' + (editable ? ' data-pin="' + i + '" style="cursor:grab"' : '') + '/>';
+      var px = p.x * W, py = p.y * H, lx = p.lx * W, ly = p.ly * H;
+      var ax = px + (lx - px) / 3, bx = px + 2 * (lx - px) / 3;   // crank: slant lives in the middle third of x
+      var pts = px.toFixed(1) + ',' + py.toFixed(1) + ' ' + ax.toFixed(1) + ',' + py.toFixed(1) + ' ' + bx.toFixed(1) + ',' + ly.toFixed(1) + ' ' + lx.toFixed(1) + ',' + ly.toFixed(1);
+      var right = lx >= px, anchor = right ? 'start' : 'end', tx = lx + (right ? 1 : -1) * fs * 0.4;
+      var isSel = editable && i === sel, txt = esc(pinText(a, d, p)) || '⋯';
+      body += '<polyline class="tk2-pin-lead" data-pinlead="' + i + '" points="' + pts + '" fill="none"/>';
+      body += '<text class="tk2-pin-txt' + (isSel ? ' is-sel' : '') + '" data-pintxt="' + i + '" x="' + tx.toFixed(1) + '" y="' + (ly + fs * 0.34).toFixed(1) + '" font-size="' + fs + '" text-anchor="' + anchor + '">' + txt + '</text>';
+      if (editable) body += '<rect class="tk2-pin-grip' + (isSel ? ' is-sel' : '') + '" x="' + (lx - g).toFixed(1) + '" y="' + (ly - g).toFixed(1) + '" width="' + (2 * g).toFixed(1) + '" height="' + (2 * g).toFixed(1) + '" data-pinlabel="' + i + '" style="cursor:move"/>';
+      body += '<circle class="tk2-pin-dot' + (isSel ? ' is-sel' : '') + '" cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="' + r.toFixed(1) + '"' + (editable ? ' data-pin="' + i + '" style="cursor:grab"' : '') + '/>';
     });
     var addSurface = editable ? '<rect class="tk2-pin-add" x="0" y="0" width="' + W + '" height="' + H + '" fill="transparent" style="cursor:crosshair"/>' : '';
     return '<svg class="tk2-pin-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' + addSurface + body + '</svg>';
@@ -510,37 +504,58 @@
         '<label class="tk2-annot-f">valeur <select class="tk2-annot-bind">' + opts + '</select></label>' +
         (pin.field ? '<div class="tk2-mut">→ ' + esc(resolvePin(a, d, pin.field) || '—') + ' <span class="tk2-mut">(vivant)</span></div>'
                    : '<label class="tk2-annot-f">texte <input class="tk2-annot-txt" value="' + esc(pin.text) + '" placeholder="valeur libre"></label>') +
-        '<button class="app-btn app-btn-danger tk2-annot-del">retirer</button>' +
+        '<div class="tk2-annot-btns"><button class="app-btn tk2-annot-align" title="remettre le label droit face au point">⇔ aligner</button><button class="app-btn app-btn-danger tk2-annot-del">retirer</button></div>' +
       '</div>';
     }
     pane.innerHTML =
       '<div class="tk2-bar"><button class="app-btn tk2-annot-back">← FICHE</button><span class="tk2-title">ANNOTER</span>' +
-        '<span class="tk2-bar-sp"></span><span class="tk2-mut">clic = poser · glisser le point = déplacer</span></div>' +
+        '<span class="tk2-bar-sp"></span><span class="tk2-mut">clic = poser · glisse le point ● ou le label ▪ (indépendants) · aligner = remettre droit</span></div>' +
       '<div class="tk2-annot">' +
         '<div class="tk2-annot-stage"><img class="tk2-annot-img" src="' + a.plate.png + '" alt="">' + platePinsSvg(a, d, true, sel) + '</div>' +
         editor +
       '</div>';
     wireAnnotate(pane);
   }
+  function defaultLabelX(x) { return Math.max(0, Math.min(1, x + (x < 0.5 ? 0.16 : -0.16))); }
+  function pinLeadPoints(a, p) {
+    var W = PIN_W, H = plateH(a), px = p.x * W, py = p.y * H, lx = p.lx * W, ly = p.ly * H, ax = px + (lx - px) / 3, bx = px + 2 * (lx - px) / 3;
+    return px.toFixed(1) + ',' + py.toFixed(1) + ' ' + ax.toFixed(1) + ',' + py.toFixed(1) + ' ' + bx.toFixed(1) + ',' + ly.toFixed(1) + ' ' + lx.toFixed(1) + ',' + ly.toFixed(1);
+  }
   function wireAnnotate(pane) {
     var s = sec(pane), a = s.art;
     var back = pane.querySelector('.tk2-annot-back'); if (back) back.onclick = function () { s.mode = null; commit(pane); render(null, pane); };
     var svg = pane.querySelector('.tk2-pin-svg'); if (!svg) return;
-    var norm = function (e) { var r = svg.getBoundingClientRect(), w = r.width || 1, h = r.height || 1, c = function (v) { return v < 0 ? 0 : v > 1 ? 1 : v; }; return { x: c((e.clientX - r.left) / w), y: c((e.clientY - r.top) / h) }; };
-    var addS = svg.querySelector('.tk2-pin-add');
-    if (addS) addS.onclick = function (e) { var n = norm(e); a.plate.pins.push({ x: n.x, y: n.y, label: '', field: '', text: '' }); s.pinSel = a.plate.pins.length - 1; commit(pane); renderAnnotate(pane); };
-    svg.querySelectorAll('[data-pin]').forEach(function (dot) {
-      var i = +dot.getAttribute('data-pin');
-      dot.onmousedown = function (e) {
-        e.preventDefault(); s.pinSel = i; var moved = false;
-        var mv = function (ev) { moved = true; var n = norm(ev); a.plate.pins[i].x = n.x; a.plate.pins[i].y = n.y; dot.setAttribute('cx', (n.x * 1000).toFixed(1)); dot.setAttribute('cy', (n.y * pinLayout(a).H).toFixed(1)); };
+    // always read the LIVE svg (it survives the drag; robust to zero-size rects in tests)
+    var normEv = function (e) { var el = pane.querySelector('.tk2-pin-svg'); if (!el) return { x: 0, y: 0 }; var r = el.getBoundingClientRect(), w = r.width || 1, h = r.height || 1, c = function (v) { return v < 0 ? 0 : v > 1 ? 1 : v; }; return { x: c((e.clientX - r.left) / w), y: c((e.clientY - r.top) / h) }; };
+    // generic drag: move fn mutates the pin from event coords + repaints the affected els; commit on release
+    var drag = function (i, move) {
+      return function (e) {
+        e.preventDefault(); if (e.stopPropagation) e.stopPropagation(); s.pinSel = i;
+        var lead = svg.querySelector('polyline[data-pinlead="' + i + '"]'), text = svg.querySelector('text[data-pintxt="' + i + '"]');
+        var mv = function (ev) { move(a.plate.pins[i], normEv(ev), lead, text); };
         var up = function () { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); commit(pane); renderAnnotate(pane); };
         document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
       };
+    };
+    var addS = svg.querySelector('.tk2-pin-add');
+    if (addS) addS.onclick = function (e) { var n = normEv(e); a.plate.pins.push({ x: n.x, y: n.y, lx: defaultLabelX(n.x), ly: n.y, label: '', field: '', text: '' }); s.pinSel = a.plate.pins.length - 1; commit(pane); renderAnnotate(pane); };
+    svg.querySelectorAll('[data-pin]').forEach(function (dot) {
+      var i = +dot.getAttribute('data-pin');
+      dot.onmousedown = drag(i, function (p, n, lead) { p.x = n.x; p.y = n.y; dot.setAttribute('cx', (n.x * PIN_W).toFixed(1)); dot.setAttribute('cy', (n.y * plateH(a)).toFixed(1)); if (lead) lead.setAttribute('points', pinLeadPoints(a, p)); });
+    });
+    svg.querySelectorAll('[data-pinlabel]').forEach(function (grip) {
+      var i = +grip.getAttribute('data-pinlabel'), g = PIN_W * 0.007, fs = Math.round(PIN_W * 0.026);
+      grip.onmousedown = drag(i, function (p, n, lead, text) {
+        p.lx = n.x; p.ly = n.y; var W = PIN_W, H = plateH(a), lx = n.x * W, ly = n.y * H, px = p.x * W;
+        grip.setAttribute('x', (lx - g).toFixed(1)); grip.setAttribute('y', (ly - g).toFixed(1));
+        if (lead) lead.setAttribute('points', pinLeadPoints(a, p));
+        if (text) { var right = lx >= px; text.setAttribute('x', (lx + (right ? 1 : -1) * fs * 0.4).toFixed(1)); text.setAttribute('y', (ly + fs * 0.34).toFixed(1)); text.setAttribute('text-anchor', right ? 'start' : 'end'); }
+      });
     });
     var lab = pane.querySelector('.tk2-annot-lab'); if (lab) lab.oninput = function () { a.plate.pins[s.pinSel].label = lab.value; commit(pane); };
     var bind = pane.querySelector('.tk2-annot-bind'); if (bind) bind.onchange = function () { a.plate.pins[s.pinSel].field = bind.value; commit(pane); renderAnnotate(pane); };
     var txt = pane.querySelector('.tk2-annot-txt'); if (txt) txt.oninput = function () { a.plate.pins[s.pinSel].text = txt.value; commit(pane); };
+    var alg = pane.querySelector('.tk2-annot-align'); if (alg) alg.onclick = function () { var p = a.plate.pins[s.pinSel]; if (!p) return; p.lx = defaultLabelX(p.x); p.ly = p.y; commit(pane); renderAnnotate(pane); };
     var del = pane.querySelector('.tk2-annot-del'); if (del) del.onclick = function () { a.plate.pins.splice(s.pinSel, 1); s.pinSel = a.plate.pins.length ? 0 : -1; commit(pane); renderAnnotate(pane); };
   }
 
