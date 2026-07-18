@@ -39,6 +39,14 @@
     return '<div class="tk2-gate tk2-gate-' + (g.buildable ? (g.pushes.length ? 'push' : 'ok') : 'locked') + '"><span class="tk2-gate-h">' + esc(builder.name || 'toi') + '</span><span class="tk2-gate-v">' + verdict + '</span><span class="tk2-gate-rows">' + rows + '</span>' + tail + '</div>';
   }
   function refreshGate(pane) { var s = sec(pane); if (!s.art) return; var el = pane.querySelector('.tk2-gate-wrap'); if (el) el.innerHTML = gateStrip(s.art, s.builder); }
+  // keep the gating in sync: a sheet save (skills edited) or a role/campaign change
+  // re-reads the builder and refreshes the verdict — no manual reload.
+  function watchBuilder(pane) {
+    if (pane._techGateWatch || !(window.App && window.App.on)) return; pane._techGateWatch = 1;
+    var reload = function () { var s = sec(pane); if (!document.body.contains(pane)) return; s.builderLoaded = false; s.builder = null; loadBuilder(pane); refreshGate(pane); };
+    window.App.on('entity:saved', function (e) { if (e && e.type === 'sheet') reload(); });
+    window.App.on('campaign', reload);
+  }
   function help(t) { return '<div class="tk2-help">' + t + '</div>'; }
   var ORIGINS = [['HANDMADE', 'bricolé — visserie dépareillée'], ['SALVAGE', 'récupéré — vis de donneur'], ['CORP PULL', 'arraché au corpo — torx'], ['FACTORY', 'usine — visserie captive']];
   function effectBody(a) {
@@ -199,7 +207,7 @@
 
   function renderBench(pane) {
     var s = sec(pane), a = s.art, d = DERIVE(a);
-    loadBuilder(pane);
+    loadBuilder(pane); watchBuilder(pane);
     // adaptive plate: a slim strip when empty (no dead box), the image when set
     var plate = a.plate
       ? '<img class="tk2-plate-img" src="' + a.plate.png + '" alt=""><div class="tk2-plate-cap">planche ancrée · annotations cran 5</div>'
