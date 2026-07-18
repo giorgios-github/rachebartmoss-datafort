@@ -120,10 +120,25 @@
   var PRESETS = RAW.map(function (r) { r.preset = true; return A ? A.normalize(r) : r; });
   function presets() { return PRESETS.map(function (p) { return A ? A.clone(p) : JSON.parse(JSON.stringify(p)); }); }
 
+  // ── what a given class usually needs — the "smart parts bin" per class ──
+  var SUGGEST = {
+    weapon:      { domains: ['STRIKE', 'GUIDE'], tokens: ['tube-84', 'he-84', 'smart-84', 'rail-std'] },
+    ammo:        { domains: ['STRIKE', 'GUIDE'], tokens: ['tube-84'] },
+    gear:        { domains: ['CONCEAL', 'ARMOR', 'MOVE', 'FILTER-AIR'], tokens: ['torso-std', 'face-std', 'cell power-c', 'cartridge filter-std'] },
+    cyberware:   { domains: ['SENSE', 'LINK', 'MOVE', 'STRIKE'], tokens: ['neural-port', 'borg-frame-std'] },
+    vehicle:     { domains: ['ARMOR', 'MOVE', 'STRIKE', 'SENSE'], tokens: ['fuel-cell'] },
+    electronics: { domains: ['LINK', 'STORE', 'SENSE', 'JAM'], tokens: ['data-port', 'interface-plug', 'cell power-c'] },
+    drug:        { domains: ['HEAL'], tokens: [] },
+    carrier:     { domains: ['SENSE', 'STRIKE', 'LINK'], tokens: ['control-link', 'cell power-d'] },
+    data:        { domains: ['STORE'], tokens: ['shard-std', 'chip-std'] },
+  };
+  function suggestFor(cls) { var s = SUGGEST[cls] || { domains: [], tokens: [] }; return { domains: s.domains.filter(isKnownDomain), tokens: s.tokens.slice() }; }
+
   window.TechCatalog = {
     ANCHORS: ANCHORS, DOMAINS: DOMAINS, anchorOf: anchorOf, isKnownDomain: isKnownDomain, skillForDomain: skillForDomain,
     CLASSES: CLASSES, skillForClass: skillForClass,
     TOKENS: TOKENS, allTokens: allTokens, isStandard: isStandard,
+    SUGGEST: SUGGEST, suggestFor: suggestFor,
     presets: presets, PRESETS: PRESETS,
   };
 })();

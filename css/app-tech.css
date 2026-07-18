@@ -98,7 +98,7 @@
 .tech-stage.is-cutfull .tech-src { width: 100%; height: auto; }
 
 /* ══ TECH artifact editor (cran 1) — charter: ink/white, 2px, square, mono/head ══ */
-.tk2-pane { display:flex; flex-direction:column; height:100%; background:#fff; color:var(--ink); font-family:var(--mono); }
+.tk2-pane { display:flex; flex-direction:column; height:100%; background:#fff; color:var(--ink); font-family:var(--mono); position:relative; }
 .tk2-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 12px; border-bottom:2px solid var(--ink); }
 .tk2-title { font-family:var(--head); letter-spacing:3px; font-size:14px; }
 .tk2-bar-sp { flex:1; }
@@ -232,3 +232,21 @@
 .tk2-chip:hover { background:var(--ink); color:#fff; }
 .tk2-chip-free { border-style:dashed; }
 .tk2-sub .tk2-help { margin-bottom:3px; }
+
+/* ══ effect picker (popup) — grade ladder + class suggestions ══ */
+.tk2-chip-more { border-style:solid; font-weight:normal; }
+.tk2-modal { position:absolute; inset:0; background:rgba(17,17,17,0.18); display:flex; align-items:center; justify-content:center; z-index:60; }
+.tk2-modal-box { background:#fff; border:2px solid var(--ink); width:min(600px,94%); max-height:88%; display:flex; flex-direction:column; }
+.tk2-modal-h { background:var(--ink); color:#fff; padding:4px 10px; font-family:var(--head); letter-spacing:2px; font-size:13px; display:flex; align-items:center; }
+.tk2-modal-h .tk2-mut { color:#bbb; margin-left:8px; flex:1; }
+.tk2-modal-x { cursor:pointer; padding:0 4px; }
+.tk2-modal-x:hover { text-decoration:underline; }
+.tk2-modal-b { overflow:auto; padding:8px 10px; }
+.tk2-pk-sec { font-family:var(--head); letter-spacing:2px; font-size:11px; color:#777; margin:10px 0 5px; border-bottom:2px solid var(--ink); padding-bottom:2px; }
+.tk2-pk-sec:first-child { margin-top:0; }
+.tk2-pd { margin-bottom:7px; }
+.tk2-pd-h { font-family:var(--head); letter-spacing:1px; font-size:12px; }
+.tk2-pd-l { display:flex; flex-wrap:wrap; gap:4px; margin-top:3px; }
+.tk2-rung { font-family:var(--mono); font-size:11px; text-align:left; background:#fff; color:var(--ink); border:2px solid var(--ink); border-radius:0; padding:1px 7px; cursor:pointer; }
+.tk2-rung:hover { background:var(--ink); color:#fff; }
+.tk2-rung b { font-weight:normal; text-decoration:underline; margin-right:3px; }
