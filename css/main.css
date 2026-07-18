@@ -277,6 +277,34 @@ body { font-family:var(--mono); background:var(--bg); color:var(--text); font-si
 .inv-desc-input { width:100%; background:var(--bg1); border:none; border-bottom:1px solid #999; color:var(--text); font-family:var(--mono); font-size:12px; padding:3px 2px; margin-top:4px; box-sizing:border-box; resize:vertical; min-height:22px; line-height:1.5; }
 .inv-desc-input:focus { outline:none; border-bottom-color:#111; }
 
+/* Tech objects in the inventory (built in the TECH section) */
+.inv-tech { border-color:#111; }
+.inv-tech.inv-tech-on { border-left-width:5px; }
+.inv-tech-tag { font-family:var(--head); font-size:9px; letter-spacing:1.5px; background:#111; color:#fff; padding:1px 4px; vertical-align:middle; }
+.inv-tech-gone { color:var(--text2); cursor:help; }
+.inv-tech-e { display:inline-flex; align-items:center; justify-content:center; width:20px; height:18px; border:2px solid #111; font-family:var(--head); font-size:11px; letter-spacing:1px; cursor:pointer; background:#fff; color:#111; user-select:none; }
+.inv-tech-e:hover { background:#111; color:#fff; }
+.inv-tech-e.on { background:#111; color:#fff; }
+.inv-tech-e.on:hover { background:#fff; color:#111; }
+.inv-tech-feats { font-family:var(--mono); font-size:11px; color:var(--text2); margin-top:5px; letter-spacing:0.5px; }
+.inv-tech-bon { font-family:var(--mono); font-size:12px; color:#111; margin-top:4px; font-weight:bold; }
+.inv-tech-bon.off { color:var(--text2); font-weight:normal; }
+
+/* Workshop picker (add a finished object to the sheet) */
+.tech-pick-empty { padding:14px; font-size:13px; color:var(--text2); line-height:1.6; }
+.tech-pick-list { display:flex; flex-direction:column; }
+.tech-pick-row { border-bottom:1px solid #ddd; padding:9px 12px; position:relative; }
+.tech-pick-row:last-child { border-bottom:none; }
+.tech-pick-main { display:flex; align-items:baseline; gap:8px; padding-right:120px; }
+.tech-pick-name { font-family:var(--head); font-size:14px; letter-spacing:1px; color:#111; }
+.tech-pick-cls { font-family:var(--mono); font-size:10px; letter-spacing:1px; color:var(--text2); text-transform:uppercase; }
+.tech-pick-feats { font-family:var(--mono); font-size:11px; color:var(--text2); margin-top:3px; padding-right:120px; }
+.tech-pick-bon { font-family:var(--mono); font-size:12px; color:#111; margin-top:2px; font-weight:bold; padding-right:120px; }
+.tech-pick-dests { position:absolute; top:9px; right:12px; display:flex; gap:5px; }
+.tech-pick-add { font-family:var(--head); font-size:10px; letter-spacing:1px; color:#111; background:#fff; border:2px solid #111; padding:3px 6px; cursor:pointer; }
+.tech-pick-add:hover { background:#111; color:#fff; }
+.wd-tech-bon { font-family:var(--mono); font-weight:bold; }
+
 /* Inventory two-column layout */
 .inv-layout { display:flex; gap:16px; align-items:flex-start; }
 .inv-col-left  { flex:1; min-width:0; }

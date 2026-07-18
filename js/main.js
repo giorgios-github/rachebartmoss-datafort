@@ -133,8 +133,70 @@ function getCyberBonusesFor(type, target) {
 function getCyberTotalFor(type, target) {
   return getCyberBonusesFor(type, target).reduce(function(s, b) { return s + b.value; }, 0);
 }
+
+/* ─── Tech-artifact bonus helpers ───
+   Finished workshop objects (built in the TECH section) can be carried in the
+   inventory and, when EQUIPPED, feed their mods to the sheet as stat/skill bonuses.
+   The workshop library lives in same-origin localStorage the TECH section writes,
+   so we read it live by techId (a "stable link"); each gear copy also embeds a
+   snapshot of its mods as a fallback if the source object is gone/renamed. */
+var _CS_STAT_SET = { INT:1, REF:1, TECH:1, COOL:1, ATT:1, LUCK:1, MA:1, BODY:1, EMP:1 };
+var _techLibCache = null;
+function _techLibBust() { _techLibCache = null; }
+function _techLibRaw() { try { return JSON.parse(localStorage.getItem('bartmoss_tech_artifacts') || '{}'); } catch (e) { return {}; } }
+function _techLib() {
+  if (_techLibCache) return _techLibCache;
+  var out = {}, st = _techLibRaw(), parts = st && st.parts;
+  if (parts) Object.keys(parts).forEach(function(id) { try { out[id] = (typeof parts[id] === 'string') ? JSON.parse(parts[id]) : parts[id]; } catch (e) {} });
+  _techLibCache = out; return out;
+}
+function _techLibList() {
+  var st = _techLibRaw(), lib = _techLib();
+  var order = (st && st.order && st.order.length) ? st.order : Object.keys(lib);
+  return order.map(function(id) { return lib[id]; }).filter(Boolean);
+}
+function _modsToBonuses(mods) {
+  return (mods || []).map(function(m) {
+    var t = String(m.target || '').replace(/^wearer\./i, '').trim();
+    var v = parseInt(String(m.value == null ? '' : m.value).replace(/[^-\d]/g, ''), 10) || 0;
+    if (!t || !v) return null;
+    var up = t.toUpperCase();
+    return _CS_STAT_SET[up] ? { type: 'stat', target: up, value: v } : { type: 'skill', target: t, value: v };
+  }).filter(Boolean);
+}
+function _isTechItem(g) { return !!(g && g.techId); }
+// Live mods by techId; fall back to the embedded snapshot when the source is gone.
+function _techItemBonuses(it) {
+  if (!_isTechItem(it)) return [];
+  var live = _techLib()[it.techId];
+  var mods = live ? live.mods : (it.techSnap && it.techSnap.mods);
+  return _modsToBonuses(mods || []);
+}
+// Every tech item currently EQUIPPED: in the equipped outfit (or a bag within it),
+// in a hand, or inside an equipped standalone container.
+function _equippedTechItems() {
+  var out = [], seen = [];
+  function push(it) { if (_isTechItem(it) && seen.indexOf(it) < 0) { seen.push(it); out.push(it); } }
+  function walk(items) { (items || []).forEach(function(it) { if (!it) return; push(it); if (it.contents) walk(it.contents); }); }
+  var eq = (CS.outfits || []).filter(function(o) { return o.equipped; })[0];
+  if (eq) walk(eq.items);
+  (CS.hands || []).forEach(function(h) { if (h) { push(h); if (h.contents) walk(h.contents); } });
+  (CS.fashion || []).forEach(function(f) { if (f && f.equipped && f.contents) walk(f.contents); });
+  // A loose gadget the player flags equipped directly (its own E toggle).
+  (CS.gear || []).forEach(function(g) { if (g && g.techId && g.equipped) push(g); });
+  return out;
+}
+function getGearBonusesFor(type, target) {
+  var out = [];
+  _equippedTechItems().forEach(function(it) {
+    _techItemBonuses(it).forEach(function(b) { if (b.type === type && b.target === target) out.push({ name: it.name, value: b.value }); });
+  });
+  return out;
+}
+function getGearTotalFor(type, target) { return getGearBonusesFor(type, target).reduce(function(s, b) { return s + b.value; }, 0); }
+
 function effectiveStat(s) {
-  return (CS.stats[s] || 0) + getCyberTotalFor('stat', s);
+  return (CS.stats[s] || 0) + getCyberTotalFor('stat', s) + getGearTotalFor('stat', s);
 }
 
 var WOUND_ZONES = [
@@ -918,10 +980,11 @@ function clearPhoto() {
 
 /* ─── STATS ─── */
 function renderStats() {
+  _techLibBust();
   var g = document.getElementById('stats-grid');
   g.innerHTML = STATS.map(function(s) {
     var base     = CS.stats[s] || 0;
-    var bonuses  = getCyberBonusesFor('stat', s);
+    var bonuses  = getCyberBonusesFor('stat', s).concat(getGearBonusesFor('stat', s));
     var cyberSum = bonuses.reduce(function(acc, b) { return acc + b.value; }, 0);
     var effective = base + cyberSum;
 
@@ -985,6 +1048,7 @@ function getRoleSkills() {
 
 /* ─── SKILLS ─── */
 function renderSkills() {
+  _techLibBust();
   var filter = document.getElementById('skill-filter').value.toLowerCase();
   var nz = document.getElementById('skill-nonzero').checked;
   var roleSkills = getRoleSkills();
@@ -1026,14 +1090,14 @@ function renderSkills() {
       var val = CS.skills[sk.name] || 0;
       totalPts += val;
       var statVal = effectiveStat(sk.stat);
-      var cyberBonus = getCyberTotalFor('skill', sk.name);
+      var cyberBonus = getCyberTotalFor('skill', sk.name) + getGearTotalFor('skill', sk.name);
       var total = val + statVal + cyberBonus;
       var isRole = roleSkills.indexOf(sk.name) >= 0;
       var esc = sk.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
       var cyberTag = '';
       if (cyberBonus !== 0) {
-        var bonuses = getCyberBonusesFor('skill', sk.name);
+        var bonuses = getCyberBonusesFor('skill', sk.name).concat(getGearBonusesFor('skill', sk.name));
         var tip = bonuses.map(function(b) { return b.name + ': ' + (b.value >= 0 ? '+' : '') + b.value; }).join('&#10;');
         cyberTag = '<span class="sk-cyber" title="' + tip + '">' + (cyberBonus > 0 ? '+' : '') + cyberBonus + '</span>';
       }
@@ -1799,11 +1863,13 @@ function _makeWardrobeItem(src, isArmor) {
     isArmor: !!isArmor, sp: sp, description: '' };
 }
 function _makeOutfitItem(w) {
-  return { name: w.name, category: w.category || '', cost: w.cost || 0, wt: w.wt || 0, notes: w.notes || '',
+  var it = { name: w.name, category: w.category || '', cost: w.cost || 0, wt: w.wt || 0, notes: w.notes || '',
     isArmor: !!w.isArmor, slots: Math.max(_getFashionSlots(w), 2),
     contents: [], sp: w.sp || 0, spCurrent: w.sp || 0,
     locs: { head:false, torso:false, rarm:false, larm:false, rleg:false, lleg:false },
     description: w.description || '' };
+  if (w.techId) { it.techId = w.techId; it.techSnap = w.techSnap; } // carry a tech gadget into the outfit
+  return it;
 }
 
 function addOutfit(item)  { var it = _makeWardrobeItem(item, false); CS.wardrobe.push(it); pendPurchase(it, 'clothing', item.cost); renderWardrobe(); }
@@ -1970,11 +2036,18 @@ function renderWardrobe() {
       searchResultsEl.style.display = 'none';
     }
   }
+  _techLibBust();
   el.innerHTML = CS.wardrobe.length ? CS.wardrobe.map(function(w, wi) {
+    var techTag = '', techBon = '';
+    if (_isTechItem(w)) {
+      techTag = ' <span class="inv-tech-tag">TECH</span>';
+      var bon = _modsToBonuses(_techView(w).mods || []);
+      if (bon.length) techBon = '<span class="wd-tag wd-tech-bon">' + bon.map(function(b){ return (b.value>=0?'+':'')+b.value+' '+_htmlesc(b.target); }).join(' ') + '</span>';
+    }
     return '<div class="wd-item" draggable="true" ondragstart="wardrobeDragStart(event,' + wi + ')">' +
       (w.isArmor ? '<span class="wd-armor-dot" title="Armor"></span>' : '') +
-      '<span class="wd-name">' + w.name + '</span>' +
-      (w.sp ? '<span class="wd-tag">SP ' + w.sp + '</span>' : '') +
+      '<span class="wd-name">' + _htmlesc(w.name) + techTag + '</span>' +
+      (w.sp ? '<span class="wd-tag">SP ' + w.sp + '</span>' : '') + techBon +
       '<span class="wd-equip-btn" onclick="addToActiveOutfit(' + wi + ')" title="Add to active outfit">▶</span>' +
       '<span class="wd-rm" onclick="removeFromWardrobe(' + wi + ')">✕</span>' +
     '</div>';
@@ -2449,9 +2522,12 @@ function setGearQty(idx, val) {
 }
 
 function renderGear() {
+  _techLibBust();
   var el = document.getElementById('gear-list');
   if (!el) return;
+  var equipped = _equippedTechItems();
   el.innerHTML = CS.gear.map(function(g, i) {
+    if (_isTechItem(g)) return _techGearCard(g, i, equipped.indexOf(g) >= 0);
     return '<div class="inv-item' + (g._forSale ? ' inv-forsale' : '') + '" data-gi="' + i + '" draggable="true" ondragstart="gearItemDragStart(event,' + i + ')">' +
       '<div class="inv-top">' +
       '<span class="drag-handle" title="Drag into a container">⠿</span>' +
@@ -2469,6 +2545,84 @@ function renderGear() {
       '</div>';
   }).join('');
   if (window.CtxMenu) el.querySelectorAll('.inv-item[data-gi]').forEach(function (n) { CtxMenu.attach(n, function () { return _gearCtxMenu(+n.getAttribute('data-gi')); }); });
+}
+
+/* ─── Tech objects in the inventory (built in the TECH section) ─── */
+function _htmlesc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function _techView(g) { return _techLib()[g.techId] || g.techSnap || {}; }
+function _techGearCard(g, i, active) {
+  var v = _techView(g);
+  var feats = (v.feats || []).map(function(f) { return _htmlesc(f.domain) + ' g' + f.grade; }).join(' · ');
+  var bon = _modsToBonuses(v.mods || []);
+  var bonStr = bon.map(function(b) { return (b.value >= 0 ? '+' : '') + b.value + ' ' + _htmlesc(b.target); }).join('   ');
+  var gone = !_techLib()[g.techId];
+  return '<div class="inv-item inv-tech' + (active ? ' inv-tech-on' : '') + '" data-gi="' + i + '" draggable="true" ondragstart="gearItemDragStart(event,' + i + ')">' +
+    '<div class="inv-top">' +
+    '<span class="drag-handle" title="Drag into a container">⠿</span>' +
+    '<span class="inv-name">' + _htmlesc(g.name) + ' <span class="inv-tech-tag">TECH</span>' +
+      (gone ? ' <span class="inv-tech-gone" title="Source object not in the workshop — using the saved snapshot.">◇</span>' : '') + '</span>' +
+    '<div class="inv-tags">' +
+    '<span class="inv-tech-e' + (active ? ' on' : '') + '" title="Equip — apply its wearer bonuses" onclick="toggleTechEquip(' + i + ')">E</span>' +
+    editTagNum('gear', i, 'cost', '', 'eb', 50) +
+    editTagNum('gear', i, 'wt', '', 'kg', 40) +
+    '</div>' +
+    '<span class="inv-remove" onclick="removeGear(' + i + ')">✕</span></div>' +
+    (feats ? '<div class="inv-tech-feats">' + feats + '</div>' : '') +
+    (bon.length
+      ? '<div class="inv-tech-bon' + (active ? '' : ' off') + '">' + (active ? '● applies:  ' : '○ when equipped:  ') + bonStr + '</div>'
+      : '<div class="inv-tech-bon off">no wearer bonuses</div>') +
+    (g.notes ? '<div class="inv-details">' + _htmlesc(g.notes) + '</div>' : '') +
+    '</div>';
+}
+function toggleTechEquip(i) {
+  var g = CS.gear[i]; if (!_isTechItem(g)) return;
+  g.equipped = !g.equipped;
+  renderGear(); renderStats(); renderSkills();
+  try { _csPersist(); } catch (e) {}
+}
+function addTechToSheet(id, dest) {
+  var o = _techLib()[id]; if (!o) return;
+  var snap = { name: o.name, cls: o.cls, feats: o.feats || [], mods: o.mods || [] };
+  if (dest === 'wardrobe') {
+    CS.wardrobe = CS.wardrobe || [];
+    CS.wardrobe.push({ name: o.name || 'UNTITLED', category: 'ARMOR/CLOTHING', cost: 0, wt: 0, notes: o.flavor || '',
+      isArmor: false, sp: 0, description: '', techId: o.id || id, techSnap: snap });
+    _modalClose();
+    if (typeof renderWardrobe === 'function') renderWardrobe();
+  } else {
+    CS.gear = CS.gear || [];
+    CS.gear.push({ name: o.name || 'UNTITLED', category: 'TECH', cost: 0, wt: 0, qty: 1,
+      notes: o.flavor || '', description: '', techId: o.id || id, equipped: false, techSnap: snap });
+    _modalClose();
+    renderGear();
+  }
+  renderStats(); renderSkills();
+  try { _csPersist(); } catch (e) {}
+}
+function openWorkshopPicker() {
+  _techLibBust();
+  var list = _techLibList();
+  var body;
+  if (!list.length) {
+    body = '<div class="tech-pick-empty">No finished objects in your Tech workshop yet. Build one in the <b>TECH</b> section, then it shows up here.</div>';
+  } else {
+    body = '<div class="tech-pick-list">' + list.map(function(o) {
+      var feats = (o.feats || []).map(function(f) { return _htmlesc(f.domain) + ' g' + f.grade; }).join(' · ');
+      var bon = _modsToBonuses(o.mods || []);
+      var bonStr = bon.map(function(b) { return (b.value >= 0 ? '+' : '') + b.value + ' ' + _htmlesc(b.target); }).join('   ');
+      var id = (o.id || '').replace(/'/g, "\\'");
+      return '<div class="tech-pick-row">' +
+        '<div class="tech-pick-main"><span class="tech-pick-name">' + _htmlesc(o.name || 'UNTITLED') + '</span>' +
+        '<span class="tech-pick-cls">' + _htmlesc(o.cls || '') + '</span></div>' +
+        (feats ? '<div class="tech-pick-feats">' + feats + '</div>' : '') +
+        (bon.length ? '<div class="tech-pick-bon">' + bonStr + '</div>' : '') +
+        '<div class="tech-pick-dests">' +
+          '<button class="tech-pick-add" onclick="addTechToSheet(\'' + id + '\',\'gear\')" title="Loose gear — carry it, equip in hand/bag or with E">+ gear</button>' +
+          '<button class="tech-pick-add" onclick="addTechToSheet(\'' + id + '\',\'wardrobe\')" title="Wearable — assign a body location and wear it in an outfit">+ wear</button>' +
+        '</div></div>';
+    }).join('') + '</div>';
+  }
+  _modalOpen('Add from your Tech workshop', body);
 }
 /* ─── Inventory right-click menus ─── */
 function _ctxInvRefresh() {
