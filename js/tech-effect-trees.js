@@ -15,89 +15,89 @@
 
   // ── authored trees (bushy where it matters: g3–g4) ──
   var TREES = {
-    STRIKE: { l: 'Weapon', cap: 'it wounds', kids: [
-      { l: 'Ranged', kids: [
-        { l: 'Ballistic', kids: [
-          { l: 'Sidearm', act: 'aimed-shot', kids: [
-            { l: 'Compact', tag: 'conceal' },
-            { l: 'Match', act: 'aimed-shot', kids: [
-              { l: 'Marksman', act: 'overwatch', kids: [{ l: 'Anti-materiel', arch: 'Barrett', need: 'mount' }] }] },
-            { l: 'Heavy', act: 'pierce' }] },
-          { l: 'SMG', sc: { max: 3, per: 'rof' }, tag: 'mag' },
-          { l: 'Longarm', act: 'burst', kids: [
-            { l: 'Assault', act: 'burst', tag: 'rail' },
-            { l: 'Marksman', act: 'overwatch', kids: [{ l: 'Fire-control', act: 'overwatch', need: 'node:SENSE.tag' }] },
-            { l: 'Shotgun', act: 'spread' }] },
-          { l: 'Launcher', act: 'lob', tag: 'tube' }] },
-        { l: 'Energy', need: 'power', kids: [
-          { l: 'Beam', kids: [
-            { l: 'Continuous', sc: { max: 3, per: 'sustain' }, act: 'burn' },
-            { l: 'Pulse', act: 'overcharge' }] },
-          { l: 'Arc', kids: [{ l: 'Chain', sc: { max: 3, per: 'targets' }, act: 'arc' }] }] }] },
-      { l: 'Melee', cap: 'silent', kids: [
-        { l: 'Blade', kids: [
-          { l: 'Mono', arch: 'mantis' },
-          { l: 'Vibro', sc: { max: 3, per: 'cut' } },
-          { l: 'Poisoned', act: 'inject', need: 'node:INJECT' }] },
-        { l: 'Blunt', act: 'stagger' },
-        { l: 'Flexible', kids: [{ l: 'Monowire', act: 'dismember' }] }] }] },
+    STRIKE: { l: 'Weapon', cap: 'a thing that wounds', kids: [
+      { l: 'Ranged', cap: 'strikes at a distance', kids: [
+        { l: 'Ballistic', cap: 'throws slugs — bullets', kids: [
+          { l: 'Sidearm', cap: 'pistol-class, one-handed', act: 'aimed-shot', kids: [
+            { l: 'Compact', cap: 'small, concealable frame', tag: 'conceal' },
+            { l: 'Match', cap: 'precision-tuned frame', act: 'aimed-shot', kids: [
+              { l: 'Marksman', cap: 'accurate long-range fire', act: 'overwatch', kids: [{ l: 'Anti-materiel', cap: 'punches through vehicles & walls', arch: 'Barrett', need: 'mount' }] }] },
+            { l: 'Heavy', cap: 'big rounds, hard hits', act: 'pierce' }] },
+          { l: 'SMG', cap: 'high fire-rate, close range', sc: { max: 3, per: 'rof' }, tag: 'mag' },
+          { l: 'Longarm', cap: 'rifle-class, two-handed', act: 'burst', kids: [
+            { l: 'Assault', cap: 'select-fire carbine', act: 'burst', tag: 'rail' },
+            { l: 'Marksman', cap: 'accurate long-range fire', act: 'overwatch', kids: [{ l: 'Fire-control', cap: 'computer-aimed, watches an arc', act: 'overwatch', need: 'node:SENSE.tag' }] },
+            { l: 'Shotgun', cap: 'wide spread, close range', act: 'spread' }] },
+          { l: 'Launcher', cap: 'lobs grenades / rockets', act: 'lob', tag: 'tube' }] },
+        { l: 'Energy', cap: 'directed energy (needs power)', need: 'power', kids: [
+          { l: 'Beam', cap: 'coherent energy beam', kids: [
+            { l: 'Continuous', cap: 'sustained beam that burns through', sc: { max: 3, per: 'sustain' }, act: 'burn' },
+            { l: 'Pulse', cap: 'a burst of energy', act: 'overcharge' }] },
+          { l: 'Arc', cap: 'an electric arc', kids: [{ l: 'Chain', cap: 'arc that jumps between targets', sc: { max: 3, per: 'targets' }, act: 'arc' }] }] }] },
+      { l: 'Melee', cap: 'silent, hand-to-hand', kids: [
+        { l: 'Blade', cap: 'an edged weapon', kids: [
+          { l: 'Mono', cap: 'monomolecular edge — cuts most matter', arch: 'mantis' },
+          { l: 'Vibro', cap: 'vibrating blade, deeper cuts', sc: { max: 3, per: 'cut' } },
+          { l: 'Poisoned', cap: 'coated to inject on a hit', act: 'inject', need: 'node:INJECT' }] },
+        { l: 'Blunt', cap: 'impact weapon, staggers', act: 'stagger' },
+        { l: 'Flexible', cap: 'whip / wire — reach + entangle', kids: [{ l: 'Monowire', cap: 'monofilament wire, dismembers', act: 'dismember' }] }] }] },
 
-    ARMOR: { l: 'Cover', cap: 'it stops a hit', kids: [
-      { l: 'Worn', kids: [
-        { l: 'Weave', kids: [
-          { l: 'Kevlar' }, { l: 'Silk', tag: 'conceal' }, { l: 'Trauma-lined', act: 'cushion' }] },
-        { l: 'Sealed', need: 'seal', kids: [
-          { l: 'Filter-liner' }, { l: 'Hardsuit', kids: [{ l: 'Deep-env' }] }] }] },
-      { l: 'Rigid', kids: [
-        { l: 'Plate', kids: [
-          { l: 'Trauma-insert', add: true, cap: 'stacks with other treatments' },
-          { l: 'Ceramic', add: true, cap: 'stacks with other treatments', kids: [
-            { l: 'Milspec plate', needsAll: ['rigid.plate.trauma-insert'], arch: 'milspec', cap: 'needs trauma-insert + ceramic' }] },
-          { l: 'Ablative', add: true, sc: { max: 3, per: 'hits' }, cap: 'ablates by the hit' }] },
-        { l: 'Composite', kids: [
-          { l: 'Reactive', sc: { max: 3, per: 'coverage' }, need: 'power', act: 'brace' },
-          { l: 'Self-seal', act: 'patch' },
-          { l: 'Powered', need: 'node:MOVE.servo', act: 'carry', kids: [{ l: 'Exo', arch: 'Dragoon', act: 'shrug' }] }] }] }] },
+    ARMOR: { l: 'Cover', cap: 'a thing that stops a hit', kids: [
+      { l: 'Worn', cap: 'soft, wearable protection', kids: [
+        { l: 'Weave', cap: 'ballistic fabric', kids: [
+          { l: 'Kevlar', cap: 'aramid weave, common' }, { l: 'Silk', cap: 'thin, concealable', tag: 'conceal' }, { l: 'Trauma-lined', cap: 'cushions blunt trauma', act: 'cushion' }] },
+        { l: 'Sealed', cap: 'airtight (needs a seal)', need: 'seal', kids: [
+          { l: 'Filter-liner', cap: 'filters bad air' }, { l: 'Hardsuit', cap: 'rigid pressure suit', kids: [{ l: 'Deep-env', cap: 'deep-sea / vacuum rated' }] }] }] },
+      { l: 'Rigid', cap: 'hard-shell protection', kids: [
+        { l: 'Plate', cap: 'rigid armour plate', kids: [
+          { l: 'Trauma-insert', add: true, cap: 'shock-plate; stacks with other treatments' },
+          { l: 'Ceramic', add: true, cap: 'shatters incoming rounds; stacks', kids: [
+            { l: 'Milspec plate', needsAll: ['rigid.plate.trauma-insert'], arch: 'milspec', cap: 'military composite — needs trauma-insert + ceramic' }] },
+          { l: 'Ablative', add: true, sc: { max: 3, per: 'hits' }, cap: 'sacrificial layer, ablates each hit' }] },
+        { l: 'Composite', cap: 'layered high-tech plate', kids: [
+          { l: 'Reactive', cap: 'reacts to a hit and braces (needs power)', sc: { max: 3, per: 'coverage' }, need: 'power', act: 'brace' },
+          { l: 'Self-seal', cap: 'seals its own breaches', act: 'patch' },
+          { l: 'Powered', cap: 'motorized frame, carries the load (needs servos)', need: 'node:MOVE.servo', act: 'carry', kids: [{ l: 'Exo', cap: 'full exoskeleton — shrugs hits', arch: 'Dragoon', act: 'shrug' }] }] }] }] },
 
-    HACK: { l: 'Intrusion', cap: 'get in', bridge: 'net', kids: [
-      { l: 'Access', kids: [
-        { l: 'Lockpick', act: 'unlock' },
-        { l: 'Spoof', act: 'spoof', need: 'data-port' },
-        { l: 'Brute', act: 'crack-pw' }] },
-      { l: 'Breach', act: 'breach', kids: [
-        { l: 'Rootkit', act: 'persist' },
-        { l: 'Backdoor' },
-        { l: 'Escalate', act: 'root', kids: [
-          { l: 'Crack-fort', bridge: 'net', act: 'crack', kids: [{ l: 'Own-net', sc: { max: 3, per: 'reach' }, act: 'own' }] }] }] },
-      { l: 'Stealth', kids: [
-        { l: 'Loop-feeds', act: 'loop' },
-        { l: 'Wipe-trail', act: 'wipe' },
-        { l: 'Trace-back', act: 'trace' }] },
-      { l: 'Payload', kids: [
-        { l: 'Virus', act: 'infect' },
-        { l: 'Logic-bomb', act: 'arm' },
-        { l: 'Ransom', act: 'lock-sys' }] }] },
+    HACK: { l: 'Intrusion', cap: 'a thing that gets in', bridge: 'net', kids: [
+      { l: 'Access', cap: 'get past a lock / gate', kids: [
+        { l: 'Lockpick', cap: 'opens physical & electronic locks', act: 'unlock' },
+        { l: 'Spoof', cap: 'fakes credentials (needs a port)', act: 'spoof', need: 'data-port' },
+        { l: 'Brute', cap: 'cracks passwords by force', act: 'crack-pw' }] },
+      { l: 'Breach', cap: 'break into a device', act: 'breach', kids: [
+        { l: 'Rootkit', cap: 'stays in after the breach', act: 'persist' },
+        { l: 'Backdoor', cap: 'leaves a quiet way back in' },
+        { l: 'Escalate', cap: 'grabs root / admin rights', act: 'root', kids: [
+          { l: 'Crack-fort', cap: 'assaults a full datafort (NET)', bridge: 'net', act: 'crack', kids: [{ l: 'Own-net', cap: 'owns the whole subnet', sc: { max: 3, per: 'reach' }, act: 'own' }] }] }] },
+      { l: 'Stealth', cap: 'stay undetected', kids: [
+        { l: 'Loop-feeds', cap: 'loops camera / sensor feeds', act: 'loop' },
+        { l: 'Wipe-trail', cap: 'erases the logs', act: 'wipe' },
+        { l: 'Trace-back', cap: 'traces the sysop back', act: 'trace' }] },
+      { l: 'Payload', cap: 'drop malware', kids: [
+        { l: 'Virus', cap: 'self-spreading infection', act: 'infect' },
+        { l: 'Logic-bomb', cap: 'triggers on a condition', act: 'arm' },
+        { l: 'Ransom', cap: 'locks the system for ransom', act: 'lock-sys' }] }] },
 
-    SENSE: { l: 'Sense', cap: 'perceive', kids: [
-      { l: 'Optical', kids: [
-        { l: 'Zoom', sc: { max: 3, per: 'magnify' } },
-        { l: 'Low-light', kids: [{ l: 'Thermal', kids: [{ l: 'Multispectral' }] }] }] },
-      { l: 'Signal', need: 'power', kids: [
-        { l: 'Radar', sc: { max: 4, per: 'range' }, act: 'ping' },
-        { l: 'Intercept', bridge: 'net', act: 'tap' }] },
-      { l: 'Track', kids: [
-        { l: 'Follow', sc: { max: 3, per: 'range' }, act: 'track' },
-        { l: 'Predict', need: 'node:COMPUTE.expert', act: 'predict' }] }] },
+    SENSE: { l: 'Sense', cap: 'a thing that perceives', kids: [
+      { l: 'Optical', cap: 'see better', kids: [
+        { l: 'Zoom', cap: 'magnifies (dial)', sc: { max: 3, per: 'magnify' } },
+        { l: 'Low-light', cap: 'sees in the dark', kids: [{ l: 'Thermal', cap: 'sees heat', kids: [{ l: 'Multispectral', cap: 'sees across every spectrum' }] }] }] },
+      { l: 'Signal', cap: 'detect emissions (needs power)', need: 'power', kids: [
+        { l: 'Radar', cap: 'active ranging ping (dial)', sc: { max: 4, per: 'range' }, act: 'ping' },
+        { l: 'Intercept', cap: 'taps comms traffic (NET)', bridge: 'net', act: 'tap' }] },
+      { l: 'Track', cap: 'follow a target', kids: [
+        { l: 'Follow', cap: 'keeps a lock (dial range)', sc: { max: 3, per: 'range' }, act: 'track' },
+        { l: 'Predict', cap: 'anticipates the path (needs a smart core)', need: 'node:COMPUTE.expert', act: 'predict' }] }] },
 
-    HEAL: { l: 'Heal', cap: 'mend', kids: [
-      { l: 'First-aid', kids: [
-        { l: 'Stabilize', sc: { max: 3, per: 'charges' }, act: 'stabilize' },
-        { l: 'Trauma-pack', tag: 'sterile' }] },
-      { l: 'Chem', need: 'injector', kids: [
-        { l: 'Stim', sc: { max: 3, per: 'doses' }, act: 'dose' },
-        { l: 'Antitox', act: 'purge' }] },
-      { l: 'Nano', need: 'power', kids: [
-        { l: 'Repair', sc: { max: 3, per: 'rate' }, act: 'mend', kids: [{ l: 'Regen', arch: 'regen bay', need: 'mount' }] }] }] },
+    HEAL: { l: 'Heal', cap: 'a thing that mends', kids: [
+      { l: 'First-aid', cap: 'basic care', kids: [
+        { l: 'Stabilize', cap: 'stops someone from dying (dial charges)', sc: { max: 3, per: 'charges' }, act: 'stabilize' },
+        { l: 'Trauma-pack', cap: 'sterile field dressing', tag: 'sterile' }] },
+      { l: 'Chem', cap: 'drugs (needs an injector)', need: 'injector', kids: [
+        { l: 'Stim', cap: 'combat stimulant (dial doses)', sc: { max: 3, per: 'doses' }, act: 'dose' },
+        { l: 'Antitox', cap: 'purges toxins', act: 'purge' }] },
+      { l: 'Nano', cap: 'medical nanites (needs power)', need: 'power', kids: [
+        { l: 'Repair', cap: 'mends wounds over time (dial rate)', sc: { max: 3, per: 'rate' }, act: 'mend', kids: [{ l: 'Regen', cap: 'full-body regeneration bay (needs a mount)', arch: 'regen bay', need: 'mount' }] }] }] },
   };
 
   function hasTree(domain) { return !!TREES[String(domain || '').toUpperCase()]; }

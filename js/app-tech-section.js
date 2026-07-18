@@ -87,6 +87,7 @@
         '<span class="tk2-tree-legend"><b>○</b> pick-one · <b>□</b> add · <b>◇</b> ° dial · <b>⬡</b> needs-all</span>' +
         '<span class="tk2-bar-sp"></span>' +
         '<button class="app-btn tk2-treeadd"' + (path.length ? '' : ' disabled') + '>' + (pick.editFi != null ? 'SET' : 'ADD') + ' · g' + TR.pathTier(g, path) + '</button></div>' +
+      '<div class="tk2-tree-desc" data-treedesc><span class="tk2-mut">hover a node to read what it does</span></div>' +
       treeSvg(g, path) +
       '<div class="tk2-tree-crumb">' + crumb + '</div>' +
       (dialHtml ? '<div class="tk2-tree-dials">' + dialHtml + '</div>' : '') +
@@ -101,12 +102,14 @@
   }
   function treeSvg(g, path) {
     var L = TR.layout(g), on = {}; TR.activeIds(path).forEach(function (id) { on[id] = 1; });
+    on[g.root] = 1;   // the base is always "on" so the trunk to the chosen branch lights up
     var svg = '';
     for (var t = 1; t <= g.maxTier; t++) { var gy = L.padY + t * L.rowH; svg += '<text class="tk2-tree-g" x="8" y="' + (gy + 4).toFixed(0) + '">g' + t + '</text>'; }
     g.edges.forEach(function (e) { var A = L.pos[e.from], B = L.pos[e.to], lit = on[e.from] && on[e.to]; svg += '<line class="tk2-tedge' + (lit ? ' on' : '') + '" x1="' + A.x.toFixed(1) + '" y1="' + A.y.toFixed(1) + '" x2="' + B.x.toFixed(1) + '" y2="' + B.y.toFixed(1) + '"/>'; });
     // needsAll: dashed links from the convergence node to EVERY required node
     Object.keys(g.nodes).forEach(function (id) { var n = g.nodes[id]; if (!n.needsAll) return; var B = L.pos[id]; n.needsAll.forEach(function (r) { var A = L.pos[r]; if (!A) return; var lit = on[id] && on[r]; svg += '<line class="tk2-tedge-req' + (lit ? ' on' : '') + '" x1="' + A.x.toFixed(1) + '" y1="' + A.y.toFixed(1) + '" x2="' + B.x.toFixed(1) + '" y2="' + B.y.toFixed(1) + '"/>'; }); });
-    var R = L.pos[g.root]; svg += '<text class="tk2-troot" x="' + R.x.toFixed(1) + '" y="' + (R.y - 8).toFixed(1) + '" text-anchor="middle">' + esc(g.nodes[g.root].label.toUpperCase()) + '</text>';
+    var R = L.pos[g.root]; svg += '<text class="tk2-troot" x="' + R.x.toFixed(1) + '" y="' + (R.y - 12).toFixed(1) + '" text-anchor="middle">' + esc(g.nodes[g.root].label.toUpperCase()) + '</text>';
+    svg += '<circle class="tk2-tbase" cx="' + R.x.toFixed(1) + '" cy="' + R.y.toFixed(1) + '" r="5"/>';   // the base, under the title — the trunk starts here
     Object.keys(g.nodes).forEach(function (id) {
       if (id === g.root) return;
       var n = g.nodes[id], p = L.pos[id], k = TR.kindOf(n), act = !!on[id];
@@ -417,6 +420,8 @@
     var tback = pane.querySelector('[data-treeback]'); if (tback) tback.onclick = function () { s.pick.treeDom = null; s.pick.treePath = []; s.pick.treeScroll = null; renderBench(pane); };
     pane.querySelectorAll('[data-treenode]').forEach(function (nd) { nd.onclick = function () { saveTreeScroll(pane, s); var g = TR.get(s.pick.treeDom); s.pick.treePath = TR.toggle(g, s.pick.treePath || [], nd.getAttribute('data-treenode')); renderBench(pane); }; });
     pane.querySelectorAll('[data-dial]').forEach(function (b) { b.onclick = function () { saveTreeScroll(pane, s); var g = TR.get(s.pick.treeDom), id = b.getAttribute('data-dial'), dd = +b.getAttribute('data-dd'), n = g.nodes[id], cur = TR.scaleOf(s.pick.treePath, id) || 1, mx = (n.scale && n.scale.max) || 3; s.pick.treePath = TR.setScale(s.pick.treePath, id, Math.max(1, Math.min(mx, cur + dd))); renderBench(pane); }; });
+    var tdesc = pane.querySelector('[data-treedesc]');
+    if (tdesc) pane.querySelectorAll('[data-treenode]').forEach(function (nd) { nd.onmouseenter = function () { var g = TR.get(s.pick.treeDom), n = g.nodes[nd.getAttribute('data-treenode')]; if (!n) return; tdesc.innerHTML = '<b>' + esc(n.label) + '</b>' + (n.cap ? ' — ' + esc(n.cap) : '') + (n.act ? ' <span class="tk2-tchip act">▸ ' + esc(n.act) + '</span>' : '') + (n.scale ? ' <span class="tk2-mut">◇ ° ' + esc(n.scale.per || 'dial') + '</span>' : '') + (n.add ? ' <span class="tk2-mut">□ stackable</span>' : '') + (n.tag ? ' <span class="tk2-mut">unlocks +' + esc(n.tag) + ' addons</span>' : '') + (n.need ? ' <span class="tk2-mut">(needs ' + esc(n.need) + ')</span>' : '') + (n.needsAll ? ' <span class="tk2-mut">⬡ needs all: ' + esc(n.needsAll.map(function (r) { return g.nodes[r] ? g.nodes[r].label : r; }).join(', ')) + '</span>' : ''); }; });
     var tadd = pane.querySelector('.tk2-treeadd'); if (tadd && !tadd.disabled) tadd.onclick = function () {
       var g = TR.get(s.pick.treeDom), path = s.pick.treePath || []; if (!path.length) return;
       var feat = { domain: s.pick.treeDom, grade: TR.pathTier(g, path), path: path };
