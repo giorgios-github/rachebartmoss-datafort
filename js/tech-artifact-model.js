@@ -40,6 +40,7 @@
     lineage: { perStep: 2, cap: 6 },  // re-crafting your own line lowers DC, capped
     ingredient: { gradeBelow: 1 },    // a feature grade N needs a component grade N−1
     gate: { instabilityPerLevel: 0.6 },  // building above your skill = PUSH, per level of deficit
+    addon: { eb: 40, dc: 0.4, dcHeavy: 1.2 },  // an addon adds cost + a little build difficulty; "heavy" (complexity-scaled) addons are harder still
   };
   var WHO = ['maker', 'owner', 'GM', 'public'];
 
@@ -65,6 +66,7 @@
       feats: opts.feats || [],
       ports: opts.ports || {},
       limits: opts.limits || [],
+      addons: opts.addons || [],
       mods: opts.mods || [],
       lineage: opts.lineage || null,
       latent: opts.latent || [],
@@ -73,6 +75,7 @@
     });
   }
 
+  function normAddon(x) { return typeof x === 'string' ? { name: str(x), note: '' } : { name: str(x.name || ''), note: str(x.note || '') }; }
   function normFeat(f) {
     f = f || {};
     var o = { domain: str(f.domain || 'EFFECT').toUpperCase(), grade: clampGrade(f.grade != null ? f.grade : 1) };
@@ -80,6 +83,7 @@
     if (f.dur != null) o.dur = str(f.dur);
     if (f.when != null) o.when = str(f.when);
     if (f.note != null) o.note = str(f.note);
+    var ad = arr(f.addons).map(normAddon); if (ad.length) o.addons = ad;   // addons tied to THIS effect
     return o;
   }
   function normPorts(p) {
@@ -105,6 +109,10 @@
     p.feats = arr(p.feats).map(normFeat);
     p.ports = normPorts(p.ports);
     p.limits = arr(p.limits).map(function (l) { return typeof l === 'string' ? { text: l, relief: 1 } : { text: str(l.text), relief: l.relief != null ? +l.relief : 1 }; });
+    // addons = GENERIC object-side modifications (miniaturized, ruggedized…) — descriptive, no wearer effect.
+    // Effect-specific addons live on each feat (feat.addons).
+    p.addons = arr(p.addons).map(normAddon);
+    // mods = wearer bonuses fed to the sheet — { target: <stat|skill>, value }
     p.mods = arr(p.mods).map(function (m) { return { target: str(m.target || ''), value: str(m.value != null ? m.value : ''), when: str(m.when || 'when worn') }; });
     p.lineage = p.lineage ? { refines: str(p.lineage.refines || ''), steps: Math.max(0, Math.round(+p.lineage.steps || 0)) } : null;
     p.latent = arr(p.latent).map(function (x) { return { text: str(x.text || x), domain: str(x.domain || '').toUpperCase(), grade: x.grade != null ? clampGrade(x.grade) : null, who: normWho(x.who) }; });
@@ -128,6 +136,26 @@
     return out;
   }
 
+  // ── ADDON COST ──
+  // Complexity anchor = the object's base materials cost (rises with Σgrades). A
+  // complexity-scaled addon ({mult}) prices as a fraction of that — miniaturising a
+  // simple pistol is cheap, miniaturising a robot-dog (many high-grade feats) is not.
+  function complexityBase(p) { return TUNING.cost.matBase + TUNING.cost.matPerGrade * gradeSum(p); }
+  function allAddonNames(p) {
+    var out = [];
+    p.feats.forEach(function (f) { (f.addons || []).forEach(function (x) { if (x && x.name) out.push(x.name); }); });
+    p.addons.forEach(function (x) { if (x && x.name) out.push(x.name); });
+    return out;
+  }
+  // eb for ONE addon on object p: catalogue entry = number (fixed) | {mult} (×complexity) | absent (flat default).
+  function addonEb(p, name, opts) {
+    var entry = (opts && opts.addonPrice) ? opts.addonPrice(name) : null;
+    if (typeof entry === 'number') return Math.round(entry);
+    if (entry && entry.mult != null) return Math.round(entry.mult * complexityBase(p));
+    return TUNING.addon.eb;
+  }
+  function addonIsHeavy(name, opts) { var e = (opts && opts.addonPrice) ? opts.addonPrice(name) : null; return !!(e && e.mult != null); }
+
   function derive(p, opts) {
     opts = opts || {};
     var isKnown = opts.isKnownDomain || null;
@@ -135,12 +163,18 @@
     var gt = gradeTop(p), gs = gradeSum(p), nF = p.feats.length, nI = interfaceCount(p);
     var T = TUNING;
 
+    // addons: cost (fixed or complexity-scaled) + a little build difficulty
+    var addonNames = allAddonNames(p);
+    var addonsEb = addonNames.reduce(function (s, nm) { return s + addonEb(p, nm, opts); }, 0);
+    var addonDc = addonNames.reduce(function (s, nm) { return s + T.addon.dc + (addonIsHeavy(nm, opts) ? T.addon.dcHeavy : 0); }, 0);
+
     var dc = T.dc.base
       + T.dc.perGradeTop * gt
       + T.dc.perFeature * Math.max(0, nF - 1)
       + T.dc.perInterface * nI
       + T.dc.exoticDomain * nExotic
-      + T.dc.perTierOverThree * Math.max(0, p.tier - 3);
+      + T.dc.perTierOverThree * Math.max(0, p.tier - 3)
+      + addonDc;
     dc = Math.round(dc);
 
     var lineBonus = 0;
@@ -150,7 +184,8 @@
     var nLimits = p.limits.length;
     var op = Math.max(0, Math.round(T.op.perGradeSum * gs - T.op.limitRelief * nLimits));
 
-    var prodEb = Math.round(T.cost.matBase + T.cost.matPerGrade * gs);
+    var matEb = T.cost.matBase + T.cost.matPerGrade * gs;
+    var prodEb = Math.round(matEb + addonsEb);
     var prodHours = Math.max(1, Math.round(T.cost.hoursPerDC * dcLineage));
     var streetEb = Math.round(prodEb * T.cost.streetMult * (1 + T.cost.streetPerGradeTop * gt));
 
@@ -158,7 +193,7 @@
 
     return {
       gradeTop: gt, gradeSum: gs, nFeats: nF, nInterfaces: nI, nExotic: nExotic,
-      dc: dc, dcLineage: dcLineage, lineBonus: lineBonus,
+      dc: dc, dcLineage: dcLineage, lineBonus: lineBonus, addonsEb: Math.round(addonsEb), addonDc: Math.round(addonDc * 10) / 10,
       op: op, prodEb: prodEb, prodHours: prodHours, streetEb: streetEb,
       ingredients: ingr,
     };
@@ -201,6 +236,7 @@
     var pr = p.ports, hasP = pr.takes.length || pr.fits.length || pr.holds.length || pr.needs.length || pr.feeds.length;
     if (hasP) o.ports = pr;
     if (p.limits.length) o.limits = p.limits;
+    if (p.addons.length) o.addons = p.addons;
     if (p.mods.length) o.mods = p.mods;
     if (p.lineage) o.lineage = p.lineage;
     if (p.latent.length) o.latent = p.latent;
@@ -214,7 +250,7 @@
   window.TechArtifact = {
     TUNING: TUNING, WHO: WHO,
     newId: newId, blank: blank, normalize: normalize, derive: derive, gate: gate,
-    gradeTop: gradeTop, gradeSum: gradeSum, ingredients: ingredients,
+    gradeTop: gradeTop, gradeSum: gradeSum, ingredients: ingredients, addonEb: addonEb,
     toJSON: toJSON, fromJSON: fromJSON, clone: clone,
   };
 })();

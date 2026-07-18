@@ -272,6 +272,18 @@
 .tk2-feat-sp { flex:1; }
 .tk2-feat-cap { margin-top:5px; font-size:13px; }
 .tk2-cap { font-weight:bold; }
+/* per-effect addons (chips under each effect) + generic addons + split button */
+.tk2-feat-addons { flex-basis:100%; display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; align-items:center; }
+.tk2-addchip { display:inline-flex; align-items:center; gap:3px; font-family:var(--mono); font-size:11px; border:2px solid var(--ink); background:#fff; padding:0 3px 0 6px; }
+.tk2-addchip-x { border:none; background:none; color:var(--ink); cursor:pointer; font-size:10px; padding:0 2px; line-height:1; }
+.tk2-addchip-x:hover { background:var(--ink); color:#fff; }
+.tk2-addchip-add { font-family:var(--mono); font-size:10px; border:2px solid var(--ink); background:#fff; cursor:pointer; padding:0 6px; color:var(--ink); }
+.tk2-addchip-add:hover { background:var(--ink); color:#fff; }
+.tk2-effbtns { display:flex; gap:6px; margin-top:2px; }
+.tk2-add-eff { flex:2; } .tk2-add-gen { flex:1; }
+.tk2-genadd { margin-top:6px; display:flex; flex-direction:column; gap:4px; }
+.tk2-genadd-h { font-family:var(--head); font-size:10px; letter-spacing:1.5px; color:var(--ink); text-transform:uppercase; opacity:.6; }
+.tk2-addeb { font-family:var(--mono); font-size:10px; color:var(--ink); opacity:.65; }
 .tk2-panel.hero .tk2-panel-b { gap:8px; }
 .tk2-panel.hero > .tk2-panel-h { font-size:15px; }
 .tk2-panel.hero .tk2-help { font-size:12px; }

@@ -175,12 +175,63 @@
   var MOD_GROUPS = { weapon: ['firearm', 'general'], ammo: ['firearm'], cyberware: ['cyber', 'general'], vehicle: ['vehicle', 'general'], carrier: ['vehicle', 'electronics'], electronics: ['electronics', 'general'], data: ['electronics'], gear: ['armor', 'general'], drug: ['general'] };
   function modsFor(cls) { return (MOD_GROUPS[cls] || ['general']).map(function (g) { return { group: g, list: MODS[g] || [] }; }); }
 
+  // ── ADDONS liés aux EFFETS — chaque domaine hérite d'un catalogue par famille ──
+  // (les addons génériques, transverses, passent par le champ texte GENERIC_ADDONS).
+  var ADDON_FAMILIES = {
+    weapon:   ['silencieux', 'canon long', 'bipied', 'compensateur de recul', 'chargeur étendu', 'rail sous-canon', 'crosse pliante', 'détente à cheveu'],
+    optics:   ['monture casque', 'téléobjectif', 'filtre IR', 'gain bas-niveau', 'zoom motorisé', 'incrustation HUD', 'traitement anti-reflet', 'stabilisateur gyro'],
+    signal:   ['antenne boostée', 'module de chiffrement', 'amplificateur de signal', 'routage furtif', 'ports data supplémentaires', 'émetteur en rafale', 'antenne directionnelle'],
+    armor:    ['plaques trauma', 'doublure scellée', 'revêtement ablatif', 'insert céramique', 'largage rapide', 'coutures renforcées', 'coupe dissimulée'],
+    mobility: ['stabilisateur gyro', 'servos renforcés', 'rack cargo', 'harnais à largage rapide', 'amortisseurs', 'chenilles adhérentes'],
+    medchem:  ['régulateur de dose', 'réservoir stérile', 'auto-injecteur', 'doublure chaîne du froid', 'valve de trop-plein'],
+    core:     ['cellule haute capacité', 'port charge rapide', 'panneau solaire d’appoint', 'module hot-swap', 'boîtier durci'],
+  };
+  var DOMAIN_FAMILY = {
+    STRIKE: 'weapon', SHOCK: 'weapon', BURN: 'weapon', PROJECT: 'weapon', DEMOLISH: 'weapon', SONIC: 'weapon',
+    VISION: 'optics', SENSE: 'optics', TRACK: 'optics', ANALYZE: 'optics', RECORD: 'optics', ILLUMINATE: 'optics',
+    LINK: 'signal', HACK: 'signal', COMPUTE: 'signal', BROADCAST: 'signal', JAM: 'signal', CONTROL: 'signal', TRANSLATE: 'signal',
+    ARMOR: 'armor', SHIELD: 'armor', SEAL: 'armor', CONCEAL: 'armor', CLOAK: 'armor', DISGUISE: 'armor',
+    MOVE: 'mobility', FLY: 'mobility', HAUL: 'mobility', BOOST: 'mobility', RESTRAIN: 'mobility', SURVIVE: 'mobility',
+    HEAL: 'medchem', INJECT: 'medchem', 'FILTER-AIR': 'medchem', REPAIR: 'medchem', FABRICATE: 'medchem',
+    POWER: 'core', STORE: 'core', GUIDE: 'core', STYLE: 'core',
+  };
+  var GENERIC_ADDONS = ['miniaturisation', 'durci', 'étanche', 'modulaire', 'dissimulé', 'allégé', 'sans empreintes', 'renforcé', 'commande vocale', 'auto-nettoyant'];
+  function familyOfDomain(dom) { return DOMAIN_FAMILY[String(dom || '').toUpperCase()] || null; }
+  function addonsForDomain(dom) { var f = familyOfDomain(dom); return f ? ADDON_FAMILIES[f].slice() : GENERIC_ADDONS.slice(); }
+
+  // ── ADDON PRICES ── number = fixed eb ; { mult } = fraction of the object's base
+  // complexity cost (scales with Σgrades) — miniaturising a robot-dog costs a fortune.
+  // Anything absent falls to the flat TUNING.addon.eb default.
+  var ADDON_PRICES = {
+    // weapon
+    'silencieux': 150, 'canon long': 100, 'bipied': 75, 'compensateur de recul': 120, 'chargeur étendu': 50, 'rail sous-canon': 40, 'crosse pliante': 80, 'détente à cheveu': 100,
+    // optics
+    'monture casque': 60, 'téléobjectif': 200, 'filtre ir': 150, 'gain bas-niveau': 250, 'zoom motorisé': 180, 'incrustation hud': 300, 'traitement anti-reflet': 50, 'stabilisateur gyro': 220,
+    // signal
+    'antenne boostée': 120, 'module de chiffrement': 300, 'amplificateur de signal': 150, 'routage furtif': 400, 'ports data supplémentaires': 80, 'émetteur en rafale': 180, 'antenne directionnelle': 100,
+    // armor
+    'plaques trauma': 200, 'doublure scellée': 250, 'revêtement ablatif': 300, 'insert céramique': 180, 'largage rapide': 60, 'coutures renforcées': 40, 'coupe dissimulée': 90,
+    // mobility
+    'servos renforcés': 300, 'rack cargo': 80, 'harnais à largage rapide': 60, 'amortisseurs': 120, 'chenilles adhérentes': 150,
+    // medchem
+    'régulateur de dose': 150, 'réservoir stérile': 90, 'auto-injecteur': 200, 'doublure chaîne du froid': 250, 'valve de trop-plein': 60,
+    // core
+    'cellule haute capacité': 200, 'port charge rapide': 80, 'panneau solaire d’appoint': 150, 'module hot-swap': 120, 'boîtier durci': 100,
+    // generic — mostly complexity-scaled (they touch the whole object)
+    'miniaturisation': { mult: 1.0 }, 'durci': { mult: 0.3 }, 'étanche': { mult: 0.2 }, 'modulaire': { mult: 0.25 },
+    'dissimulé': { mult: 0.15 }, 'allégé': { mult: 0.35 }, 'renforcé': { mult: 0.3 },
+    'sans empreintes': 60, 'commande vocale': 120, 'auto-nettoyant': 80,
+  };
+  function addonPrice(name) { var e = ADDON_PRICES[String(name || '').toLowerCase().trim()]; return e === undefined ? null : e; }
+
   window.TechCatalog = {
     ANCHORS: ANCHORS, DOMAINS: DOMAINS, anchorOf: anchorOf, isKnownDomain: isKnownDomain, skillForDomain: skillForDomain,
     CLASSES: CLASSES, skillForClass: skillForClass,
     TOKENS: TOKENS, allTokens: allTokens, isStandard: isStandard,
     SUGGEST: SUGGEST, suggestFor: suggestFor,
     MODS: MODS, modsFor: modsFor,
+    ADDON_FAMILIES: ADDON_FAMILIES, GENERIC_ADDONS: GENERIC_ADDONS, familyOfDomain: familyOfDomain, addonsForDomain: addonsForDomain,
+    ADDON_PRICES: ADDON_PRICES, addonPrice: addonPrice,
     presets: presets, PRESETS: PRESETS,
   };
 })();

@@ -9,22 +9,33 @@
   var LS = 'bartmoss_tech_artifacts';
   var esc = function (t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
   var isKnown = function (d) { return C.isKnownDomain(d); };
-  var DERIVE = function (a) { return M.derive(a, { isKnownDomain: isKnown }); };
+  var DERIVE = function (a) { return M.derive(a, { isKnownDomain: isKnown, addonPrice: C.addonPrice }); };
+  function addonEbTag(a, name) { var eb = M.addonEb(a, name, { addonPrice: C.addonPrice }); var e = C.addonPrice(name); var scaled = !!(e && e.mult != null); return '<span class="tk2-addeb" title="' + (scaled ? 'coût proportionnel à la complexité de l’objet' : 'coût de l’addon') + '">' + (scaled ? '~' : '') + eb + 'eb</span>'; }
+  function allAddonCount(a) { var n = a.addons.length; a.feats.forEach(function (f) { n += (f.addons || []).length; }); return n; }
   var GATE = function (a, skills) { return M.gate(a, skills, { skillForClass: C.skillForClass, skillForDomain: C.skillForDomain }); };
   // ── the BUILDER = the current player's OWN sheet (the one shown in /party/me),
   // picked up automatically from the session — no manual linking. GM = fiat. ──
   function builderInfo() { var B = window.Shell && window.Shell.bridge && window.Shell.bridge(); var sess = B && B.sess; return { role: (sess && sess.role) || 'gm', sheetId: sess && sess.sheetId }; }
   function skillMap(sk) { var m = {}; if (Array.isArray(sk)) sk.forEach(function (x) { if (x && x.name) m[x.name] = +(x.val != null ? x.val : x.level) || 0; }); else if (sk && typeof sk === 'object') for (var k in sk) m[k] = +sk[k] || 0; return m; }
+  var STATS9 = ['INT', 'REF', 'TECH', 'COOL', 'ATT', 'LUCK', 'MA', 'BODY', 'EMP'];
+  // Targets the "+ mod" picker can bind a wearer bonus to — read straight off the sheet.
+  function sheetTargets(json) {
+    json = json || {};
+    var customStats = ((json.nativeExtras && json.nativeExtras['sec-stats:primary']) || []).map(function (f) { return f && f.label; }).filter(Boolean);
+    var skills = Object.keys(json.skills || {}).concat(((json.customSkills || []).map(function (s) { return s && s.name; }))).filter(Boolean);
+    var seen = {}, uniq = skills.filter(function (n) { var k = n.toLowerCase(); return seen[k] ? false : (seen[k] = 1); });
+    return { stats: STATS9.slice(), customStats: customStats, skills: uniq.sort() };
+  }
   function loadBuilder(pane, force) {
     var s = sec(pane); if (s.builderLoaded && !force) return; s.builderLoaded = true;
     var info = builderInfo();
-    if (info.role === 'gm') { s.builder = { role: 'gm' }; refreshGate(pane); return; }
-    if (!info.sheetId || !(window.Store && window.Store.resolve)) { s.builder = { role: 'player', none: true }; refreshGate(pane); return; }
+    if (info.role === 'gm') { s.builder = { role: 'gm', targets: sheetTargets(null) }; refreshGate(pane); return; }
+    if (!info.sheetId || !(window.Store && window.Store.resolve)) { s.builder = { role: 'player', none: true, targets: sheetTargets(null) }; refreshGate(pane); return; }
     if (force && window.Store.invalidate) window.Store.invalidate();   // bust a stale sheet cache so skill edits are seen
     window.Store.resolve({ type: 'sheet', id: info.sheetId }).then(function (hit) {
-      s.builder = (hit && hit.json) ? { role: 'player', name: hit.json.handle || hit.json.name || 'toi', skills: skillMap(hit.json.skills) } : { role: 'player', none: true };
+      s.builder = (hit && hit.json) ? { role: 'player', name: hit.json.handle || hit.json.name || 'toi', skills: skillMap(hit.json.skills), targets: sheetTargets(hit.json) } : { role: 'player', none: true, targets: sheetTargets(null) };
       refreshGate(pane);
-    }).catch(function () { s.builder = { role: 'player', none: true }; refreshGate(pane); });
+    }).catch(function () { s.builder = { role: 'player', none: true, targets: sheetTargets(null) }; refreshGate(pane); });
   }
   function gateStrip(a, builder) {
     if (!builder) return '<div class="tk2-gate is-load"><span class="tk2-mut">gating… (lecture de ta feuille)</span></div>';
@@ -73,10 +84,23 @@
   function originBody(a) {
     return ORIGINS.map(function (o) { return '<button class="tk2-pk-row' + (o[0] === a.origin ? ' is-sel' : '') + '" data-pkorigin="' + o[0] + '"><span class="tk2-pd-h">' + o[0] + '</span> <span class="tk2-mut">· ' + esc(o[1]) + '</span></button>'; }).join('');
   }
-  function modBody(a) {
-    var body = '';
-    C.modsFor(a.cls).forEach(function (g) { body += '<div class="tk2-pk-sec">' + g.group.toUpperCase() + '</div>' + pickGrid(g.list.map(function (m) { return pickCell('data-pkmod', m, ''); }).join('')); });
-    body += '<div class="tk2-pk-sec">CUSTOM</div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="modification custom…"><button class="tk2-chip" data-pkcustom="mod">+ ajouter</button></div>';
+  // EFFECT-ADDON picker — the addon catalogue is scoped to what THIS effect does (its domain).
+  function faddonBody(a, fi) {
+    var f = a.feats[fi]; if (!f) return '';
+    var fam = C.familyOfDomain(f.domain), list = C.addonsForDomain(f.domain);
+    var body = '<div class="tk2-pk-sec">' + esc(f.domain) + (fam ? '' : ' · générique') + '</div>' + pickGrid(list.map(function (m) { return pickCell('data-pkfaddon', m, ''); }).join(''));
+    body += '<div class="tk2-pk-sec">CUSTOM</div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="addon custom…"><button class="tk2-chip" data-pkcustom="faddon">+ ajouter</button></div>';
+    return body;
+  }
+  // WEARER-MOD picker — a bonus fed to the sheet, bound to one of the wearer's own
+  // stats / custom stats / skills (read live off their sheet). Falls back to stats-only.
+  function wmodBody(a, builder) {
+    var T = (builder && builder.targets) || sheetTargets(null);
+    var body = '<div class="tk2-pk-sec">STATS</div>' + pickGrid(T.stats.map(function (t) { return pickCell('data-pkwmod', t, 'stat'); }).join(''));
+    if (T.customStats.length) body += '<div class="tk2-pk-sec">STATS CUSTOM</div>' + pickGrid(T.customStats.map(function (t) { return pickCell('data-pkwmod', t, 'stat custom'); }).join(''));
+    if (T.skills.length) body += '<div class="tk2-pk-sec">SKILLS DE LA FEUILLE</div>' + pickGrid(T.skills.map(function (t) { return pickCell('data-pkwmod', t, 'skill'); }).join(''));
+    else body += '<div class="tk2-pk-sec">SKILLS</div><div class="tk2-help">aucune feuille lue — passe en joueur techie ou ajoute un skill custom ci-dessous.</div>';
+    body += '<div class="tk2-pk-sec">SKILL CUSTOM</div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="nom du skill…"><button class="tk2-chip" data-pkcustom="wmod">+ ajouter</button></div>';
     return body;
   }
   // effect PICKER (popup): every domain with its full grade ladder — you SEE what a
@@ -98,11 +122,12 @@
   function pickGrid(html) { return '<div class="tk2-pk-grid">' + html + '</div>'; }
   var KIND_LABEL = { ammo: 'munition', mount: 'monture', power: 'alimentation', port: 'prise', format: 'format', consumable: 'consommable' };
   function tokenKind(t) { var T = C.TOKENS, k; for (k in T) if (T[k].indexOf(t) >= 0) return KIND_LABEL[k] || k; return 'custom'; }
-  function pickerModal(a, pick) {
+  function pickerModal(a, pick, builder) {
     var title, body;
     if (pick.kind === 'effect') { title = 'CHOISIR UN EFFET <span class="tk2-mut">— clique un grade</span>'; body = effectBody(a); }
     else if (pick.kind === 'token') { title = 'AJOUTER <span class="tk2-mut">— ' + esc(pick.tkind) + '</span>'; body = tokenBody(a, pick.tkind); }
-    else if (pick.kind === 'mod') { title = 'AJOUTER UN MOD'; body = modBody(a); }
+    else if (pick.kind === 'faddon') { title = 'ADDON <span class="tk2-mut">— lié à l’effet</span>'; body = faddonBody(a, pick.fi); }
+    else if (pick.kind === 'wmod') { title = 'BONUS AU PORTEUR <span class="tk2-mut">— cible une stat / un skill</span>'; body = wmodBody(a, builder); }
     else if (pick.kind === 'class') { title = 'CLASSE DE L’OBJET'; body = classBody(a); }
     else { title = 'ORIGINE'; body = originBody(a); }
     return '<div class="tk2-modal" data-pkscrim><div class="tk2-modal-box"><div class="tk2-modal-h">' + title + '<span class="tk2-bar-sp"></span><span class="tk2-modal-x" data-pkclose>✕</span></div><div class="tk2-modal-b">' + body + '</div></div></div>';
@@ -185,11 +210,13 @@
       if (!n.token) return;
       rows.push('<tr><td>' + esc(n.token) + (n.rate ? ' <span class="tk2-mut">/' + esc(n.rate) + '</span>' : '') + '</td><td>' + (C.isStandard(n.token) ? 'shop <span class="tk2-mut">standard</span>' : 'custom · craft/salvage') + '</td><td class="tk2-r">' + (C.isStandard(n.token) ? '☐ ' + linkPend('commander', 'commande vers un shop épinglé — cran DATA') : '—') + '</td></tr>');
     });
-    rows.push('<tr><td>matériaux</td><td>shop <span class="tk2-mut">épinglé</span></td><td class="tk2-r">' + d.prodEb + 'eb</td></tr>');
+    if (d.addonsEb > 0) rows.push('<tr><td>addons <span class="tk2-mut">×' + allAddonCount(a) + '</span></td><td>pièces / greffes <span class="tk2-mut">(inclus ci-dessus)</span></td><td class="tk2-r">+' + d.addonsEb + 'eb' + (d.addonDc ? ' · +' + d.addonDc + ' DC' : '') + '</td></tr>');
+    rows.push('<tr><td>matériaux + addons</td><td>shop <span class="tk2-mut">épinglé</span></td><td class="tk2-r">' + d.prodEb + 'eb</td></tr>');
     return rows.join('');
   }
-  function featRow(f, i) {
+  function featRow(f, i, a) {
     var an = C.anchorOf(f.domain, f.grade);
+    var chips = (f.addons || []).map(function (x, ai) { return '<span class="tk2-addchip">' + esc(x.name) + (a ? ' ' + addonEbTag(a, x.name) : '') + '<button class="tk2-addchip-x" data-delfaddon="' + i + '" data-ai="' + ai + '" title="retirer">✕</button></span>'; }).join('');
     return '<div class="tk2-feat" data-fi="' + i + '">' +
       '<div class="tk2-feat-top">' +
         '<input class="tk2-fd" data-fi="' + i + '" list="tk2-domains" value="' + esc(f.domain) + '">' +
@@ -199,6 +226,7 @@
         '<button class="tk2-x" data-delfeat="' + i + '" title="retirer">✕</button>' +
       '</div>' +
       '<div class="tk2-feat-cap">' + (an ? '<span class="tk2-cap">' + esc(an.bar) + '</span> <span class="tk2-mut">·</span> ' + skillLink(an.skill) : '<span class="tk2-mut">domaine libre (exotique) · Basic Tech</span>') + '</div>' +
+      '<div class="tk2-feat-addons">' + chips + '<button class="tk2-addchip-add" data-openpk data-pkkind="faddon" data-pkfi="' + i + '" title="addons liés à ' + esc(f.domain) + '">+ addon</button></div>' +
     '</div>';
   }
   function tokenRow(kind, i, val, extra) {
@@ -222,6 +250,7 @@
     pane.innerHTML =
       '<datalist id="tk2-domains">' + C.DOMAINS.map(function (x) { return '<option value="' + x + '">'; }).join('') + '</datalist>' +
       '<datalist id="tk2-tokens">' + C.allTokens().map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist>' +
+      '<datalist id="tk2-genaddons">' + (C.GENERIC_ADDONS || []).map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist>' +
       '<div class="tk2-bar">' +
         '<button class="app-btn tk2-back">← BIBLIOTHÈQUE</button>' +
         '<input class="tk2-name" data-f="name" value="' + esc(a.name) + '">' +
@@ -236,14 +265,17 @@
       '<div class="tk2-body">' +
         '<div class="tk2-plate' + (a.plate ? '' : ' is-empty') + '">' + plate + '</div>' +
         '<div class="tk2-fiche">' +
-          panel('EFFETS', help('ce que l’objet FAIT — clique ＋ effet pour piocher un domaine et son grade.') + (a.feats.length ? a.feats.map(featRow).join('') : '<div class="tk2-empty-sm">Aucun effet.</div>') + '<button class="tk2-add" data-openpk data-pkkind="effect">＋ effet…</button>', true) +
+          panel('EFFETS', help('ce que l’objet FAIT — ＋ effet pioche un domaine + grade ; sous chaque effet, ses addons propres (＋ addon).') +
+            (a.feats.length ? a.feats.map(function (f, i) { return featRow(f, i, a); }).join('') : '<div class="tk2-empty-sm">Aucun effet.</div>') +
+            '<div class="tk2-effbtns"><button class="tk2-add tk2-add-eff" data-openpk data-pkkind="effect">＋ effet…</button><button class="tk2-add tk2-add-gen" data-addgen title="un addon générique / transverse (miniaturisation, durci…) — texte libre">+ addon</button></div>' +
+            (a.addons.length ? '<div class="tk2-genadd"><div class="tk2-genadd-h">addons génériques</div>' + a.addons.map(function (x, i) { return '<div class="tk2-line"><input list="tk2-genaddons" data-addon="' + i + '" value="' + esc(x.name) + '" placeholder="addon générique…">' + (x.name ? addonEbTag(a, x.name) : '') + '<button class="tk2-x" data-deladdon="' + i + '">✕</button></div>'; }).join('') + '</div>' : ''), true) +
           panel('INTERFACES', help('ce que l’objet CONSOMME / ACCUEILLE / dans quoi il s’insère — pioche des jetons standards (achetables) ou tape un jeton custom.') + interfacesPanel(a)) +
           '<div class="tk2-details">' +
             '<div class="tk2-details-h">DÉTAILS</div>' +
             sub('flavor', '<textarea class="tk2-flavor" data-f="flavor" placeholder="le mot du maker — aucun effet mécanique…">' + esc(a.flavor) + '</textarea>') +
             '<div class="tk2-two">' +
               sub('limites', help('ce qui le bride — chaque limite baisse l’OP') + a.limits.map(function (l, i) { return '<div class="tk2-line"><input data-lim="' + i + '" value="' + esc(l.text) + '" placeholder="ex. 30 min d’autonomie"><button class="tk2-x" data-dellim="' + i + '">✕</button></div>'; }).join('') + '<button class="tk2-add" data-addlim>+ limite</button>') +
-              sub('mods', help('un bonus sur une stat de la feuille (cran 2)') + a.mods.map(function (m, i) { return '<div class="tk2-line"><input class="tk2-mt" data-mod="' + i + '" data-k="target" value="' + esc(m.target) + '" placeholder="wearer.MA.jump"><input class="tk2-mv" data-mod="' + i + '" data-k="value" value="' + esc(m.value) + '" placeholder="+3"><button class="tk2-x" data-delmod="' + i + '">✕</button></div>'; }).join('') + '<button class="tk2-add" data-openpk data-pkkind="mod">＋ mod…</button>') +
+              sub('wearer mods', help('un bonus qui rejaillit sur la feuille du porteur quand l’objet est équipé') + a.mods.map(function (m, i) { return '<div class="tk2-line"><input class="tk2-mt" data-mod="' + i + '" data-k="target" value="' + esc(m.target) + '" placeholder="REF / Handgun…"><input class="tk2-mv" data-mod="' + i + '" data-k="value" value="' + esc(m.value) + '" placeholder="+3"><button class="tk2-x" data-delmod="' + i + '">✕</button></div>'; }).join('') + '<button class="tk2-add" data-openpk data-pkkind="wmod">＋ mod…</button>') +
             '</div>' +
             '<div class="tk2-two">' +
               sub('lignée', help('raffine un objet existant → le DC baisse à chaque itération') + '<div class="tk2-line"><input data-f="lin-ref" value="' + esc(a.lineage ? a.lineage.refines : '') + '" placeholder="raffine… (nom/ID)"><label class="tk2-tier">itér <input type="number" min="0" max="6" data-f="lin-steps" value="' + (a.lineage ? a.lineage.steps : 0) + '"></label></div><div class="tk2-mut">bonus DC −' + d.lineBonus + linLive + '</div>') +
@@ -255,7 +287,7 @@
       '<div class="tk2-nomen"><div class="tk2-nomen-h">NOMENCLATURE</div><table class="tk2-nomen-t"><tbody>' + nomenclature(a, d) + '</tbody></table></div>' +
       '<div class="tk2-gate-wrap">' + gateStrip(a, s.builder) + '</div>' +
       productionBar(a, d) +
-      (s.pick ? pickerModal(a, s.pick) : '');
+      (s.pick ? pickerModal(a, s.pick, s.builder) : '');
 
     // ── wiring ──
     pane.querySelector('.tk2-back').onclick = function () { commit(pane); backToLibrary(pane); };
@@ -283,7 +315,7 @@
     });
     pane.querySelectorAll('[data-delfeat]').forEach(function (b) { b.onclick = function () { a.feats.splice(+b.getAttribute('data-delfeat'), 1); commit(pane); renderBench(pane); }; });
     // ── unified picker: any [data-openpk] opens the modal for its kind ──
-    pane.querySelectorAll('[data-openpk]').forEach(function (b) { b.onclick = function () { s.pick = { kind: b.getAttribute('data-pkkind'), tkind: b.getAttribute('data-pktkind') || null }; renderBench(pane); }; });
+    pane.querySelectorAll('[data-openpk]').forEach(function (b) { b.onclick = function () { s.pick = { kind: b.getAttribute('data-pkkind'), tkind: b.getAttribute('data-pktkind') || null, fi: b.hasAttribute('data-pkfi') ? +b.getAttribute('data-pkfi') : null }; renderBench(pane); }; });
     var pkc = pane.querySelector('[data-pkclose]'); if (pkc) pkc.onclick = function () { s.pick = null; renderBench(pane); };
     var scrim = pane.querySelector('[data-pkscrim]'); if (scrim) scrim.onclick = function (e) { if (e.target === scrim) { s.pick = null; renderBench(pane); } };
     var pickDone = function () { s.pick = null; M.normalize(a); commit(pane); renderBench(pane); };
@@ -291,8 +323,10 @@
     pane.querySelectorAll('[data-pktok]').forEach(function (b) { b.onclick = function () { var v = b.getAttribute('data-pktok'), k = s.pick && s.pick.tkind; if (k === 'needs') a.ports.needs.push({ token: v, rate: '' }); else if (k === 'fits') a.ports.fits.push(v); pickDone(); }; });
     pane.querySelectorAll('[data-pkcls]').forEach(function (b) { b.onclick = function () { a.cls = b.getAttribute('data-pkcls'); pickDone(); }; });
     pane.querySelectorAll('[data-pkorigin]').forEach(function (b) { b.onclick = function () { a.origin = b.getAttribute('data-pkorigin'); pickDone(); }; });
-    pane.querySelectorAll('[data-pkmod]').forEach(function (b) { b.onclick = function () { a.mods.push({ target: b.getAttribute('data-pkmod'), value: '', when: 'modded' }); pickDone(); }; });
-    pane.querySelectorAll('[data-pkcustom]').forEach(function (b) { b.onclick = function () { var box = b.parentNode.querySelector('.tk2-pk-cin'), v = box ? box.value.trim() : ''; if (!v) return; var kind = b.getAttribute('data-pkcustom'); if (kind === 'effect') a.feats.push({ domain: v.toUpperCase(), grade: 1 }); else if (kind === 'mod') a.mods.push({ target: v, value: '', when: 'modded' }); else { var k = s.pick && s.pick.tkind; if (k === 'needs') a.ports.needs.push({ token: v, rate: '' }); else if (k === 'fits') a.ports.fits.push(v); } pickDone(); }; });
+    var pushFaddon = function (name) { var fi = s.pick && s.pick.fi, f = a.feats[fi]; if (f) (f.addons || (f.addons = [])).push({ name: name, note: '' }); };
+    pane.querySelectorAll('[data-pkfaddon]').forEach(function (b) { b.onclick = function () { pushFaddon(b.getAttribute('data-pkfaddon')); pickDone(); }; });
+    pane.querySelectorAll('[data-pkwmod]').forEach(function (b) { b.onclick = function () { a.mods.push({ target: b.getAttribute('data-pkwmod'), value: '', when: 'when worn' }); pickDone(); }; });
+    pane.querySelectorAll('[data-pkcustom]').forEach(function (b) { b.onclick = function () { var box = b.parentNode.querySelector('.tk2-pk-cin'), v = box ? box.value.trim() : ''; if (!v) return; var kind = b.getAttribute('data-pkcustom'); if (kind === 'effect') a.feats.push({ domain: v.toUpperCase(), grade: 1 }); else if (kind === 'faddon') pushFaddon(v); else if (kind === 'wmod') a.mods.push({ target: v, value: '', when: 'when worn' }); else { var k = s.pick && s.pick.tkind; if (k === 'needs') a.ports.needs.push({ token: v, rate: '' }); else if (k === 'fits') a.ports.fits.push(v); } pickDone(); }; });
     // tokens (needs/fits/takes-accepts/holds simplified via interfacesPanel wiring)
     wireInterfaces(pane, a);
     // limits
@@ -303,6 +337,12 @@
     // mods
     pane.querySelectorAll('[data-mod]').forEach(function (inp) { inp.oninput = function () { a.mods[+inp.getAttribute('data-mod')][inp.getAttribute('data-k')] = inp.value; commit(pane); refreshDerived(pane); }; });
     pane.querySelectorAll('[data-delmod]').forEach(function (b) { b.onclick = function () { a.mods.splice(+b.getAttribute('data-delmod'), 1); commit(pane); renderBench(pane); }; });
+    // generic addons (object-level, text)
+    var addGen = pane.querySelector('[data-addgen]'); if (addGen) addGen.onclick = function () { a.addons.push({ name: '', note: '' }); commit(pane); renderBench(pane); };
+    pane.querySelectorAll('[data-addon]').forEach(function (inp) { inp.oninput = function () { a.addons[+inp.getAttribute('data-addon')].name = inp.value; commit(pane); }; });
+    pane.querySelectorAll('[data-deladdon]').forEach(function (b) { b.onclick = function () { a.addons.splice(+b.getAttribute('data-deladdon'), 1); commit(pane); renderBench(pane); }; });
+    // per-effect addons (chips)
+    pane.querySelectorAll('[data-delfaddon]').forEach(function (b) { b.onclick = function () { var fi = +b.getAttribute('data-delfaddon'), ai = +b.getAttribute('data-ai'), f = a.feats[fi]; if (f && f.addons) { f.addons.splice(ai, 1); if (!f.addons.length) delete f.addons; } commit(pane); renderBench(pane); }; });
     // latent
     pane.querySelectorAll('[data-lat]').forEach(function (inp) { inp.oninput = function () { a.latent[+inp.getAttribute('data-lat')].text = inp.value; commit(pane); }; });
     pane.querySelectorAll('[data-latwho]').forEach(function (cb) { cb.onchange = function () { var li = +cb.getAttribute('data-lat'), who = cb.getAttribute('data-latwho'), arrw = a.latent[li].who, k = arrw.indexOf(who); if (cb.checked && k < 0) arrw.push(who); if (!cb.checked && k >= 0) arrw.splice(k, 1); commit(pane); }; });
@@ -396,7 +436,8 @@
   function renderDocument(pane) {
     var s = sec(pane), a = s.art, d = DERIVE(a);
     var plate = a.plate ? '<img class="tk2-plate-img" src="' + a.plate.png + '" alt="">' : '<div class="tk2-plate-empty"><div>— pas de planche —</div></div>';
-    var feats = a.feats.map(function (f) { var an = C.anchorOf(f.domain, f.grade); return '<div class="tk2-docfeat">' + esc(f.domain) + ' g' + f.grade + (an ? ' <span class="tk2-mut">— ' + esc(an.bar) + '</span>' : '') + '</div>'; }).join('') || '<div class="tk2-mut">stats seules</div>';
+    var feats = a.feats.map(function (f) { var an = C.anchorOf(f.domain, f.grade); var ad = (f.addons || []).map(function (x) { return esc(x.name); }).join(', '); return '<div class="tk2-docfeat">' + esc(f.domain) + ' g' + f.grade + (an ? ' <span class="tk2-mut">— ' + esc(an.bar) + '</span>' : '') + (ad ? ' <span class="tk2-mut">+ ' + ad + '</span>' : '') + '</div>'; }).join('') || '<div class="tk2-mut">stats seules</div>';
+    var gen = a.addons.map(function (x) { return esc(x.name); }).filter(Boolean).join(', ');
     var ifs = [];
     a.ports.needs.forEach(function (n) { if (n.token) ifs.push('consumes: ' + esc(n.token) + (n.rate ? ' /' + esc(n.rate) : '')); });
     a.ports.fits.forEach(function (t) { if (t) ifs.push('fits: ' + esc(t)); });
@@ -410,6 +451,7 @@
         '<div class="tk2-doc-head"><span>' + esc(a.name) + '</span><span>' + esc(a.cls) + ' · tier ' + a.tier + '</span></div>' +
         '<div class="tk2-doc-plate">' + plate + '</div>' +
         (a.flavor ? '<div class="tk2-doc-flavor">' + esc(a.flavor) + '</div>' : '') +
+        (gen ? '<div class="tk2-doc-flavor tk2-mut">addons : ' + gen + '</div>' : '') +
         '<div class="tk2-doc-body"><div class="tk2-doc-col">' + feats + '</div>' +
           '<div class="tk2-doc-col">' + (ifs.length ? ifs.map(function (x) { return '<div>' + x + '</div>'; }).join('') : '<span class="tk2-mut">aucune interface</span>') +
           (pub.length ? pub.map(function (x) { return '<div>latent: ' + esc(x.text) + '</div>'; }).join('') : '') + '</div></div>' +
