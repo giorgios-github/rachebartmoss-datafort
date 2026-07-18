@@ -295,3 +295,13 @@
 .tk2-pk-cell:hover .tk2-mut { color:#ccc; }
 .tk2-pk-cn { font-family:var(--head); letter-spacing:1px; font-size:13px; }
 .tk2-pk-cell .tk2-mut { font-size:10px; }
+
+/* ══ cran 2 · gating strip (player-side: your skills unlock/lock what you build) ══ */
+.tk2-gate { border-top:2px solid var(--ink); padding:5px 12px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:12px; background:#fff; }
+.tk2-gate-h { font-family:var(--head); letter-spacing:2px; font-size:12px; }
+.tk2-gate-v { border:2px solid var(--ink); padding:1px 9px; font-family:var(--head); letter-spacing:1px; white-space:nowrap; }
+.tk2-gate-locked .tk2-gate-v, .tk2-gate.is-gm .tk2-gate-v { background:var(--ink); color:#fff; }
+.tk2-gate-rows { display:flex; gap:12px; flex-wrap:wrap; }
+.tk2-gr b { font-weight:bold; }
+.tk2-gr-locked { text-decoration:line-through; }
+.tk2-gate .tk2-mut { color:#666; }

@@ -39,6 +39,7 @@
     },
     lineage: { perStep: 2, cap: 6 },  // re-crafting your own line lowers DC, capped
     ingredient: { gradeBelow: 1 },    // a feature grade N needs a component grade N−1
+    gate: { instabilityPerLevel: 0.6 },  // building above your skill = PUSH, per level of deficit
   };
   var WHO = ['maker', 'owner', 'GM', 'public'];
 
@@ -163,6 +164,34 @@
     };
   }
 
+  // ---- GATING (cran 2): confront the BUILDER's skills against what the object
+  // needs. Player-side: your levels unlock (or lock) what you can craft, and show
+  // WHY. Class base skill = prerequisite (need ≥1); each feature's domain skill =
+  // a ceiling (level ≥ grade to build safe; below = PUSH, buys instability; 0 = locked).
+  function gate(p, skills, opt) {
+    opt = opt || {}; skills = skills || {};
+    var sfc = opt.skillForClass || function () { return 'Basic Tech'; };
+    var sfd = opt.skillForDomain || function () { return 'Basic Tech'; };
+    var lvl = function (name) {
+      if (skills[name] != null) return +skills[name] || 0;
+      var lc = String(name).toLowerCase();
+      for (var k in skills) if (String(k).toLowerCase() === lc) return +skills[k] || 0;
+      return 0;
+    };
+    var T = TUNING.gate, need = {}, isClass = {};
+    var cs = sfc(p.cls); need[cs] = Math.max(need[cs] || 0, 1); isClass[cs] = true;   // class prerequisite
+    p.feats.forEach(function (f) { var sk = sfd(f.domain); need[sk] = Math.max(need[sk] || 0, f.grade); });
+    var rows = [], locks = [], pushes = [], instab = 0;
+    Object.keys(need).forEach(function (sk) {
+      var n = need[sk], have = lvl(sk), status = 'ok', push = 0;
+      if (have <= 0) { status = 'locked'; locks.push(sk); }
+      else if (have < n) { status = 'push'; push = n - have; pushes.push({ skill: sk, by: push }); instab += push * T.instabilityPerLevel; }
+      rows.push({ skill: sk, need: n, have: have, status: status, push: push, isClass: !!isClass[sk] });
+    });
+    rows.sort(function (a, b) { return (b.isClass ? 1 : 0) - (a.isClass ? 1 : 0) || (a.status === 'locked' ? -1 : 1); });
+    return { rows: rows, locks: locks, pushes: pushes, instability: Math.round(instab * 10) / 10, buildable: locks.length === 0, classSkill: cs };
+  }
+
   // ── compact one-line record (library copy/import) ──
   function toJSON(p) {
     var o = { id: p.id, name: p.name, cls: p.cls, tier: p.tier };
@@ -184,7 +213,7 @@
 
   window.TechArtifact = {
     TUNING: TUNING, WHO: WHO,
-    newId: newId, blank: blank, normalize: normalize, derive: derive,
+    newId: newId, blank: blank, normalize: normalize, derive: derive, gate: gate,
     gradeTop: gradeTop, gradeSum: gradeSum, ingredients: ingredients,
     toJSON: toJSON, fromJSON: fromJSON, clone: clone,
   };

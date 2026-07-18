@@ -10,6 +10,35 @@
   var esc = function (t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
   var isKnown = function (d) { return C.isKnownDomain(d); };
   var DERIVE = function (a) { return M.derive(a, { isKnownDomain: isKnown }); };
+  var GATE = function (a, skills) { return M.gate(a, skills, { skillForClass: C.skillForClass, skillForDomain: C.skillForDomain }); };
+  // ── the BUILDER = the current player's OWN sheet (the one shown in /party/me),
+  // picked up automatically from the session — no manual linking. GM = fiat. ──
+  function builderInfo() { var B = window.Shell && window.Shell.bridge && window.Shell.bridge(); var sess = B && B.sess; return { role: (sess && sess.role) || 'gm', sheetId: sess && sess.sheetId }; }
+  function skillMap(sk) { var m = {}; if (Array.isArray(sk)) sk.forEach(function (x) { if (x && x.name) m[x.name] = +(x.val != null ? x.val : x.level) || 0; }); else if (sk && typeof sk === 'object') for (var k in sk) m[k] = +sk[k] || 0; return m; }
+  function loadBuilder(pane) {
+    var s = sec(pane); if (s.builderLoaded) return; s.builderLoaded = true;
+    var info = builderInfo();
+    if (info.role === 'gm') { s.builder = { role: 'gm' }; return; }
+    if (!info.sheetId || !(window.Store && window.Store.resolve)) { s.builder = { role: 'player', none: true }; return; }
+    window.Store.resolve({ type: 'sheet', id: info.sheetId }).then(function (hit) {
+      s.builder = (hit && hit.json) ? { role: 'player', name: hit.json.handle || hit.json.name || 'toi', skills: skillMap(hit.json.skills) } : { role: 'player', none: true };
+      refreshGate(pane);
+    }).catch(function () { s.builder = { role: 'player', none: true }; refreshGate(pane); });
+  }
+  function gateStrip(a, builder) {
+    if (!builder) return '<div class="tk2-gate is-load"><span class="tk2-mut">gating… (lecture de ta feuille)</span></div>';
+    if (builder.role === 'gm') return '<div class="tk2-gate is-gm"><span class="tk2-gate-v">MJ · FIAT</span> <span class="tk2-mut">construction libre — le gating s’applique aux joueurs techies</span></div>';
+    if (builder.none) return '<div class="tk2-gate is-none"><span class="tk2-gate-v">?</span> aucune feuille — <span class="tk2-mut">requiert : ' + esc(skillsRequired(a).join(' · ')) + '</span></div>';
+    var g = GATE(a, builder.skills);
+    var verdict = g.buildable ? (g.pushes.length ? '⚠ PUSH' : '✓ CONSTRUCTIBLE') : '✗ VERROUILLÉ';
+    var rows = g.rows.map(function (r) {
+      var ic = r.status === 'ok' ? '✓' : r.status === 'push' ? '⚠ +' + r.push : '✗';
+      return '<span class="tk2-gr tk2-gr-' + r.status + '">' + esc(r.skill) + ' <b>' + r.have + '</b>/' + r.need + ' ' + ic + (r.isClass ? ' <span class="tk2-mut">classe</span>' : '') + '</span>';
+    }).join('');
+    var tail = g.locks.length ? '<span class="tk2-mut">il te manque : ' + esc(g.locks.join(', ')) + '</span>' : (g.instability ? '<span class="tk2-mut">instabilité +' + g.instability + '</span>' : '');
+    return '<div class="tk2-gate tk2-gate-' + (g.buildable ? (g.pushes.length ? 'push' : 'ok') : 'locked') + '"><span class="tk2-gate-h">' + esc(builder.name || 'toi') + '</span><span class="tk2-gate-v">' + verdict + '</span><span class="tk2-gate-rows">' + rows + '</span>' + tail + '</div>';
+  }
+  function refreshGate(pane) { var s = sec(pane); if (!s.art) return; var el = pane.querySelector('.tk2-gate-wrap'); if (el) el.innerHTML = gateStrip(s.art, s.builder); }
   function help(t) { return '<div class="tk2-help">' + t + '</div>'; }
   var ORIGINS = [['HANDMADE', 'bricolé — visserie dépareillée'], ['SALVAGE', 'récupéré — vis de donneur'], ['CORP PULL', 'arraché au corpo — torx'], ['FACTORY', 'usine — visserie captive']];
   function effectBody(a) {
@@ -170,6 +199,7 @@
 
   function renderBench(pane) {
     var s = sec(pane), a = s.art, d = DERIVE(a);
+    loadBuilder(pane);
     // adaptive plate: a slim strip when empty (no dead box), the image when set
     var plate = a.plate
       ? '<img class="tk2-plate-img" src="' + a.plate.png + '" alt=""><div class="tk2-plate-cap">planche ancrée · annotations cran 5</div>'
@@ -214,6 +244,7 @@
         '</div>' +
       '</div>' +
       '<div class="tk2-nomen"><div class="tk2-nomen-h">NOMENCLATURE</div><table class="tk2-nomen-t"><tbody>' + nomenclature(a, d) + '</tbody></table></div>' +
+      '<div class="tk2-gate-wrap">' + gateStrip(a, s.builder) + '</div>' +
       productionBar(a, d) +
       (s.pick ? pickerModal(a, s.pick) : '');
 
@@ -333,14 +364,14 @@
       '<span class="tk2-stat">OP ' + d.op + '</span>' +
       '<span class="tk2-stat">PROD ' + d.prodEb + 'eb + ' + d.prodHours + 'h</span>' +
       '<span class="tk2-stat">STREET ' + d.streetEb + 'eb</span>' +
-      '<span class="tk2-bar-sp"></span>' +
-      '<span class="tk2-req">requiert : ' + skillsRequired(a).map(skillLink).join(' <span class="tk2-mut">·</span> ') + '</span></div>';
+      '<span class="tk2-bar-sp"></span></div>';
   }
   function refreshDerived(pane) {
     var s = sec(pane), a = s.art; if (!a) return;
     var d = DERIVE(a);
     var nb = pane.querySelector('.tk2-nomen-t tbody'); if (nb) nb.innerHTML = nomenclature(a, d);
     var pr = pane.querySelector('.tk2-prod'); if (pr) pr.outerHTML = productionBar(a, d);
+    refreshGate(pane);
   }
 
   // ══════════════ MODE · PLATE (the press) ══════════════
