@@ -257,6 +257,13 @@
       (lit.kids || []).forEach(function (c) { walk(c, id, tier + 1); });
       return id;
     })(rootLit, null, 0);
+    // a convergence renders one row BELOW its deepest requirement (a culmination, not a sibling)
+    Object.keys(nodes).forEach(function (id) {
+      var n = nodes[id]; if (!n.needsAll || !n.needsAll.length) return;
+      var mx = n.needsAll.reduce(function (m, r) { return nodes[r] ? Math.max(m, nodes[r].tier) : m; }, 0);
+      if (mx + 1 > n.tier) n.tier = mx + 1;
+    });
+    var bt = {}; Object.keys(nodes).forEach(function (id) { (bt[nodes[id].tier] || (bt[nodes[id].tier] = [])).push(id); }); byTier = bt;
     var rootId = byTier[0][0];
     return { domain: domain, authored: !!TREES[domain], nodes: nodes, edges: edges, byTier: byTier,
       root: rootId, maxTier: Math.max.apply(null, Object.keys(byTier).map(Number)) };
@@ -314,11 +321,23 @@
   }
   function setScale(path, id, v) { return (path || []).map(function (p) { return baseId(p) === id ? id + '@' + Math.max(1, v | 0) : p; }); }
   function pathTier(g, path) { return activeIds(path).reduce(function (m, id) { return g.nodes[id] ? Math.max(m, g.nodes[id].tier) : m; }, 0); }
+  // GRADE = accumulation of FEATURES, not depth. Each active node weighs (base + a bit
+  // for how deep/sophisticated it is); a corpo/OP node (arch) is a jump to g6. Tunable.
+  var GRADE = { base: 1, perTier: 0.6, thresholds: [1.5, 3.5, 6, 9, 13] };  // raw < thresholds[i] → grade i+1
+  function grade(g, path) {
+    var ids = activeIds(path); if (!ids.length) return 0;
+    var raw = 0, corpo = false;
+    ids.forEach(function (id) { var n = g.nodes[id]; if (!n) return; raw += GRADE.base + Math.max(0, n.tier - 1) * GRADE.perTier; if (n.arch) corpo = true; });
+    if (corpo) return 6;
+    var th = GRADE.thresholds, gr = th.length + 1;
+    for (var i = 0; i < th.length; i++) { if (raw < th[i]) { gr = i + 1; break; } }
+    return Math.max(1, Math.min(6, gr));
+  }
   function tips(g, path) { var a = activeIds(path); return a.filter(function (id) { return !(g.nodes[id].kids || []).some(function (k) { return a.indexOf(k) >= 0; }); }); }
   function crumbs(g, path) { return tips(g, path).map(function (id) { return ancestors(g, id).map(function (x) { return g.nodes[x].label; }).join(' › '); }); }
   function collect(g, path, key) { var out = []; activeIds(path).forEach(function (id) { var n = g.nodes[id]; if (n && n[key] && out.indexOf(n[key]) < 0) out.push(n[key]); }); return out; }
 
   window.TechTrees = { TREES: TREES, WEAPON_SYSTEMS: WEAPON_SYSTEMS, has: hasTree, get: build, layout: layout,
     kindOf: kindOf, pickable: pickable, isActive: isActive, activeIds: activeIds, ancestors: ancestors,
-    toggle: toggle, scaleOf: scaleOf, setScale: setScale, pathTier: pathTier, tips: tips, crumbs: crumbs, collect: collect };
+    toggle: toggle, scaleOf: scaleOf, setScale: setScale, pathTier: pathTier, grade: grade, tips: tips, crumbs: crumbs, collect: collect };
 })();

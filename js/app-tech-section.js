@@ -89,7 +89,7 @@
         '<span class="tk2-tree-dom">' + esc(pick.treeDom) + '</span>' + (TR.has(pick.treeDom) ? '' : ' <span class="tk2-mut">(ladder)</span>') +
         '<span class="tk2-tree-legend"><b>○</b> pick-one · <b>□</b> add · <b>◇</b> ° dial · <b>⬡</b> needs-all</span>' +
         '<span class="tk2-bar-sp"></span>' +
-        '<button class="app-btn tk2-treeadd"' + (path.length ? '' : ' disabled') + '>' + (pick.editFi != null ? 'SET' : 'ADD') + ' · g' + TR.pathTier(g, path) + '</button></div>' +
+        '<button class="app-btn tk2-treeadd"' + (path.length ? '' : ' disabled') + '>' + (pick.editFi != null ? 'SET' : 'ADD') + ' · g' + TR.grade(g, path) + '</button></div>' +
       '<div class="tk2-tree-desc" data-treedesc><span class="tk2-mut">hover a node to read what it does</span></div>' +
       treeSvg(g, path) +
       '<div class="tk2-tree-crumb">' + crumb + '</div>' +
@@ -427,7 +427,7 @@
     if (tdesc) pane.querySelectorAll('[data-treenode]').forEach(function (nd) { nd.onmouseenter = function () { var g = TR.get(s.pick.treeDom), n = g.nodes[nd.getAttribute('data-treenode')]; if (!n) return; tdesc.innerHTML = '<b>' + esc(n.label) + '</b>' + (n.cap ? ' — ' + esc(n.cap) : '') + (n.act ? ' <span class="tk2-tchip act">▸ ' + esc(n.act) + '</span>' : '') + (n.scale ? ' <span class="tk2-mut">◇ ° ' + esc(n.scale.per || 'dial') + '</span>' : '') + (n.add ? ' <span class="tk2-mut">□ stackable</span>' : '') + (n.tag ? ' <span class="tk2-mut">unlocks +' + esc(n.tag) + ' addons</span>' : '') + (n.need ? ' <span class="tk2-mut">(needs ' + esc(n.need) + ')</span>' : '') + (n.needsAll ? ' <span class="tk2-mut">⬡ needs all: ' + esc(n.needsAll.map(function (r) { return g.nodes[r] ? g.nodes[r].label : r; }).join(', ')) + '</span>' : ''); }; });
     var tadd = pane.querySelector('.tk2-treeadd'); if (tadd && !tadd.disabled) tadd.onclick = function () {
       var g = TR.get(s.pick.treeDom), path = s.pick.treePath || []; if (!path.length) return;
-      var feat = { domain: s.pick.treeDom, grade: TR.pathTier(g, path), path: path };
+      var feat = { domain: s.pick.treeDom, grade: TR.grade(g, path), path: path };
       if (s.pick.editFi != null && a.feats[s.pick.editFi]) { feat.addons = a.feats[s.pick.editFi].addons || []; a.feats[s.pick.editFi] = feat; }
       else a.feats.push(feat);
       pickDone();
