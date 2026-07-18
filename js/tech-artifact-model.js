@@ -17,23 +17,31 @@
   // ── TUNING — the whole derived-math surface, in one editable place ──
   var TUNING = {
     grade: { min: 0, max: 6 },
+    // convex per-grade WEIGHT: a g6 feature is not 6× a g1 — it's corpo-monopoly tech.
+    // Sophistication = Σ weight over feats; it dominates cost/OP so OP objects explode.
+    gradeW: [0, 1, 2.5, 5, 9, 15, 22],
     dc: {
       base: 8,
       perGradeTop: 2,      // hardest feature drives the floor
-      perFeature: 1.5,     // each ADDITIONAL feature
+      perFeatureNode: 0.6, // each additional WALKED feature (tree node), not just each domain
       perInterface: 1,     // takes-slot / needs line = integration effort
       exoticDomain: 3,     // a domain with no market anchor is harder
       perTierOverThree: 1, // big things are harder to make
+      corpo: 5,            // each corpo-tier (g6) domain is near-impossible to reproduce
     },
     op: {
-      perGradeSum: 1,      // raw power = Σ grades
+      perSophist: 0.5,     // raw power = convex sophistication (Σ gradeW)
       limitRelief: 1.5,    // each declared limit lowers OP (limits are the balance engine)
       pushRisk: 0.6,       // instability per grade above the maker's ceiling (used at cran 2)
     },
     cost: {
       matBase: 40,
-      matPerGrade: 60,     // materials ≈ Σ grades
-      hoursPerDC: 0.5,
+      matPerNode: 20,      // materials rise with the count of WALKED features (path nodes)
+      matPerSophist: 60,   // …and hard with sophistication (convex grade)
+      corpoMult: 1.0,      // materials ×(1 + this·#corpo-domains) — corpo tech is astronomically dear
+      hoursPerDC: 0.8,
+      hoursPerNode: 1.2,   // more features = more build time
+      hoursPerCorpo: 20,   // a lone techie reproducing corpo-monopoly tech takes weeks
       streetMult: 2.2,     // STREET = PROD × this × (1 + 0.12·gradeTop)
       streetPerGradeTop: 0.12,
     },
@@ -136,6 +144,21 @@
   function gradeTop(p) { return p.feats.reduce(function (m, f) { return Math.max(m, f.grade); }, 0); }
   function gradeSum(p) { return p.feats.reduce(function (s, f) { return s + f.grade; }, 0); }
   function interfaceCount(p) { return p.ports.takes.length + p.ports.needs.length + p.ports.holds.length; }
+  // ── feature RICHNESS (effect-tree era) — a feat is a walked PATH, not a scalar grade ──
+  function featNodes(f) { return (f.path && f.path.length) ? f.path.length : (f.grade > 0 ? 1 : 0); }
+  function nodeCount(p) { return p.feats.reduce(function (s, f) { return s + featNodes(f); }, 0); }   // total walked features (breadth)
+  function sophistication(p) { var W = TUNING.gradeW; return p.feats.reduce(function (s, f) { return s + (W[clampGrade(f.grade)] || 0); }, 0); }  // convex (depth)
+  function corpoCount(p) { return p.feats.filter(function (f) { return f.grade >= TUNING.grade.max; }).length; }   // # corpo-monopoly (g6) domains
+  // at-a-glance object level (pure over a feats array — works from a sheet snapshot too)
+  function headline(feats) {
+    feats = feats || [];
+    var gt = feats.reduce(function (m, f) { return Math.max(m, +f.grade || 0); }, 0);
+    var corpo = feats.filter(function (f) { return (+f.grade || 0) >= TUNING.grade.max; }).length;
+    var nodes = feats.reduce(function (s, f) { return s + ((f.path && f.path.length) ? f.path.length : ((+f.grade || 0) > 0 ? 1 : 0)); }, 0);
+    var label = corpo ? ((corpo >= 2 || nodes >= 24) ? 'OVERKILL' : 'CORPO-TIER')
+      : gt >= 5 ? 'PROTOTYPE' : gt >= 4 ? 'MILSPEC' : gt >= 3 ? 'PRO' : gt >= 1 ? 'STREET' : 'BASIC';
+    return { grade: gt, corpo: corpo, nodes: nodes, op: corpo > 0 || gt >= 5, label: label };
+  }
 
   // ingredients: one graded component per feature (grade N ← component N−1); grade-0 feats need none
   function ingredients(p, isKnownDomain) {
@@ -151,7 +174,8 @@
   // Complexity anchor = the object's base materials cost (rises with Σgrades). A
   // complexity-scaled addon ({mult}) prices as a fraction of that — miniaturising a
   // simple pistol is cheap, miniaturising a robot-dog (many high-grade feats) is not.
-  function complexityBase(p) { return TUNING.cost.matBase + TUNING.cost.matPerGrade * gradeSum(p); }
+  function materials(p) { var T = TUNING.cost; return (T.matBase + T.matPerNode * nodeCount(p) + T.matPerSophist * sophistication(p)) * (1 + T.corpoMult * corpoCount(p)); }
+  function complexityBase(p) { return materials(p); }
   function allAddonNames(p) {
     var out = [];
     p.feats.forEach(function (f) { (f.addons || []).forEach(function (x) { if (x && x.name) out.push(x.name); }); });
@@ -172,6 +196,7 @@
     var isKnown = opts.isKnownDomain || null;
     var nExotic = isKnown ? p.feats.filter(function (f) { return !isKnown(f.domain); }).length : 0;
     var gt = gradeTop(p), gs = gradeSum(p), nF = p.feats.length, nI = interfaceCount(p);
+    var nodes = nodeCount(p), soph = sophistication(p), corpo = corpoCount(p);
     var T = TUNING;
 
     // addons: cost (fixed or complexity-scaled) + a little build difficulty
@@ -181,10 +206,11 @@
 
     var dc = T.dc.base
       + T.dc.perGradeTop * gt
-      + T.dc.perFeature * Math.max(0, nF - 1)
+      + T.dc.perFeatureNode * Math.max(0, nodes - 1)
       + T.dc.perInterface * nI
       + T.dc.exoticDomain * nExotic
       + T.dc.perTierOverThree * Math.max(0, p.tier - 3)
+      + T.dc.corpo * corpo
       + addonDc;
     dc = Math.round(dc);
 
@@ -193,17 +219,18 @@
     var dcLineage = Math.max(T.dc.base, dc - lineBonus);
 
     var nLimits = p.limits.length;
-    var op = Math.max(0, Math.round(T.op.perGradeSum * gs - T.op.limitRelief * nLimits));
+    var op = Math.max(0, Math.round(T.op.perSophist * soph - T.op.limitRelief * nLimits));
 
-    var matEb = T.cost.matBase + T.cost.matPerGrade * gs;
+    var matEb = materials(p);
     var prodEb = Math.round(matEb + addonsEb);
-    var prodHours = Math.max(1, Math.round(T.cost.hoursPerDC * dcLineage));
+    var prodHours = Math.max(1, Math.round(T.cost.hoursPerDC * dcLineage + T.cost.hoursPerNode * nodes + T.cost.hoursPerCorpo * corpo));
     var streetEb = Math.round(prodEb * T.cost.streetMult * (1 + T.cost.streetPerGradeTop * gt));
 
     var ingr = ingredients(p, isKnown);
 
     return {
       gradeTop: gt, gradeSum: gs, nFeats: nF, nInterfaces: nI, nExotic: nExotic,
+      nodes: nodes, sophist: soph, corpo: corpo, level: headline(p.feats),
       dc: dc, dcLineage: dcLineage, lineBonus: lineBonus, addonsEb: Math.round(addonsEb), addonDc: Math.round(addonDc * 10) / 10,
       op: op, prodEb: prodEb, prodHours: prodHours, streetEb: streetEb,
       ingredients: ingr,
@@ -262,6 +289,7 @@
     TUNING: TUNING, WHO: WHO,
     newId: newId, blank: blank, normalize: normalize, derive: derive, gate: gate,
     gradeTop: gradeTop, gradeSum: gradeSum, ingredients: ingredients, addonEb: addonEb,
+    nodeCount: nodeCount, sophistication: sophistication, corpoCount: corpoCount, headline: headline,
     toJSON: toJSON, fromJSON: fromJSON, clone: clone,
   };
 })();

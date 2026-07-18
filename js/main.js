@@ -2038,15 +2038,18 @@ function renderWardrobe() {
   }
   _techLibBust();
   el.innerHTML = CS.wardrobe.length ? CS.wardrobe.map(function(w, wi) {
-    var techTag = '', techBon = '';
+    var techTag = '', techBon = '', techLvl = '';
     if (_isTechItem(w)) {
       techTag = ' <span class="inv-tech-tag">TECH</span>';
+      var H = _techHeadline(_techView(w));
+      if (H.grade) techLvl = '<span class="wd-tag wd-lvl' + (H.op ? ' op' : '') + '" title="tech level">' + (H.op ? '⬢ ' : '') + H.label + ' g' + H.grade + '</span>';
       var bon = _modsToBonuses(_techView(w).mods || []);
       if (bon.length) techBon = '<span class="wd-tag wd-tech-bon">' + bon.map(function(b){ return (b.value>=0?'+':'')+b.value+' '+_htmlesc(b.target); }).join(' ') + '</span>';
     }
     return '<div class="wd-item" draggable="true" ondragstart="wardrobeDragStart(event,' + wi + ')">' +
       (w.isArmor ? '<span class="wd-armor-dot" title="Armor"></span>' : '') +
       '<span class="wd-name">' + _htmlesc(w.name) + techTag + '</span>' +
+      techLvl +
       (w.sp ? '<span class="wd-tag">SP ' + w.sp + '</span>' : '') + techBon +
       '<span class="wd-equip-btn" onclick="addToActiveOutfit(' + wi + ')" title="Add to active outfit">▶</span>' +
       '<span class="wd-rm" onclick="removeFromWardrobe(' + wi + ')">✕</span>' +
@@ -2550,6 +2553,25 @@ function renderGear() {
 /* ─── Tech objects in the inventory (built in the TECH section) ─── */
 function _htmlesc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function _techView(g) { return _techLib()[g.techId] || g.techSnap || {}; }
+// at-a-glance object level, computed from the snapshot's feats (no TechArtifact dependency on the sheet)
+function _techHeadline(v) {
+  var fs = (v && v.feats) || [];
+  var gt = fs.reduce(function(m, f) { return Math.max(m, +f.grade || 0); }, 0);
+  var corpo = fs.filter(function(f) { return (+f.grade || 0) >= 6; }).length;
+  var nodes = fs.reduce(function(s, f) { return s + ((f.path && f.path.length) ? f.path.length : ((+f.grade || 0) > 0 ? 1 : 0)); }, 0);
+  var label = corpo ? ((corpo >= 2 || nodes >= 24) ? 'OVERKILL' : 'CORPO-TIER')
+    : gt >= 5 ? 'PROTOTYPE' : gt >= 4 ? 'MILSPEC' : gt >= 3 ? 'PRO' : gt >= 1 ? 'STREET' : 'BASIC';
+  return { grade: gt, corpo: corpo, nodes: nodes, op: corpo > 0 || gt >= 5, label: label };
+}
+function _techLvlBand(v, cls) {
+  var H = _techHeadline(v); if (!H.grade) return '';
+  return '<div class="' + cls + (H.op ? ' op' : '') + '">' +
+    '<span class="' + cls + '-b">' + (H.op ? '⬢ ' : '') + H.label + '</span>' +
+    '<span class="' + cls + '-g">g' + H.grade + '</span>' +
+    '<span class="' + cls + '-m">' + H.nodes + ' feat' + (H.nodes > 1 ? 's' : '') +
+      (H.corpo ? ' · ⬡ CORPO' + (H.corpo > 1 ? ' ×' + H.corpo : '') : '') + '</span>' +
+  '</div>';
+}
 function _techGearCard(g, i, active) {
   var v = _techView(g);
   var feats = (v.feats || []).map(function(f) { return _htmlesc(f.domain) + ' g' + f.grade; }).join(' · ');
@@ -2567,6 +2589,7 @@ function _techGearCard(g, i, active) {
     editTagNum('gear', i, 'wt', '', 'kg', 40) +
     '</div>' +
     '<span class="inv-remove" onclick="removeGear(' + i + ')">✕</span></div>' +
+    _techLvlBand(v, 'inv-tech-lvl') +
     (feats ? '<div class="inv-tech-feats">' + feats + '</div>' : '') +
     (bon.length
       ? '<div class="inv-tech-bon' + (active ? '' : ' off') + '">' + (active ? '● applies:  ' : '○ when equipped:  ') + bonStr + '</div>'

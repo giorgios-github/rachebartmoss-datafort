@@ -78,6 +78,11 @@
       return body;
     }
     var g = TR.get(pick.treeDom), path = pick.treePath || [];
+    // juice: diff the active set vs the last render so only JUST-added nodes animate (pop / edge-in / pull)
+    var gr = TR.grade(g, path), curOn = TR.activeIds(path), fresh = {};
+    if (pick._prevOn) curOn.forEach(function (id) { if (pick._prevOn.indexOf(id) < 0) fresh[id] = 1; });
+    var bumped = !!pick._prevOn && pick._prevGrade != null && gr > pick._prevGrade;
+    pick._prevOn = curOn.slice(); pick._prevGrade = gr;
     var crumbA = TR.crumbs(g, path);
     var crumb = crumbA.length ? crumbA.map(function (c) { return esc(c); }).join(' <span class="tk2-mut">+</span> ') : '<span class="tk2-mut">click a node to add it…</span>';
     var chips = TR.collect(g, path, 'act').map(function (x) { return '<span class="tk2-tchip act">▸ ' + esc(x) + '</span>'; }).join('') +
@@ -89,9 +94,9 @@
         '<span class="tk2-tree-dom">' + esc(pick.treeDom) + '</span>' + (TR.has(pick.treeDom) ? '' : ' <span class="tk2-mut">(ladder)</span>') +
         '<span class="tk2-tree-legend"><b>○</b> pick-one · <b>□</b> add · <b>◇</b> ° dial · <b>⬡</b> needs-all</span>' +
         '<span class="tk2-bar-sp"></span>' +
-        '<button class="app-btn tk2-treeadd"' + (path.length ? '' : ' disabled') + '>' + (pick.editFi != null ? 'SET' : 'ADD') + ' · g' + TR.grade(g, path) + '</button></div>' +
+        '<button class="app-btn tk2-treeadd' + (bumped ? ' is-bumped' : '') + '"' + (path.length ? '' : ' disabled') + '>' + (pick.editFi != null ? 'SET' : 'ADD') + ' · g' + gr + '</button></div>' +
       '<div class="tk2-tree-desc" data-treedesc><span class="tk2-mut">hover a node to read what it does</span></div>' +
-      treeSvg(g, path) +
+      treeSvg(g, path, fresh) +
       '<div class="tk2-tree-crumb">' + crumb + '</div>' +
       (dialHtml ? '<div class="tk2-tree-dials">' + dialHtml + '</div>' : '') +
       (chips ? '<div class="tk2-tree-chips">' + chips + '</div>' : '');
@@ -103,27 +108,27 @@
     if (kind === 'conv') return '<polygon class="tk2-tg" points="0,-7 6,-3.5 6,3.5 0,7 -6,3.5 -6,-3.5" fill="' + f + '"/>';
     return '<circle class="tk2-tg" r="6" fill="' + f + '"/>';
   }
-  function treeSvg(g, path) {
+  function treeSvg(g, path, fresh) {
+    fresh = fresh || {};
     var L = TR.layout(g), on = {}; TR.activeIds(path).forEach(function (id) { on[id] = 1; });
     on[g.root] = 1;   // the base is always "on" so the trunk to the chosen branch lights up
     var svg = '';
     for (var t = 1; t <= g.maxTier; t++) { var gy = L.padY + t * L.rowH; svg += '<text class="tk2-tree-g" x="8" y="' + (gy + 4).toFixed(0) + '">g' + t + '</text>'; }
-    g.edges.forEach(function (e) { var A = L.pos[e.from], B = L.pos[e.to], lit = on[e.from] && on[e.to]; svg += '<line class="tk2-tedge' + (lit ? ' on' : '') + '" x1="' + A.x.toFixed(1) + '" y1="' + A.y.toFixed(1) + '" x2="' + B.x.toFixed(1) + '" y2="' + B.y.toFixed(1) + '"/>'; });
-    // needsAll: dashed links from the convergence node to EVERY required node
-    Object.keys(g.nodes).forEach(function (id) { var n = g.nodes[id]; if (!n.needsAll) return; var B = L.pos[id]; n.needsAll.forEach(function (r) { var A = L.pos[r]; if (!A) return; var lit = on[id] && on[r]; svg += '<line class="tk2-tedge-req' + (lit ? ' on' : '') + '" x1="' + A.x.toFixed(1) + '" y1="' + A.y.toFixed(1) + '" x2="' + B.x.toFixed(1) + '" y2="' + B.y.toFixed(1) + '"/>'; }); });
+    g.edges.forEach(function (e) { var A = L.pos[e.from], B = L.pos[e.to], lit = on[e.from] && on[e.to]; svg += '<line class="tk2-tedge' + (lit ? ' on' : '') + (lit && fresh[e.to] ? ' is-fresh' : '') + '" x1="' + A.x.toFixed(1) + '" y1="' + A.y.toFixed(1) + '" x2="' + B.x.toFixed(1) + '" y2="' + B.y.toFixed(1) + '"/>'; });
+    // needsAll: dashed links from the convergence node to EVERY required node (crawl toward the ⬡ when freshly pulled)
+    Object.keys(g.nodes).forEach(function (id) { var n = g.nodes[id]; if (!n.needsAll) return; var B = L.pos[id]; n.needsAll.forEach(function (r) { var A = L.pos[r]; if (!A) return; var lit = on[id] && on[r]; svg += '<line class="tk2-tedge-req' + (lit ? ' on' : '') + (lit && (fresh[id] || fresh[r]) ? ' is-fresh' : '') + '" x1="' + A.x.toFixed(1) + '" y1="' + A.y.toFixed(1) + '" x2="' + B.x.toFixed(1) + '" y2="' + B.y.toFixed(1) + '"/>'; }); });
     var R = L.pos[g.root]; svg += '<text class="tk2-troot" x="' + R.x.toFixed(1) + '" y="' + (R.y - 12).toFixed(1) + '" text-anchor="middle">' + esc(g.nodes[g.root].label.toUpperCase()) + '</text>';
     svg += '<circle class="tk2-tbase" cx="' + R.x.toFixed(1) + '" cy="' + R.y.toFixed(1) + '" r="5"/>';   // the base, under the title — the trunk starts here
     Object.keys(g.nodes).forEach(function (id) {
       if (id === g.root) return;
       var n = g.nodes[id], p = L.pos[id], k = TR.kindOf(n), act = !!on[id];
-      var blocked = n.needsAll && !n.needsAll.every(function (r) { return on[r]; });
-      var st = act ? 'on' : blocked ? 'off' : 'ok';
+      var st = act ? 'on' : 'ok';   // convergence-pull: every node is reachable (a ⬡ pulls its reqs), so nothing is "blocked"
       var tip = (n.cap || '') + (n.need ? (n.cap ? ' · ' : '') + 'needs ' + n.need : '') + (n.needsAll ? (n.cap || n.need ? ' · ' : '') + 'needs all: ' + n.needsAll.map(function (r) { return g.nodes[r] ? g.nodes[r].label : r; }).join(', ') : '');
       var dv = act && n.scale ? '<text class="tk2-tdialv" y="21" text-anchor="middle">×' + (TR.scaleOf(path, id) || 1) + '</text>' : '';
-      svg += '<g class="tk2-tnode tk2-t-' + k + ' is-' + st + '" data-treenode="' + id + '" transform="translate(' + p.x.toFixed(1) + ',' + p.y.toFixed(1) + ')">' +
+      svg += '<g class="tk2-tnode tk2-t-' + k + ' is-' + st + (fresh[id] ? ' is-fresh' : '') + '" data-treenode="' + id + '" transform="translate(' + p.x.toFixed(1) + ',' + p.y.toFixed(1) + ')">' +
         (tip ? '<title>' + esc(tip) + '</title>' : '') +
         '<text class="tk2-tlabel" y="-13" text-anchor="middle">' + esc(n.label) + (n.scale ? '°' : '') + (n.act ? ' ▸' : '') + '</text>' +
-        glyphSvg(k, act) + dv + '</g>';
+        '<g class="tk2-gpop">' + glyphSvg(k, act) + '</g>' + dv + '</g>';
     });
     return '<div class="tk2-tree-wrap"><svg class="tk2-tree" width="' + L.W.toFixed(0) + '" height="' + L.H.toFixed(0) + '" viewBox="0 0 ' + L.W.toFixed(0) + ' ' + L.H.toFixed(0) + '">' + svg + '</svg></div>';
   }
@@ -291,14 +296,29 @@
   function addonChips(f, i, a) {
     return (f.addons || []).map(function (x, ai) { return '<span class="tk2-addchip">' + esc(x.name) + (a ? ' ' + addonEbTag(a, x.name) : '') + '<button class="tk2-addchip-x" data-delfaddon="' + i + '" data-ai="' + ai + '" title="remove">✕</button></span>'; }).join('');
   }
-  // a walked-tree effect: breadcrumb + grade badge + unlocked actions; click to re-walk
+  function glyphChar(k) { return k === 'add' ? '□' : k === 'dial' ? '◇' : k === 'conv' ? '⬡' : '○'; }
+  // a walked-tree effect, as a mini-datasheet: what it IS (glyphed crumb) + what it DOES (caps) + actions + unlocks
   function featRowTree(f, i, a) {
-    var g = TR.get(f.domain), crumb = TR.crumbs(g, f.path).join('  +  '), acts = TR.collect(g, f.path, 'act');
+    var g = TR.get(f.domain), ids = TR.activeIds(f.path), tipIds = TR.tips(g, f.path);
+    var crumb = tipIds.map(function (id) {
+      return '<span class="tk2-fcr"><b class="tk2-fcg">' + glyphChar(TR.kindOf(g.nodes[id])) + '</b> ' +
+        esc(TR.ancestors(g, id).map(function (x) { return g.nodes[x].label; }).join(' › ')) + '</span>';
+    }).join('<span class="tk2-mut"> + </span>');
+    var does = tipIds.map(function (id) { return g.nodes[id].cap; }).filter(Boolean);
+    var acts = TR.collect(g, f.path, 'act'), tags = TR.collect(g, f.path, 'tag');
+    var corpo = ids.some(function (id) { return g.nodes[id] && g.nodes[id].arch; });
+    var n = ids.length;
     return '<div class="tk2-feat" data-fi="' + i + '">' +
       '<div class="tk2-feat-top"><span class="tk2-fdom" data-editfeat="' + i + '">' + esc(f.domain) + '</span>' +
-        '<span class="tk2-fg">g' + f.grade + '</span><span class="tk2-feat-sp"></span>' +
-        '<button class="tk2-x" data-delfeat="' + i + '" title="remove">✕</button></div>' +
-      '<div class="tk2-feat-cap tk2-fedit" data-editfeat="' + i + '">' + esc(crumb || '(empty)') + (acts.length ? ' <span class="tk2-mut">▸ ' + esc(acts.join(', ')) + '</span>' : '') + '</div>' +
+        '<span class="tk2-fg">g' + f.grade + '</span>' +
+        (corpo ? '<span class="tk2-fcorpo">⬡ CORPO</span>' : '') +
+        (n ? '<span class="tk2-mut tk2-fcount">' + n + ' feature' + (n > 1 ? 's' : '') + '</span>' : '') +
+        '<span class="tk2-feat-sp"></span><button class="tk2-x" data-delfeat="' + i + '" title="remove">✕</button></div>' +
+      '<div class="tk2-feat-cap tk2-fedit" data-editfeat="' + i + '">' + (crumb || '<span class="tk2-mut">(empty)</span>') + '</div>' +
+      (does.length ? '<div class="tk2-feat-does">' + does.map(esc).join(' <span class="tk2-mut">·</span> ') + '</div>' : '') +
+      ((acts.length || tags.length) ? '<div class="tk2-feat-line">' +
+        acts.map(function (x) { return '<span class="tk2-tchip act">▸ ' + esc(x) + '</span>'; }).join('') +
+        tags.map(function (x) { return '<span class="tk2-tchip">+ ' + esc(x) + '</span>'; }).join('') + '</div>' : '') +
       '<div class="tk2-feat-addons">' + addonChips(f, i, a) + '<button class="tk2-addchip-add" data-openpk data-pkkind="faddon" data-pkfi="' + i + '" title="addons tied to ' + esc(f.domain) + '">+ addon</button></div>' +
     '</div>';
   }
@@ -321,6 +341,18 @@
   function tokenRow(kind, i, val, extra) {
     return '<span class="tk2-tok"><input list="tk2-tokens" data-tok="' + kind + '" data-ti="' + i + '" value="' + esc(val) + '" placeholder="token…">' +
       (extra || '') + '<button class="tk2-x" data-deltok="' + kind + '" data-ti="' + i + '">✕</button></span>';
+  }
+  // at-a-glance OBJECT LEVEL — what you're up against, before reading a single feature. Inverts to ink when OP.
+  function levelBand(d) {
+    var L = d.level; if (!L || !L.grade) return '';
+    return '<div class="tk2-lvl' + (L.op ? ' is-op' : '') + '" title="the tech level of this object">' +
+      '<span class="tk2-lvl-badge">' + (L.op ? '⬢ ' : '') + esc(L.label) + '</span>' +
+      '<span class="tk2-lvl-g">g' + L.grade + '</span>' +
+      '<span class="tk2-lvl-meta">' + L.nodes + ' feature' + (L.nodes > 1 ? 's' : '') +
+        (L.corpo ? ' · ⬡ CORPO' + (L.corpo > 1 ? ' ×' + L.corpo : '') : '') + '</span>' +
+      '<span class="tk2-lvl-sp"></span>' +
+      '<span class="tk2-lvl-op">OP ' + d.op + '</span>' +
+    '</div>';
   }
 
   function renderBench(pane) {
@@ -351,6 +383,7 @@
         '<button class="app-btn tk2-copy">⧉ RECORD</button>' +
         '<button class="app-btn app-btn-danger tk2-del">DELETE</button>' +
       '</div>' +
+      levelBand(d) +
       '<div class="tk2-body">' +
         '<div class="tk2-plate' + (a.plate ? '' : ' is-empty') + '">' + plate + '</div>' +
         '<div class="tk2-fiche">' +
@@ -675,8 +708,11 @@
     var feats = a.feats.map(function (f) {
       var ad = (f.addons || []).map(function (x) { return esc(x.name); }).join(', '), body;
       if (f.path && f.path.length) {
-        var g = TR.get(f.domain); body = esc(f.domain) + ' g' + f.grade + ' <span class="tk2-mut">— ' + esc(TR.crumbs(g, f.path).join('  +  ')) + '</span>';
+        var g = TR.get(f.domain), corpo = TR.activeIds(f.path).some(function (id) { return g.nodes[id] && g.nodes[id].arch; });
+        body = esc(f.domain) + ' g' + f.grade + (corpo ? ' <span class="tk2-docorpo">⬡ CORPO</span>' : '') + ' <span class="tk2-mut">— ' + esc(TR.crumbs(g, f.path).join('  +  ')) + '</span>';
         var acts = TR.collect(g, f.path, 'act'); if (acts.length) body += ' <span class="tk2-mut">▸ ' + esc(acts.join(', ')) + '</span>';
+        var does = TR.tips(g, f.path).map(function (id) { return g.nodes[id].cap; }).filter(Boolean);
+        if (does.length) body += '<div class="tk2-docdoes tk2-mut">' + does.map(esc).join(' · ') + '</div>';
       } else { var an = C.anchorOf(f.domain, f.grade); body = esc(f.domain) + ' g' + f.grade + (an ? ' <span class="tk2-mut">— ' + esc(an.bar) + '</span>' : ''); }
       return '<div class="tk2-docfeat">' + body + (ad ? ' <span class="tk2-mut">+ ' + ad + '</span>' : '') + '</div>';
     }).join('') || '<div class="tk2-mut">stats only</div>';
@@ -692,6 +728,7 @@
         '<span class="tk2-bar-sp"></span><span class="tk2-mut">player view — non-public fields hidden</span></div>' +
       '<div class="tk2-doc-card">' +
         '<div class="tk2-doc-head"><span>' + esc(a.name) + '</span><span>' + esc(a.cls) + ' · tier ' + a.tier + '</span></div>' +
+        levelBand(d) +
         '<div class="tk2-doc-plate">' + plate + '</div>' +
         (a.flavor ? '<div class="tk2-doc-flavor">' + esc(a.flavor) + '</div>' : '') +
         (gen ? '<div class="tk2-doc-flavor tk2-mut">addons: ' + gen + '</div>' : '') +

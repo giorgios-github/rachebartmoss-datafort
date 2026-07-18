@@ -274,6 +274,23 @@
 .tk2-cap { font-weight:bold; }
 /* per-effect addons (chips under each effect) + generic addons + split button */
 .tk2-feat-addons { flex-basis:100%; display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; align-items:center; }
+/* the object's features, read explicitly (mini-datasheet) */
+.tk2-fcorpo { font-family:var(--head); font-size:10px; letter-spacing:1px; background:var(--ink); color:#fff; padding:1px 5px; }
+.tk2-fcount { font-size:11px; }
+.tk2-fcr { white-space:nowrap; }
+.tk2-fcg { font-family:var(--mono); font-weight:normal; }
+.tk2-feat-does { margin-top:4px; font-size:12px; color:#333; line-height:1.5; }
+.tk2-feat-line { flex-basis:100%; display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; align-items:center; }
+.tk2-docorpo { font-family:var(--head); font-size:9px; letter-spacing:1px; background:var(--ink); color:#fff; padding:0 4px; }
+.tk2-docdoes { font-size:11px; margin-top:2px; line-height:1.45; }
+/* at-a-glance object LEVEL band — inverts to solid ink when the object is OP */
+.tk2-lvl { display:flex; align-items:center; gap:12px; border:2px solid var(--ink); background:#fff; color:var(--ink); padding:5px 12px; margin:0 0 8px; }
+.tk2-lvl.is-op { background:var(--ink); color:#fff; }
+.tk2-lvl-badge { font-family:var(--head); font-size:18px; letter-spacing:2px; font-weight:bold; }
+.tk2-lvl-g { font-family:var(--head); font-size:13px; border:2px solid currentColor; padding:0 6px; }
+.tk2-lvl-meta { font-family:var(--mono); font-size:12px; letter-spacing:.5px; }
+.tk2-lvl-sp { flex:1; }
+.tk2-lvl-op { font-family:var(--head); font-size:15px; letter-spacing:1px; }
 .tk2-addchip { display:inline-flex; align-items:center; gap:3px; font-family:var(--mono); font-size:11px; border:2px solid var(--ink); background:#fff; padding:0 3px 0 6px; }
 .tk2-addchip-x { border:none; background:none; color:var(--ink); cursor:pointer; font-size:10px; padding:0 2px; line-height:1; }
 .tk2-addchip-x:hover { background:var(--ink); color:#fff; }
@@ -307,10 +324,21 @@
 .tk2-tg { stroke:var(--ink); stroke-width:2; }
 .tk2-tlabel { font-family:var(--mono); font-size:13px; fill:var(--ink); pointer-events:none; stroke:#fff; stroke-width:3.5; paint-order:stroke; }
 .tk2-tdialv { font-family:var(--mono); font-size:12px; fill:var(--ink); pointer-events:none; stroke:#fff; stroke-width:3; paint-order:stroke; }
-.tk2-tnode.is-off { opacity:.32; cursor:default; }
 .tk2-tnode.is-ok:hover .tk2-tg { fill:#ddd !important; }
 .tk2-tnode.is-ok .tk2-tlabel { fill:#555; }
 .tk2-tnode.is-on .tk2-tlabel { fill:var(--ink); font-weight:bold; }
+/* juice: only JUST-added nodes/edges animate (the render diffs the active set) */
+.tk2-gpop { transform-box:fill-box; transform-origin:center; }
+.tk2-tnode.is-fresh .tk2-gpop { animation:tk2-pop .16s ease-out; }
+.tk2-tnode.is-fresh .tk2-tlabel { animation:tk2-labelin .16s ease-out; }
+.tk2-tedge.is-fresh.on { animation:tk2-edgein .16s ease-out; }
+.tk2-tedge-req.is-fresh.on { animation:tk2-reqpull .18s linear; }
+.tk2-treeadd.is-bumped { animation:tk2-flash .18s ease-out; }
+@keyframes tk2-pop { 0%{transform:scale(.35)} 55%{transform:scale(1.22)} 100%{transform:scale(1)} }
+@keyframes tk2-labelin { from{opacity:.2} to{opacity:1} }
+@keyframes tk2-edgein { from{opacity:0} to{opacity:1} }
+@keyframes tk2-reqpull { from{stroke-dashoffset:14} to{stroke-dashoffset:0} }
+@keyframes tk2-flash { 0%{background:var(--ink);color:#fff} 100%{} }
 .tk2-tree-crumb { margin-top:8px; font-family:var(--mono); font-size:13px; }
 .tk2-tree-dials { margin-top:6px; display:flex; flex-wrap:wrap; gap:12px; }
 .tk2-dial { font-family:var(--mono); font-size:12px; display:inline-flex; align-items:center; gap:4px; }

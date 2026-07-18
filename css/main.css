@@ -289,6 +289,14 @@ body { font-family:var(--mono); background:var(--bg); color:var(--text); font-si
 .inv-tech-feats { font-family:var(--mono); font-size:11px; color:var(--text2); margin-top:5px; letter-spacing:0.5px; }
 .inv-tech-bon { font-family:var(--mono); font-size:12px; color:#111; margin-top:4px; font-weight:bold; }
 .inv-tech-bon.off { color:var(--text2); font-weight:normal; }
+/* at-a-glance object LEVEL — reads OP before you read a single feature */
+.inv-tech-lvl { display:flex; align-items:center; gap:8px; border:2px solid #111; background:#fff; color:#111; padding:2px 7px; margin-top:6px; }
+.inv-tech-lvl.op { background:#111; color:#fff; }
+.inv-tech-lvl-b { font-family:var(--head); font-size:13px; letter-spacing:1.5px; font-weight:bold; }
+.inv-tech-lvl-g { font-family:var(--head); font-size:12px; border:2px solid currentColor; padding:0 5px; }
+.inv-tech-lvl-m { font-family:var(--mono); font-size:11px; }
+.wd-lvl { font-family:var(--head); letter-spacing:1px; }
+.wd-lvl.op { background:#111; color:#fff; border-color:#111; }
 
 /* Workshop picker (add a finished object to the sheet) */
 .tech-pick-empty { padding:14px; font-size:13px; color:var(--text2); line-height:1.6; }
