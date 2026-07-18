@@ -75,33 +75,47 @@
       return body;
     }
     var g = TR.get(pick.treeDom), path = pick.treePath || [];
-    var crumb = TR.crumbs(g, path).join(' › ') || '<span class="tk2-mut">click a node to walk down…</span>';
+    var crumbA = TR.crumbs(g, path);
+    var crumb = crumbA.length ? crumbA.map(function (c) { return esc(c); }).join(' <span class="tk2-mut">+</span> ') : '<span class="tk2-mut">click a node to add it…</span>';
     var chips = TR.collect(g, path, 'act').map(function (x) { return '<span class="tk2-tchip act">▸ ' + esc(x) + '</span>'; }).join('') +
-      TR.collect(g, path, 'tag').map(function (x) { return '<span class="tk2-tchip">+' + esc(x) + '</span>'; }).join('') +
+      TR.collect(g, path, 'tag').map(function (x) { return '<span class="tk2-tchip">unlocks +' + esc(x) + '</span>'; }).join('') +
       TR.collect(g, path, 'need').map(function (x) { return '<span class="tk2-tchip need">' + esc(x) + '</span>'; }).join('');
+    var dials = TR.activeIds(path).map(function (id) { return g.nodes[id]; }).filter(function (n) { return n && n.scale; });
+    var dialHtml = dials.map(function (n) { var v = TR.scaleOf(path, n.id) || 1; return '<span class="tk2-dial">' + esc(n.label) + ' ° <button class="tk2-dstep" data-dial="' + n.id + '" data-dd="-1">−</button><b>' + v + '</b><button class="tk2-dstep" data-dial="' + n.id + '" data-dd="1">+</button> <span class="tk2-mut">' + esc(n.scale.per || '') + ' — requires ×' + v + '</span></span>'; }).join('');
     return '<div class="tk2-tree-head"><button class="tk2-chip" data-treeback>← effects</button>' +
         '<span class="tk2-tree-dom">' + esc(pick.treeDom) + '</span>' + (TR.has(pick.treeDom) ? '' : ' <span class="tk2-mut">(ladder)</span>') +
+        '<span class="tk2-tree-legend"><b>○</b> pick-one · <b>□</b> add · <b>◇</b> ° dial · <b>⬡</b> needs-all</span>' +
         '<span class="tk2-bar-sp"></span>' +
         '<button class="app-btn tk2-treeadd"' + (path.length ? '' : ' disabled') + '>' + (pick.editFi != null ? 'SET' : 'ADD') + ' · g' + TR.pathTier(g, path) + '</button></div>' +
       treeSvg(g, path) +
       '<div class="tk2-tree-crumb">' + crumb + '</div>' +
+      (dialHtml ? '<div class="tk2-tree-dials">' + dialHtml + '</div>' : '') +
       (chips ? '<div class="tk2-tree-chips">' + chips + '</div>' : '');
   }
-  var TNW = 104, TNH = 26;
-  function treeChain(g, id) { var out = [], cur = id; while (cur && cur !== 'ROOT' && g.nodes[cur]) { out.unshift(cur); cur = g.nodes[cur].parent; } return out; }
-  function treeMark(n) { return (n.scale ? '°' : '') + (n.act ? ' ▸' : ''); }
+  function glyphSvg(kind, on) {
+    var f = on ? '#111' : '#fff';
+    if (kind === 'add') return '<rect class="tk2-tg" x="-6" y="-6" width="12" height="12" fill="' + f + '"/>';
+    if (kind === 'dial') return '<rect class="tk2-tg" x="-6" y="-6" width="12" height="12" transform="rotate(45)" fill="' + f + '"/>';
+    if (kind === 'conv') return '<polygon class="tk2-tg" points="0,-7 6,-3.5 6,3.5 0,7 -6,3.5 -6,-3.5" fill="' + f + '"/>';
+    return '<circle class="tk2-tg" r="6" fill="' + f + '"/>';
+  }
   function treeSvg(g, path) {
-    var L = TR.layout(g), onp = {}; (path || []).forEach(function (id) { onp[id] = 1; });
+    var L = TR.layout(g), on = {}; TR.activeIds(path).forEach(function (id) { on[id] = 1; });
     var svg = '';
     for (var t = 1; t <= g.maxTier; t++) { var gy = L.padY + t * L.rowH; svg += '<text class="tk2-tree-g" x="8" y="' + (gy + 4).toFixed(0) + '">g' + t + '</text>'; }
-    g.edges.forEach(function (e) { var A = L.pos[e.from], B = L.pos[e.to], on = onp[e.from] && onp[e.to]; svg += '<line class="tk2-tedge' + (on ? ' on' : '') + '" x1="' + A.x.toFixed(1) + '" y1="' + (A.y + TNH / 2).toFixed(1) + '" x2="' + B.x.toFixed(1) + '" y2="' + (B.y - TNH / 2).toFixed(1) + '"/>'; });
+    g.edges.forEach(function (e) { var A = L.pos[e.from], B = L.pos[e.to], lit = on[e.from] && on[e.to]; svg += '<line class="tk2-tedge' + (lit ? ' on' : '') + '" x1="' + A.x.toFixed(1) + '" y1="' + A.y.toFixed(1) + '" x2="' + B.x.toFixed(1) + '" y2="' + B.y.toFixed(1) + '"/>'; });
     var R = L.pos[g.root]; svg += '<text class="tk2-troot" x="' + R.x.toFixed(1) + '" y="' + (R.y + 4).toFixed(1) + '" text-anchor="middle">' + esc(g.nodes[g.root].label.toUpperCase()) + '</text>';
     Object.keys(g.nodes).forEach(function (id) {
       if (id === g.root) return;
-      var n = g.nodes[id], p = L.pos[id], on = onp[id];
-      svg += '<g class="tk2-tnode' + (on ? ' on' : '') + '" data-treenode="' + id + '">' +
-        '<rect x="' + (p.x - TNW / 2).toFixed(1) + '" y="' + (p.y - TNH / 2).toFixed(1) + '" width="' + TNW + '" height="' + TNH + '"/>' +
-        '<text x="' + p.x.toFixed(1) + '" y="' + (p.y + 4).toFixed(1) + '" text-anchor="middle">' + esc(n.label) + esc(treeMark(n)) + '</text></g>';
+      var n = g.nodes[id], p = L.pos[id], k = TR.kindOf(n), act = !!on[id];
+      var blocked = n.needsAll && !n.needsAll.every(function (r) { return on[r]; });
+      var st = act ? 'on' : blocked ? 'off' : 'ok';
+      var tip = (n.cap || '') + (n.need ? (n.cap ? ' · ' : '') + 'needs ' + n.need : '') + (n.needsAll ? (n.cap || n.need ? ' · ' : '') + 'needs all: ' + n.needsAll.map(function (r) { return g.nodes[r] ? g.nodes[r].label : r; }).join(', ') : '');
+      var dv = act && n.scale ? '<text class="tk2-tdialv" y="18" text-anchor="middle">×' + (TR.scaleOf(path, id) || 1) + '</text>' : '';
+      svg += '<g class="tk2-tnode tk2-t-' + k + ' is-' + st + '" data-treenode="' + id + '" transform="translate(' + p.x.toFixed(1) + ',' + p.y.toFixed(1) + ')">' +
+        (tip ? '<title>' + esc(tip) + '</title>' : '') +
+        '<text class="tk2-tlabel" y="-11" text-anchor="middle">' + esc(n.label) + (n.scale ? '°' : '') + (n.act ? ' ▸' : '') + '</text>' +
+        glyphSvg(k, act) + dv + '</g>';
     });
     return '<div class="tk2-tree-wrap"><svg class="tk2-tree" width="' + L.W.toFixed(0) + '" height="' + L.H.toFixed(0) + '" viewBox="0 0 ' + L.W.toFixed(0) + ' ' + L.H.toFixed(0) + '">' + svg + '</svg></div>';
   }
@@ -176,7 +190,8 @@
     else if (pick.kind === 'wmod') { title = 'WEARER BONUS <span class="tk2-mut">— target a stat / a skill</span>'; body = wmodBody(a, builder); }
     else if (pick.kind === 'class') { title = 'OBJECT CLASS'; body = classBody(a); }
     else { title = 'ORIGIN'; body = originBody(a); }
-    return '<div class="tk2-modal" data-pkscrim><div class="tk2-modal-box"><div class="tk2-modal-h">' + title + '<span class="tk2-bar-sp"></span><span class="tk2-modal-x" data-pkclose>✕</span></div><div class="tk2-modal-b">' + body + '</div></div></div>';
+    var wide = (pick.kind === 'effect' && pick.treeDom) ? ' tk2-modal-wide' : '';
+    return '<div class="tk2-modal" data-pkscrim><div class="tk2-modal-box' + wide + '"><div class="tk2-modal-h">' + title + '<span class="tk2-bar-sp"></span><span class="tk2-modal-x" data-pkclose>✕</span></div><div class="tk2-modal-b">' + body + '</div></div></div>';
   }
 
   // ── store ──
@@ -267,7 +282,7 @@
   }
   // a walked-tree effect: breadcrumb + grade badge + unlocked actions; click to re-walk
   function featRowTree(f, i, a) {
-    var g = TR.get(f.domain), crumb = TR.crumbs(g, f.path).join(' › '), acts = TR.collect(g, f.path, 'act');
+    var g = TR.get(f.domain), crumb = TR.crumbs(g, f.path).join('  +  '), acts = TR.collect(g, f.path, 'act');
     return '<div class="tk2-feat" data-fi="' + i + '">' +
       '<div class="tk2-feat-top"><span class="tk2-fdom" data-editfeat="' + i + '">' + esc(f.domain) + '</span>' +
         '<span class="tk2-fg">g' + f.grade + '</span><span class="tk2-feat-sp"></span>' +
@@ -395,7 +410,8 @@
     // ── effect-tree walk (inside the effect picker) ──
     pane.querySelectorAll('[data-treedom]').forEach(function (b) { b.onclick = function () { s.pick.treeDom = b.getAttribute('data-treedom'); s.pick.treePath = []; renderBench(pane); }; });
     var tback = pane.querySelector('[data-treeback]'); if (tback) tback.onclick = function () { s.pick.treeDom = null; s.pick.treePath = []; renderBench(pane); };
-    pane.querySelectorAll('[data-treenode]').forEach(function (nd) { nd.onclick = function () { var g = TR.get(s.pick.treeDom); s.pick.treePath = treeChain(g, nd.getAttribute('data-treenode')); renderBench(pane); }; });
+    pane.querySelectorAll('[data-treenode]').forEach(function (nd) { nd.onclick = function () { var g = TR.get(s.pick.treeDom); s.pick.treePath = TR.toggle(g, s.pick.treePath || [], nd.getAttribute('data-treenode')); renderBench(pane); }; });
+    pane.querySelectorAll('[data-dial]').forEach(function (b) { b.onclick = function () { var g = TR.get(s.pick.treeDom), id = b.getAttribute('data-dial'), dd = +b.getAttribute('data-dd'), n = g.nodes[id], cur = TR.scaleOf(s.pick.treePath, id) || 1, mx = (n.scale && n.scale.max) || 3; s.pick.treePath = TR.setScale(s.pick.treePath, id, Math.max(1, Math.min(mx, cur + dd))); renderBench(pane); }; });
     var tadd = pane.querySelector('.tk2-treeadd'); if (tadd && !tadd.disabled) tadd.onclick = function () {
       var g = TR.get(s.pick.treeDom), path = s.pick.treePath || []; if (!path.length) return;
       var feat = { domain: s.pick.treeDom, grade: TR.pathTier(g, path), path: path };
@@ -645,7 +661,7 @@
     var feats = a.feats.map(function (f) {
       var ad = (f.addons || []).map(function (x) { return esc(x.name); }).join(', '), body;
       if (f.path && f.path.length) {
-        var g = TR.get(f.domain); body = esc(f.domain) + ' g' + f.grade + ' <span class="tk2-mut">— ' + esc(TR.crumbs(g, f.path).join(' › ')) + '</span>';
+        var g = TR.get(f.domain); body = esc(f.domain) + ' g' + f.grade + ' <span class="tk2-mut">— ' + esc(TR.crumbs(g, f.path).join('  +  ')) + '</span>';
         var acts = TR.collect(g, f.path, 'act'); if (acts.length) body += ' <span class="tk2-mut">▸ ' + esc(acts.join(', ')) + '</span>';
       } else { var an = C.anchorOf(f.domain, f.grade); body = esc(f.domain) + ' g' + f.grade + (an ? ' <span class="tk2-mut">— ' + esc(an.bar) + '</span>' : ''); }
       return '<div class="tk2-docfeat">' + body + (ad ? ' <span class="tk2-mut">+ ' + ad + '</span>' : '') + '</div>';

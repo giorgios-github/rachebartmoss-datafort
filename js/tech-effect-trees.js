@@ -50,7 +50,10 @@
           { l: 'Filter-liner' }, { l: 'Hardsuit', kids: [{ l: 'Deep-env' }] }] }] },
       { l: 'Rigid', kids: [
         { l: 'Plate', kids: [
-          { l: 'Trauma-insert' }, { l: 'Ceramic' }, { l: 'Ablative', sc: { max: 3, per: 'hits' } }] },
+          { l: 'Trauma-insert', add: true, cap: 'stacks with other treatments' },
+          { l: 'Ceramic', add: true, cap: 'stacks with other treatments', kids: [
+            { l: 'Milspec plate', needsAll: ['rigid.plate.trauma-insert'], arch: 'milspec', cap: 'needs trauma-insert + ceramic' }] },
+          { l: 'Ablative', add: true, sc: { max: 3, per: 'hits' }, cap: 'ablates by the hit' }] },
         { l: 'Composite', kids: [
           { l: 'Reactive', sc: { max: 3, per: 'coverage' }, need: 'power', act: 'brace' },
           { l: 'Self-seal', act: 'patch' },
@@ -120,7 +123,7 @@
       var n = { id: id, tier: tier, parent: parentId, label: lit.l, cap: lit.cap || '',
         act: lit.act || null, tag: lit.tag || null, need: lit.need || null,
         scale: lit.sc || null, arch: lit.arch || null, bridge: lit.bridge || null,
-        kids: [] };
+        add: !!lit.add, needsAll: lit.needsAll || null, kids: [] };
       nodes[id] = n; (byTier[tier] || (byTier[tier] = [])).push(id);
       if (parentId) { edges.push({ from: parentId, to: id }); nodes[parentId].kids.push(id); }
       (lit.kids || []).forEach(function (c) { walk(c, id, tier + 1); });
@@ -150,18 +153,44 @@
     return { pos: pos, W: maxX + padX, H: padY + (g.maxTier + 1) * rowH, colW: colW, rowH: rowH, padX: padX, padY: padY };
   }
 
-  // helpers the UI needs
-  function pathTier(g, path) { return (path || []).reduce(function (m, id) { return g.nodes[id] ? Math.max(m, g.nodes[id].tier) : m; }, 0); }
-  function frontier(g, path) { // children of the deepest picked node = the next choices
-    if (!path || !path.length) return g.nodes[g.root].kids.slice();
-    var last = path[path.length - 1]; return g.nodes[last] ? g.nodes[last].kids.slice() : [];
+  // ── selection engine (path = a SET of node ids; a ° dial node is stored 'id@n') ──
+  // status → glyph: excl = ○ (pick one) · add = □ (stackable) · dial = ◇ (° cumulative) · conv = ⬡ (needsAll)
+  function baseId(p) { return String(p).split('@')[0]; }
+  function scaleOf(path, id) { var e = (path || []).filter(function (p) { return baseId(p) === id; })[0]; return e && e.indexOf('@') >= 0 ? (+e.split('@')[1] || 1) : null; }
+  function activeIds(path) { return (path || []).map(baseId); }
+  function isActive(path, id) { return activeIds(path).indexOf(id) >= 0; }
+  function kindOf(n) { return n.needsAll ? 'conv' : n.scale ? 'dial' : n.add ? 'add' : 'excl'; }
+  function ancestors(g, id) { var out = [], cur = id; while (cur && cur !== 'ROOT' && g.nodes[cur]) { out.unshift(cur); cur = g.nodes[cur].parent; } return out; }
+  function pickable(g, path, id) { // parent active (or tier 1) AND every needsAll met
+    var n = g.nodes[id]; if (!n) return false;
+    var parentOk = n.tier <= 1 || isActive(path, n.parent);
+    var reqOk = !n.needsAll || n.needsAll.every(function (r) { return isActive(path, r); });
+    return parentOk && reqOk;
   }
-  function crumbs(g, path) { return (path || []).map(function (id) { return g.nodes[id] ? g.nodes[id].label : id; }); }
-  function collect(g, path, key) { // gather a node field (act/tag/need/bridge) along the path
-    var out = []; (path || []).forEach(function (id) { var n = g.nodes[id]; if (n && n[key]) out.push(n[key]); });
-    return out;
+  function toggle(g, path, id) {
+    var set = (path || []).slice();
+    var ids = function () { return set.map(baseId); };
+    var has = function (x) { return ids().indexOf(x) >= 0; };
+    var removeSub = function (x) { var kill = {}; (function rec(y) { kill[y] = 1; (g.nodes[y].kids || []).forEach(rec); })(x); set = set.filter(function (p) { return !kill[baseId(p)]; }); };
+    var n = g.nodes[id]; if (!n) return set;
+    if (has(id)) { removeSub(id); return set; }                          // un-pick (prunes its subtree)
+    if (n.needsAll && !n.needsAll.every(has)) return set;                // convergence gate unmet → no-op
+    ancestors(g, id).forEach(function (nid) {                            // ensure the chain, honouring exclusivity
+      var node = g.nodes[nid]; if (has(nid)) return;
+      (g.nodes[node.parent] ? g.nodes[node.parent].kids : []).forEach(function (sib) {
+        if (sib !== nid && has(sib) && !node.add && !g.nodes[sib].add) removeSub(sib);   // exclusive siblings drop
+      });
+      set.push(node.scale ? nid + '@1' : nid);
+    });
+    return set;
   }
+  function setScale(path, id, v) { return (path || []).map(function (p) { return baseId(p) === id ? id + '@' + Math.max(1, v | 0) : p; }); }
+  function pathTier(g, path) { return activeIds(path).reduce(function (m, id) { return g.nodes[id] ? Math.max(m, g.nodes[id].tier) : m; }, 0); }
+  function tips(g, path) { var a = activeIds(path); return a.filter(function (id) { return !(g.nodes[id].kids || []).some(function (k) { return a.indexOf(k) >= 0; }); }); }
+  function crumbs(g, path) { return tips(g, path).map(function (id) { return ancestors(g, id).map(function (x) { return g.nodes[x].label; }).join(' › '); }); }
+  function collect(g, path, key) { var out = []; activeIds(path).forEach(function (id) { var n = g.nodes[id]; if (n && n[key] && out.indexOf(n[key]) < 0) out.push(n[key]); }); return out; }
 
   window.TechTrees = { TREES: TREES, has: hasTree, get: build, layout: layout,
-    pathTier: pathTier, frontier: frontier, crumbs: crumbs, collect: collect };
+    kindOf: kindOf, pickable: pickable, isActive: isActive, activeIds: activeIds, ancestors: ancestors,
+    toggle: toggle, scaleOf: scaleOf, setScale: setScale, pathTier: pathTier, tips: tips, crumbs: crumbs, collect: collect };
 })();
