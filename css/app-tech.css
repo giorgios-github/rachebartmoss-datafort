@@ -296,7 +296,8 @@
 .tk2-tree-g { font-family:var(--mono); font-size:13px; fill:#aaa; }
 .tk2-troot { font-family:var(--head); font-size:16px; fill:var(--ink); letter-spacing:1px; font-weight:bold; stroke:#fff; stroke-width:4; paint-order:stroke; }
 .tk2-tbase { fill:#111; stroke:#111; }
-.tk2-tree-desc { border:2px solid var(--ink); background:#fff; padding:6px 10px; font-family:var(--mono); font-size:13px; min-height:20px; margin-bottom:6px; }
+/* fixed height: empty vs full must not resize the popup */
+.tk2-tree-desc { box-sizing:border-box; height:44px; overflow:hidden; display:flex; align-items:center; border:2px solid var(--ink); background:#fff; padding:0 10px; font-family:var(--mono); font-size:13px; line-height:1.35; margin-bottom:6px; }
 .tk2-tree-desc b { font-family:var(--head); letter-spacing:.5px; }
 .tk2-tedge { stroke:#ccc; stroke-width:1.5; fill:none; }
 .tk2-tedge.on { stroke:var(--ink); stroke-width:2.5; }
