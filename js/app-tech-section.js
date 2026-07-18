@@ -19,13 +19,13 @@
     body += '<div class="tk2-pk-sec">DOMAINE EXOTIQUE</div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="nom du domaine…"><button class="tk2-chip" data-pkcustom="effect">+ ajouter (g1)</button></div>';
     return body;
   }
-  function tokCell(t) { return '<button class="tk2-cell" data-pktok="' + esc(t) + '">' + esc(t) + (C.isStandard(t) ? '<span class="tk2-mut"> · shop</span>' : '') + '</button>'; }
   function tokenBody(a, tkind) {
     var T = C.TOKENS, groups = tkind === 'needs' ? [['munitions', 'ammo'], ['alimentation', 'power'], ['consommables', 'consumable']] : [['montures', 'mount'], ['munitions', 'ammo'], ['prises', 'port'], ['formats', 'format']];
+    var tcell = function (t, kind) { return pickCell('data-pktok', t, kind + (C.isStandard(t) ? ' · shop' : ' · custom')); };
     var sugT = C.suggestFor(a.cls).tokens.filter(function (t) { return groups.some(function (g) { return T[g[1]].indexOf(t) >= 0; }); });
     var body = '';
-    if (sugT.length) body += '<div class="tk2-pk-sec">SUGGÉRÉ POUR ' + esc(a.cls.toUpperCase()) + '</div>' + gridCells(sugT, tokCell, 3);
-    groups.forEach(function (g) { body += '<div class="tk2-pk-sec">' + g[0].toUpperCase() + '</div>' + gridCells(T[g[1]], tokCell, 3); });
+    if (sugT.length) body += '<div class="tk2-pk-sec">SUGGÉRÉ POUR ' + esc(a.cls.toUpperCase()) + '</div>' + pickGrid(sugT.map(function (t) { return tcell(t, tokenKind(t)); }).join(''));
+    groups.forEach(function (g) { body += '<div class="tk2-pk-sec">' + g[0].toUpperCase() + '</div>' + pickGrid(T[g[1]].map(function (t) { return tcell(t, KIND_LABEL[g[1]]); }).join('')); });
     body += '<div class="tk2-pk-sec">CUSTOM</div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="jeton custom…"><button class="tk2-chip" data-pkcustom="token">+ ajouter</button></div>';
     return body;
   }
@@ -35,10 +35,9 @@
   function originBody(a) {
     return ORIGINS.map(function (o) { return '<button class="tk2-pk-row' + (o[0] === a.origin ? ' is-sel' : '') + '" data-pkorigin="' + o[0] + '"><span class="tk2-pd-h">' + o[0] + '</span> <span class="tk2-mut">· ' + esc(o[1]) + '</span></button>'; }).join('');
   }
-  function modCell(m) { return '<button class="tk2-cell" data-pkmod="' + esc(m) + '">' + esc(m) + '</button>'; }
   function modBody(a) {
     var body = '';
-    C.modsFor(a.cls).forEach(function (g) { body += '<div class="tk2-pk-sec">' + g.group.toUpperCase() + '</div>' + gridCells(g.list, modCell, 2); });
+    C.modsFor(a.cls).forEach(function (g) { body += '<div class="tk2-pk-sec">' + g.group.toUpperCase() + '</div>' + pickGrid(g.list.map(function (m) { return pickCell('data-pkmod', m, ''); }).join('')); });
     body += '<div class="tk2-pk-sec">CUSTOM</div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="modification custom…"><button class="tk2-chip" data-pkcustom="mod">+ ajouter</button></div>';
     return body;
   }
@@ -56,17 +55,11 @@
     }).join('');
     return '<div class="tk2-etab-wrap"><table class="tk2-etab"><thead>' + head + '</thead><tbody>' + rows + '</tbody></table></div>';
   }
-  // lay a flat list into a bordered grid of clickable cells (tokens / mods)
-  function gridCells(items, cellHtml, cols) {
-    cols = cols || 3;
-    var rows = '', row = '', i;
-    for (i = 0; i < items.length; i++) {
-      row += '<td>' + cellHtml(items[i]) + '</td>';
-      if ((i + 1) % cols === 0) { rows += '<tr>' + row + '</tr>'; row = ''; }
-    }
-    if (row) { var pad = cols - (items.length % cols); if (pad < cols) for (var k = 0; k < pad; k++) row += '<td class="tk2-cell-x"></td>'; rows += '<tr>' + row + '</tr>'; }
-    return '<div class="tk2-etab-wrap"><table class="tk2-gtab">' + rows + '</table></div>';
-  }
+  // substantial cards (name + note) in a responsive grid — for 1-D lists (tokens/mods)
+  function pickCell(attr, val, sub) { return '<button class="tk2-pk-cell" ' + attr + '="' + esc(val) + '"><span class="tk2-pk-cn">' + esc(val) + '</span>' + (sub ? '<span class="tk2-mut">' + esc(sub) + '</span>' : '') + '</button>'; }
+  function pickGrid(html) { return '<div class="tk2-pk-grid">' + html + '</div>'; }
+  var KIND_LABEL = { ammo: 'munition', mount: 'monture', power: 'alimentation', port: 'prise', format: 'format', consumable: 'consommable' };
+  function tokenKind(t) { var T = C.TOKENS, k; for (k in T) if (T[k].indexOf(t) >= 0) return KIND_LABEL[k] || k; return 'custom'; }
   function pickerModal(a, pick) {
     var title, body;
     if (pick.kind === 'effect') { title = 'CHOISIR UN EFFET <span class="tk2-mut">— clique un grade</span>'; body = effectBody(a); }
