@@ -104,7 +104,9 @@
     var svg = '';
     for (var t = 1; t <= g.maxTier; t++) { var gy = L.padY + t * L.rowH; svg += '<text class="tk2-tree-g" x="8" y="' + (gy + 4).toFixed(0) + '">g' + t + '</text>'; }
     g.edges.forEach(function (e) { var A = L.pos[e.from], B = L.pos[e.to], lit = on[e.from] && on[e.to]; svg += '<line class="tk2-tedge' + (lit ? ' on' : '') + '" x1="' + A.x.toFixed(1) + '" y1="' + A.y.toFixed(1) + '" x2="' + B.x.toFixed(1) + '" y2="' + B.y.toFixed(1) + '"/>'; });
-    var R = L.pos[g.root]; svg += '<text class="tk2-troot" x="' + R.x.toFixed(1) + '" y="' + (R.y + 4).toFixed(1) + '" text-anchor="middle">' + esc(g.nodes[g.root].label.toUpperCase()) + '</text>';
+    // needsAll: dashed links from the convergence node to EVERY required node
+    Object.keys(g.nodes).forEach(function (id) { var n = g.nodes[id]; if (!n.needsAll) return; var B = L.pos[id]; n.needsAll.forEach(function (r) { var A = L.pos[r]; if (!A) return; var lit = on[id] && on[r]; svg += '<line class="tk2-tedge-req' + (lit ? ' on' : '') + '" x1="' + A.x.toFixed(1) + '" y1="' + A.y.toFixed(1) + '" x2="' + B.x.toFixed(1) + '" y2="' + B.y.toFixed(1) + '"/>'; }); });
+    var R = L.pos[g.root]; svg += '<text class="tk2-troot" x="' + R.x.toFixed(1) + '" y="' + (R.y - 8).toFixed(1) + '" text-anchor="middle">' + esc(g.nodes[g.root].label.toUpperCase()) + '</text>';
     Object.keys(g.nodes).forEach(function (id) {
       if (id === g.root) return;
       var n = g.nodes[id], p = L.pos[id], k = TR.kindOf(n), act = !!on[id];
@@ -119,6 +121,9 @@
     });
     return '<div class="tk2-tree-wrap"><svg class="tk2-tree" width="' + L.W.toFixed(0) + '" height="' + L.H.toFixed(0) + '" viewBox="0 0 ' + L.W.toFixed(0) + ' ' + L.H.toFixed(0) + '">' + svg + '</svg></div>';
   }
+  // keep the tree's scroll across re-renders; center on the title on first open
+  function saveTreeScroll(pane, s) { if (!s.pick) return; var tw = pane.querySelector('.tk2-tree-wrap'); if (tw) s.pick.treeScroll = { x: tw.scrollLeft, y: tw.scrollTop }; }
+  function restoreTreeScroll(pane) { var s = sec(pane); if (!s.pick || !s.pick.treeDom) return; var tw = pane.querySelector('.tk2-tree-wrap'); if (!tw) return; if (s.pick.treeScroll) { tw.scrollLeft = s.pick.treeScroll.x; tw.scrollTop = s.pick.treeScroll.y; } else { tw.scrollLeft = Math.max(0, (tw.scrollWidth - tw.clientWidth) / 2); tw.scrollTop = 0; } }
   function tokenBody(a, tkind) {
     var T = C.TOKENS, groups = tkind === 'needs' ? [['ammo', 'ammo'], ['power', 'power'], ['consumables', 'consumable']] : [['mounts', 'mount'], ['ammo', 'ammo'], ['ports', 'port'], ['formats', 'format']];
     var tcell = function (t, kind) { return pickCell('data-pktok', t, kind + (C.isStandard(t) ? ' · shop' : ' · custom')); };
@@ -408,10 +413,10 @@
     pane.querySelectorAll('[data-pkwmod]').forEach(function (b) { b.onclick = function () { a.mods.push({ target: b.getAttribute('data-pkwmod'), value: '', when: 'when worn' }); pickDone(); }; });
     pane.querySelectorAll('[data-pkcustom]').forEach(function (b) { b.onclick = function () { var box = b.parentNode.querySelector('.tk2-pk-cin'), v = box ? box.value.trim() : ''; if (!v) return; var kind = b.getAttribute('data-pkcustom'); if (kind === 'effect') a.feats.push({ domain: v.toUpperCase(), grade: 1 }); else if (kind === 'faddon') pushFaddon(v); else if (kind === 'gaddon') a.addons.push({ name: v, note: '' }); else if (kind === 'wmod') a.mods.push({ target: v, value: '', when: 'when worn' }); else { var k = s.pick && s.pick.tkind; if (k === 'needs') a.ports.needs.push({ token: v, rate: '' }); else if (k === 'fits') a.ports.fits.push(v); } pickDone(); }; });
     // ── effect-tree walk (inside the effect picker) ──
-    pane.querySelectorAll('[data-treedom]').forEach(function (b) { b.onclick = function () { s.pick.treeDom = b.getAttribute('data-treedom'); s.pick.treePath = []; renderBench(pane); }; });
-    var tback = pane.querySelector('[data-treeback]'); if (tback) tback.onclick = function () { s.pick.treeDom = null; s.pick.treePath = []; renderBench(pane); };
-    pane.querySelectorAll('[data-treenode]').forEach(function (nd) { nd.onclick = function () { var g = TR.get(s.pick.treeDom); s.pick.treePath = TR.toggle(g, s.pick.treePath || [], nd.getAttribute('data-treenode')); renderBench(pane); }; });
-    pane.querySelectorAll('[data-dial]').forEach(function (b) { b.onclick = function () { var g = TR.get(s.pick.treeDom), id = b.getAttribute('data-dial'), dd = +b.getAttribute('data-dd'), n = g.nodes[id], cur = TR.scaleOf(s.pick.treePath, id) || 1, mx = (n.scale && n.scale.max) || 3; s.pick.treePath = TR.setScale(s.pick.treePath, id, Math.max(1, Math.min(mx, cur + dd))); renderBench(pane); }; });
+    pane.querySelectorAll('[data-treedom]').forEach(function (b) { b.onclick = function () { s.pick.treeDom = b.getAttribute('data-treedom'); s.pick.treePath = []; s.pick.treeScroll = null; renderBench(pane); }; });
+    var tback = pane.querySelector('[data-treeback]'); if (tback) tback.onclick = function () { s.pick.treeDom = null; s.pick.treePath = []; s.pick.treeScroll = null; renderBench(pane); };
+    pane.querySelectorAll('[data-treenode]').forEach(function (nd) { nd.onclick = function () { saveTreeScroll(pane, s); var g = TR.get(s.pick.treeDom); s.pick.treePath = TR.toggle(g, s.pick.treePath || [], nd.getAttribute('data-treenode')); renderBench(pane); }; });
+    pane.querySelectorAll('[data-dial]').forEach(function (b) { b.onclick = function () { saveTreeScroll(pane, s); var g = TR.get(s.pick.treeDom), id = b.getAttribute('data-dial'), dd = +b.getAttribute('data-dd'), n = g.nodes[id], cur = TR.scaleOf(s.pick.treePath, id) || 1, mx = (n.scale && n.scale.max) || 3; s.pick.treePath = TR.setScale(s.pick.treePath, id, Math.max(1, Math.min(mx, cur + dd))); renderBench(pane); }; });
     var tadd = pane.querySelector('.tk2-treeadd'); if (tadd && !tadd.disabled) tadd.onclick = function () {
       var g = TR.get(s.pick.treeDom), path = s.pick.treePath || []; if (!path.length) return;
       var feat = { domain: s.pick.treeDom, grade: TR.pathTier(g, path), path: path };
@@ -446,6 +451,7 @@
         if (el.getAttribute('data-lk') === 'artifact') { var pa = M.fromJSON(s.st.parts[el.getAttribute('data-lid')]); if (pa) { commit(pane); openArtifact(pane, pa); } }
       });
     });
+    restoreTreeScroll(pane);
   }
 
   function panel(title, inner, hero) { return '<div class="tk2-panel' + (hero ? ' hero' : '') + '"><div class="tk2-panel-h">' + title + '</div><div class="tk2-panel-b">' + inner + '</div></div>'; }

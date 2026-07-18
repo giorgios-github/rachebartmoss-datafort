@@ -297,6 +297,8 @@
 .tk2-troot { font-family:var(--head); font-size:12px; fill:var(--ink); letter-spacing:1px; }
 .tk2-tedge { stroke:#ccc; stroke-width:1.5; fill:none; }
 .tk2-tedge.on { stroke:var(--ink); stroke-width:2.5; }
+.tk2-tedge-req { stroke:#bbb; stroke-width:1.5; stroke-dasharray:3 3; fill:none; }
+.tk2-tedge-req.on { stroke:var(--ink); stroke-width:2; }
 .tk2-tnode { cursor:pointer; }
 .tk2-tg { stroke:var(--ink); stroke-width:2; }
 .tk2-tlabel { font-family:var(--mono); font-size:11px; fill:var(--ink); pointer-events:none; }
