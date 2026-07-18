@@ -292,9 +292,9 @@
 .tk2-tree-legend { font-family:var(--mono); font-size:11px; color:#666; }
 .tk2-tree-legend b { color:var(--ink); }
 .tk2-tree-wrap { max-height:68vh; overflow:auto; border:2px solid var(--ink); background:#fff; }
-.tk2-tree { display:block; }
-.tk2-tree-g { font-family:var(--mono); font-size:11px; fill:#aaa; }
-.tk2-troot { font-family:var(--head); font-size:13px; fill:var(--ink); letter-spacing:1px; font-weight:bold; }
+.tk2-tree { display:block; margin:0 auto; }   /* centers when narrower than the frame */
+.tk2-tree-g { font-family:var(--mono); font-size:13px; fill:#aaa; }
+.tk2-troot { font-family:var(--head); font-size:16px; fill:var(--ink); letter-spacing:1px; font-weight:bold; stroke:#fff; stroke-width:4; paint-order:stroke; }
 .tk2-tbase { fill:#111; stroke:#111; }
 .tk2-tree-desc { border:2px solid var(--ink); background:#fff; padding:6px 10px; font-family:var(--mono); font-size:13px; min-height:20px; margin-bottom:6px; }
 .tk2-tree-desc b { font-family:var(--head); letter-spacing:.5px; }
@@ -304,8 +304,8 @@
 .tk2-tedge-req.on { stroke:var(--ink); stroke-width:2; }
 .tk2-tnode { cursor:pointer; }
 .tk2-tg { stroke:var(--ink); stroke-width:2; }
-.tk2-tlabel { font-family:var(--mono); font-size:11px; fill:var(--ink); pointer-events:none; }
-.tk2-tdialv { font-family:var(--mono); font-size:10px; fill:var(--ink); pointer-events:none; }
+.tk2-tlabel { font-family:var(--mono); font-size:13px; fill:var(--ink); pointer-events:none; stroke:#fff; stroke-width:3.5; paint-order:stroke; }
+.tk2-tdialv { font-family:var(--mono); font-size:12px; fill:var(--ink); pointer-events:none; stroke:#fff; stroke-width:3; paint-order:stroke; }
 .tk2-tnode.is-off { opacity:.32; cursor:default; }
 .tk2-tnode.is-ok:hover .tk2-tg { fill:#ddd !important; }
 .tk2-tnode.is-ok .tk2-tlabel { fill:#555; }

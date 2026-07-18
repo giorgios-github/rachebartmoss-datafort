@@ -137,7 +137,7 @@
   // ── layout: tiers = rows (top→bottom), tidy x (leaves sequential, parents centered) ──
   function layout(g, opt) {
     opt = opt || {};
-    var colW = opt.colW || 92, rowH = opt.rowH || 58, padX = opt.padX || 52, padY = opt.padY || 50;
+    var colW = opt.colW || 100, rowH = opt.rowH || 64, padX = opt.padX || 56, padY = opt.padY || 52;
     var x = {}, seq = { n: 0 };
     (function place(id) {
       var n = g.nodes[id];

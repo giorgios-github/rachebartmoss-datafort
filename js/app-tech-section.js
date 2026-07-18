@@ -116,10 +116,10 @@
       var blocked = n.needsAll && !n.needsAll.every(function (r) { return on[r]; });
       var st = act ? 'on' : blocked ? 'off' : 'ok';
       var tip = (n.cap || '') + (n.need ? (n.cap ? ' · ' : '') + 'needs ' + n.need : '') + (n.needsAll ? (n.cap || n.need ? ' · ' : '') + 'needs all: ' + n.needsAll.map(function (r) { return g.nodes[r] ? g.nodes[r].label : r; }).join(', ') : '');
-      var dv = act && n.scale ? '<text class="tk2-tdialv" y="18" text-anchor="middle">×' + (TR.scaleOf(path, id) || 1) + '</text>' : '';
+      var dv = act && n.scale ? '<text class="tk2-tdialv" y="21" text-anchor="middle">×' + (TR.scaleOf(path, id) || 1) + '</text>' : '';
       svg += '<g class="tk2-tnode tk2-t-' + k + ' is-' + st + '" data-treenode="' + id + '" transform="translate(' + p.x.toFixed(1) + ',' + p.y.toFixed(1) + ')">' +
         (tip ? '<title>' + esc(tip) + '</title>' : '') +
-        '<text class="tk2-tlabel" y="-11" text-anchor="middle">' + esc(n.label) + (n.scale ? '°' : '') + (n.act ? ' ▸' : '') + '</text>' +
+        '<text class="tk2-tlabel" y="-13" text-anchor="middle">' + esc(n.label) + (n.scale ? '°' : '') + (n.act ? ' ▸' : '') + '</text>' +
         glyphSvg(k, act) + dv + '</g>';
     });
     return '<div class="tk2-tree-wrap"><svg class="tk2-tree" width="' + L.W.toFixed(0) + '" height="' + L.H.toFixed(0) + '" viewBox="0 0 ' + L.W.toFixed(0) + ' ' + L.H.toFixed(0) + '">' + svg + '</svg></div>';
