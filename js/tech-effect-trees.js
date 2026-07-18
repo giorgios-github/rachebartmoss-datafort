@@ -239,23 +239,53 @@
 
     MOVE: { l: 'Move', cap: 'get around', kids: [
       { l: 'Actuators', cap: 'powered limb actuators — faster, higher jump (+1 MA)', kids: [
-        { l: 'Reflex boost', sc: { max: 3, per: 'reaction' }, cap: 'faster reactions' },
-        { l: 'Wall-run', add: true, act: 'climb', cap: 'vertical surfaces' },
-        { l: 'Gyro-stable', add: true, cap: 'no fall damage', kids: [
-          { l: 'Silent servos', need: 'node:CONCEAL', cap: 'fast AND quiet' }] },
-        { l: 'Spider frame', needsAll: ['actuators.wall-run', 'actuators.gyro-stable'], arch: 'corpo', cap: 'any surface, any angle — corpo infiltration, OP' }] },
+        { l: 'Combat reflexes', sc: { max: 3, per: 'reaction' }, cap: 'act first in a fight', kids: [
+          { l: 'Reaction override', cap: 'reflexes bypass conscious lag', kids: [
+            { l: 'Kerenzikov', cap: 'a burst of reflex speed on trigger', kids: [
+              { l: 'Time-slice', cap: 'perceive combat in slow-motion', kids: [
+                { l: 'Sandevistan', arch: 'corpo', cap: 'seconds of hyper-speed — corpo boostware, OP' }] }] }] }] },
+        { l: 'Wall-run', act: 'climb', cap: 'run up vertical surfaces', kids: [
+          { l: 'Shock-absorbers', add: true, cap: 'no fall damage' },
+          { l: 'Free-runner', cap: 'chains parkour moves fluidly', kids: [
+            { l: 'Silent servos', need: 'node:CONCEAL', cap: 'fast AND whisper-quiet', kids: [
+              { l: 'Neural sync', cap: 'the body moves at the speed of thought', kids: [
+                { l: 'Spider frame', arch: 'corpo', cap: 'any surface, any angle, unheard — a few corps build these, OP' }] }] }] }] },
+        { l: 'Load frame', cap: 'carry heavy AND stay mobile', kids: [
+          { l: 'Servo-assist', cap: 'multiplies strength', kids: [
+            { l: 'Gyro-balance', add: true, cap: 'never knocked down' },
+            { l: 'Milspec frame', cap: 'battlefield-hardened', kids: [
+              { l: 'Powered chassis', cap: 'a full wearable frame', kids: [
+                { l: 'Exo-skeleton', arch: 'corpo', cap: 'a walking tank — corpo powered-armor, OP' }] }] }] }] }] },
       { l: 'Drive system', cap: 'wheels / treads / thrust — sustained ground speed (+2 MA)', kids: [
-        { l: 'Sprint', sc: { max: 3, per: 'top speed' }, cap: 'faster' },
-        { l: 'Boost', add: true, act: 'dash', cap: 'burst on demand' },
-        { l: 'Predictive traction', add: true, cap: 'never loses grip', kids: [
-          { l: 'All-terrain', cap: 'treads / legs hybrid, amphibious' }] },
-        { l: 'Leopard drive', needsAll: ['drive-system.boost', 'drive-system.predictive-traction'], arch: 'corpo', cap: 'outruns vehicles — corpo pursuit, OP' }] },
-      { l: 'Lift', cap: 'lift surface / micro-thrust — glide & hop (needs power)', need: 'power', kids: [
-        { l: 'Glide', sc: { max: 3, per: 'range' }, cap: 'farther glide' },
-        { l: 'Sustained flight', add: true, cap: 'true flight, heavy draw', kids: [
-          { l: 'Hover', cap: 'sustained low altitude, VTOL' }] },
-        { l: 'High-altitude', add: true, cap: 'supersonic ceiling' },
-        { l: 'Orbital lift', needsAll: ['lift.sustained-flight', 'lift.high-altitude'], arch: 'corpo', cap: 'a suborbital hop — corpo AV, OP' }] }] },
+        { l: 'Sprint', sc: { max: 3, per: 'top speed' }, cap: 'faster', kids: [
+          { l: 'Boost', act: 'dash', cap: 'a burst of speed on demand', kids: [
+            { l: 'Predictive traction', need: 'node:COMPUTE', cap: 'corners impossibly', kids: [
+              { l: 'Reactor drive', need: 'power', cap: 'inexhaustible output', kids: [
+                { l: 'Leopard drive', arch: 'corpo', cap: 'outruns any pursuit vehicle — corpo racing tech, OP' }] }] }] }] },
+        { l: 'All-terrain', cap: 'treads / legs hybrid', kids: [
+          { l: 'Amphibious', add: true, cap: 'water-capable' },
+          { l: 'Climb-treads', cap: 'scales walls & rubble', kids: [
+            { l: 'Sealed drivetrain', cap: 'mud / sand / vacuum proof', kids: [
+              { l: 'Autopilot', need: 'node:COMPUTE', cap: 'drives itself', kids: [
+                { l: 'All-domain drive', arch: 'corpo', cap: 'land / water / vertical, unstoppable — corpo mil, OP' }] }] }] }] }] },
+      { l: 'Lift', cap: 'a lift surface / micro-thrust — glide & hop (needs power)', need: 'power', kids: [
+        { l: 'Glide', sc: { max: 3, per: 'range' }, cap: 'farther glide', kids: [
+          { l: 'Wingsuit', cap: 'true horizontal flight, descending', kids: [
+            { l: 'Ram-air canopy', add: true, cap: 'steer & flare a landing' },
+            { l: 'Stealth glider', need: 'node:CLOAK', cap: 'radar-silent descent', kids: [
+              { l: 'Powered assist', cap: 'extend the glide under thrust', kids: [
+                { l: 'Ghost glider', arch: 'corpo', cap: 'a silent HALO insertion rig — corpo black-ops, OP' }] }] }] }] },
+        { l: 'Hop-jets', cap: 'short boosted jumps', kids: [
+          { l: 'Hover', cap: 'sustained low altitude, VTOL', kids: [
+            { l: 'Vector thrust', add: true, cap: 'precise maneuvering' },
+            { l: 'Sustained flight', cap: 'true flight — heavy power draw', kids: [
+              { l: 'High-altitude', cap: 'supersonic ceiling', kids: [
+                { l: 'Orbital launch', arch: 'corpo', cap: 'a suborbital hop — maybe three corporations master this, OP' }] }] }] }] },
+        { l: 'Anti-grav lifter', cap: 'exotic — shrug off gravity to hover', kids: [
+          { l: 'Field hover', cap: 'a stable grav cushion', kids: [
+            { l: 'Null-weight', cap: 'effectively weightless', kids: [
+              { l: 'Inertia damper', cap: 'no momentum — turns on a dime', kids: [
+                { l: 'Grav drive', arch: 'corpo', cap: 'silent, inertia-less flight — bleeding-edge corpo, OP' }] }] }] }] }] }] },
   };
   var WEAPON_SYSTEMS = ['ROCKET', 'CHEMICAL', 'ENERGY', 'GAUSS', 'BLADE'];   // the STRIKE family (each its own base-tree)
 
@@ -357,12 +387,13 @@
   var GRADE = { base: 1, perTier: 0.6, thresholds: [1.5, 3.5, 6, 9, 13] };  // raw < thresholds[i] → grade i+1
   function grade(g, path) {
     var ids = activeIds(path); if (!ids.length) return 0;
-    var raw = 0, corpo = false;
-    ids.forEach(function (id) { var n = g.nodes[id]; if (!n) return; raw += GRADE.base + Math.max(0, n.tier - 1) * GRADE.perTier; if (n.arch) corpo = true; });
-    if (corpo) return 6;
-    var th = GRADE.thresholds, gr = th.length + 1;
-    for (var i = 0; i < th.length; i++) { if (raw < th[i]) { gr = i + 1; break; } }
-    return Math.max(1, Math.min(6, gr));
+    var ceiling = 0, raw = 0, corpo = false;
+    ids.forEach(function (id) { var n = g.nodes[id]; if (!n) return; ceiling = Math.max(ceiling, n.tier); raw += GRADE.base + Math.max(0, n.tier - 1) * GRADE.perTier; if (n.arch) corpo = true; });
+    if (corpo) return 6;                                    // corpo-monopoly tech → top grade
+    var th = GRADE.thresholds, breadth = th.length + 1;     // how MANY / how advanced features are stacked
+    for (var i = 0; i < th.length; i++) { if (raw < th[i]) { breadth = i + 1; break; } }
+    // grade = the more damning of: the sophistication of your DEEPEST feature, or the BREADTH of the build
+    return Math.max(1, Math.min(6, Math.max(ceiling, breadth)));
   }
   function tips(g, path) { var a = activeIds(path); return a.filter(function (id) { return !(g.nodes[id].kids || []).some(function (k) { return a.indexOf(k) >= 0; }); }); }
   function crumbs(g, path) { return tips(g, path).map(function (id) { return ancestors(g, id).map(function (x) { return g.nodes[x].label; }).join(' › '); }); }
