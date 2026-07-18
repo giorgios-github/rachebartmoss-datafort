@@ -5,7 +5,7 @@
    Depends on TechArtifact (model), TechCatalog (content), TechPress (plate). */
 (function () {
   'use strict';
-  var M = window.TechArtifact, C = window.TechCatalog, P = window.TechPress;
+  var M = window.TechArtifact, C = window.TechCatalog, P = window.TechPress, TR = window.TechTrees;
   var LS = 'bartmoss_tech_artifacts';
   var esc = function (t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
   var isKnown = function (d) { return C.isKnownDomain(d); };
@@ -62,12 +62,48 @@
   }
   function help(t) { return '<div class="tk2-help">' + t + '</div>'; }
   var ORIGINS = [['HANDMADE', 'handmade — mismatched screws'], ['SALVAGE', 'salvaged — donor screws'], ['CORP PULL', 'ripped from a corp — torx'], ['FACTORY', 'factory — captive screws']];
-  function effectBody(a) {
-    var sug = C.suggestFor(a.cls).domains, body = '';
-    if (sug.length) body += '<div class="tk2-pk-sec">SUGGESTED FOR ' + esc(a.cls.toUpperCase()) + '</div>' + domainTable(sug);
-    body += '<div class="tk2-pk-sec">ALL EFFECTS</div>' + domainTable(C.DOMAINS);
-    body += '<div class="tk2-pk-sec">EXOTIC DOMAIN</div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="domain name…"><button class="tk2-chip" data-pkcustom="effect">+ add (g1)</button></div>';
-    return body;
+  // ── EFFECT picker = pick a domain, then WALK its tree (tier = the old grade) ──
+  function effectBody(a, pick) {
+    pick = pick || {};
+    if (!pick.treeDom) {
+      var sug = C.suggestFor(a.cls).domains;
+      var row = function (d) { var an = C.anchorOf(d, 1); return '<button class="tk2-pk-row" data-treedom="' + d + '"><span class="tk2-pd-h">' + esc(d) + '</span> <span class="tk2-mut">· ' + (TR.has(d) ? 'tree' : 'ladder') + (an ? ' · ' + esc(an.skill) : '') + '</span></button>'; };
+      var body = '';
+      if (sug.length) body += '<div class="tk2-pk-sec">SUGGESTED FOR ' + esc(a.cls.toUpperCase()) + '</div>' + sug.map(row).join('');
+      body += '<div class="tk2-pk-sec">ALL EFFECTS</div>' + C.DOMAINS.map(row).join('');
+      body += '<div class="tk2-pk-sec">EXOTIC DOMAIN</div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="domain name…"><button class="tk2-chip" data-pkcustom="effect">+ add (g1)</button></div>';
+      return body;
+    }
+    var g = TR.get(pick.treeDom), path = pick.treePath || [];
+    var crumb = TR.crumbs(g, path).join(' › ') || '<span class="tk2-mut">click a node to walk down…</span>';
+    var chips = TR.collect(g, path, 'act').map(function (x) { return '<span class="tk2-tchip act">▸ ' + esc(x) + '</span>'; }).join('') +
+      TR.collect(g, path, 'tag').map(function (x) { return '<span class="tk2-tchip">+' + esc(x) + '</span>'; }).join('') +
+      TR.collect(g, path, 'need').map(function (x) { return '<span class="tk2-tchip need">' + esc(x) + '</span>'; }).join('');
+    return '<div class="tk2-tree-head"><button class="tk2-chip" data-treeback>← effects</button>' +
+        '<span class="tk2-tree-dom">' + esc(pick.treeDom) + '</span>' + (TR.has(pick.treeDom) ? '' : ' <span class="tk2-mut">(ladder)</span>') +
+        '<span class="tk2-bar-sp"></span>' +
+        '<button class="app-btn tk2-treeadd"' + (path.length ? '' : ' disabled') + '>' + (pick.editFi != null ? 'SET' : 'ADD') + ' · g' + TR.pathTier(g, path) + '</button></div>' +
+      treeSvg(g, path) +
+      '<div class="tk2-tree-crumb">' + crumb + '</div>' +
+      (chips ? '<div class="tk2-tree-chips">' + chips + '</div>' : '');
+  }
+  var TNW = 104, TNH = 26;
+  function treeChain(g, id) { var out = [], cur = id; while (cur && cur !== 'ROOT' && g.nodes[cur]) { out.unshift(cur); cur = g.nodes[cur].parent; } return out; }
+  function treeMark(n) { return (n.scale ? '°' : '') + (n.act ? ' ▸' : ''); }
+  function treeSvg(g, path) {
+    var L = TR.layout(g), onp = {}; (path || []).forEach(function (id) { onp[id] = 1; });
+    var svg = '';
+    for (var t = 1; t <= g.maxTier; t++) { var gy = L.padY + t * L.rowH; svg += '<text class="tk2-tree-g" x="8" y="' + (gy + 4).toFixed(0) + '">g' + t + '</text>'; }
+    g.edges.forEach(function (e) { var A = L.pos[e.from], B = L.pos[e.to], on = onp[e.from] && onp[e.to]; svg += '<line class="tk2-tedge' + (on ? ' on' : '') + '" x1="' + A.x.toFixed(1) + '" y1="' + (A.y + TNH / 2).toFixed(1) + '" x2="' + B.x.toFixed(1) + '" y2="' + (B.y - TNH / 2).toFixed(1) + '"/>'; });
+    var R = L.pos[g.root]; svg += '<text class="tk2-troot" x="' + R.x.toFixed(1) + '" y="' + (R.y + 4).toFixed(1) + '" text-anchor="middle">' + esc(g.nodes[g.root].label.toUpperCase()) + '</text>';
+    Object.keys(g.nodes).forEach(function (id) {
+      if (id === g.root) return;
+      var n = g.nodes[id], p = L.pos[id], on = onp[id];
+      svg += '<g class="tk2-tnode' + (on ? ' on' : '') + '" data-treenode="' + id + '">' +
+        '<rect x="' + (p.x - TNW / 2).toFixed(1) + '" y="' + (p.y - TNH / 2).toFixed(1) + '" width="' + TNW + '" height="' + TNH + '"/>' +
+        '<text x="' + p.x.toFixed(1) + '" y="' + (p.y + 4).toFixed(1) + '" text-anchor="middle">' + esc(n.label) + esc(treeMark(n)) + '</text></g>';
+    });
+    return '<div class="tk2-tree-wrap"><svg class="tk2-tree" width="' + L.W.toFixed(0) + '" height="' + L.H.toFixed(0) + '" viewBox="0 0 ' + L.W.toFixed(0) + ' ' + L.H.toFixed(0) + '">' + svg + '</svg></div>';
   }
   function tokenBody(a, tkind) {
     var T = C.TOKENS, groups = tkind === 'needs' ? [['ammo', 'ammo'], ['power', 'power'], ['consumables', 'consumable']] : [['mounts', 'mount'], ['ammo', 'ammo'], ['ports', 'port'], ['formats', 'format']];
@@ -133,7 +169,7 @@
   function tokenKind(t) { var T = C.TOKENS, k; for (k in T) if (T[k].indexOf(t) >= 0) return KIND_LABEL[k] || k; return 'custom'; }
   function pickerModal(a, pick, builder) {
     var title, body;
-    if (pick.kind === 'effect') { title = 'PICK AN EFFECT <span class="tk2-mut">— click a grade</span>'; body = effectBody(a); }
+    if (pick.kind === 'effect') { title = 'PICK AN EFFECT <span class="tk2-mut">— walk the tree</span>'; body = effectBody(a, pick); }
     else if (pick.kind === 'token') { title = 'ADD <span class="tk2-mut">— ' + esc(pick.tkind) + '</span>'; body = tokenBody(a, pick.tkind); }
     else if (pick.kind === 'faddon') { title = 'ADDON <span class="tk2-mut">— tied to the effect</span>'; body = faddonBody(a, pick.fi); }
     else if (pick.kind === 'gaddon') { title = 'GENERIC ADDON <span class="tk2-mut">— cross-cutting</span>'; body = gaddonBody(a); }
@@ -226,9 +262,24 @@
     rows.push('<tr><td>materials + addons</td><td>shop <span class="tk2-mut">pinned</span></td><td class="tk2-r">' + d.prodEb + 'eb</td></tr>');
     return rows.join('');
   }
+  function addonChips(f, i, a) {
+    return (f.addons || []).map(function (x, ai) { return '<span class="tk2-addchip">' + esc(x.name) + (a ? ' ' + addonEbTag(a, x.name) : '') + '<button class="tk2-addchip-x" data-delfaddon="' + i + '" data-ai="' + ai + '" title="remove">✕</button></span>'; }).join('');
+  }
+  // a walked-tree effect: breadcrumb + grade badge + unlocked actions; click to re-walk
+  function featRowTree(f, i, a) {
+    var g = TR.get(f.domain), crumb = TR.crumbs(g, f.path).join(' › '), acts = TR.collect(g, f.path, 'act');
+    return '<div class="tk2-feat" data-fi="' + i + '">' +
+      '<div class="tk2-feat-top"><span class="tk2-fdom" data-editfeat="' + i + '">' + esc(f.domain) + '</span>' +
+        '<span class="tk2-fg">g' + f.grade + '</span><span class="tk2-feat-sp"></span>' +
+        '<button class="tk2-x" data-delfeat="' + i + '" title="remove">✕</button></div>' +
+      '<div class="tk2-feat-cap tk2-fedit" data-editfeat="' + i + '">' + esc(crumb || '(empty)') + (acts.length ? ' <span class="tk2-mut">▸ ' + esc(acts.join(', ')) + '</span>' : '') + '</div>' +
+      '<div class="tk2-feat-addons">' + addonChips(f, i, a) + '<button class="tk2-addchip-add" data-openpk data-pkkind="faddon" data-pkfi="' + i + '" title="addons tied to ' + esc(f.domain) + '">+ addon</button></div>' +
+    '</div>';
+  }
   function featRow(f, i, a) {
+    if (f.path && f.path.length) return featRowTree(f, i, a);
     var an = C.anchorOf(f.domain, f.grade);
-    var chips = (f.addons || []).map(function (x, ai) { return '<span class="tk2-addchip">' + esc(x.name) + (a ? ' ' + addonEbTag(a, x.name) : '') + '<button class="tk2-addchip-x" data-delfaddon="' + i + '" data-ai="' + ai + '" title="remove">✕</button></span>'; }).join('');
+    var chips = addonChips(f, i, a);
     return '<div class="tk2-feat" data-fi="' + i + '">' +
       '<div class="tk2-feat-top">' +
         '<input class="tk2-fd" data-fi="' + i + '" list="tk2-domains" value="' + esc(f.domain) + '">' +
@@ -341,6 +392,19 @@
     pane.querySelectorAll('[data-pkgaddon]').forEach(function (b) { b.onclick = function () { a.addons.push({ name: b.getAttribute('data-pkgaddon'), note: '' }); pickDone(); }; });
     pane.querySelectorAll('[data-pkwmod]').forEach(function (b) { b.onclick = function () { a.mods.push({ target: b.getAttribute('data-pkwmod'), value: '', when: 'when worn' }); pickDone(); }; });
     pane.querySelectorAll('[data-pkcustom]').forEach(function (b) { b.onclick = function () { var box = b.parentNode.querySelector('.tk2-pk-cin'), v = box ? box.value.trim() : ''; if (!v) return; var kind = b.getAttribute('data-pkcustom'); if (kind === 'effect') a.feats.push({ domain: v.toUpperCase(), grade: 1 }); else if (kind === 'faddon') pushFaddon(v); else if (kind === 'gaddon') a.addons.push({ name: v, note: '' }); else if (kind === 'wmod') a.mods.push({ target: v, value: '', when: 'when worn' }); else { var k = s.pick && s.pick.tkind; if (k === 'needs') a.ports.needs.push({ token: v, rate: '' }); else if (k === 'fits') a.ports.fits.push(v); } pickDone(); }; });
+    // ── effect-tree walk (inside the effect picker) ──
+    pane.querySelectorAll('[data-treedom]').forEach(function (b) { b.onclick = function () { s.pick.treeDom = b.getAttribute('data-treedom'); s.pick.treePath = []; renderBench(pane); }; });
+    var tback = pane.querySelector('[data-treeback]'); if (tback) tback.onclick = function () { s.pick.treeDom = null; s.pick.treePath = []; renderBench(pane); };
+    pane.querySelectorAll('[data-treenode]').forEach(function (nd) { nd.onclick = function () { var g = TR.get(s.pick.treeDom); s.pick.treePath = treeChain(g, nd.getAttribute('data-treenode')); renderBench(pane); }; });
+    var tadd = pane.querySelector('.tk2-treeadd'); if (tadd && !tadd.disabled) tadd.onclick = function () {
+      var g = TR.get(s.pick.treeDom), path = s.pick.treePath || []; if (!path.length) return;
+      var feat = { domain: s.pick.treeDom, grade: TR.pathTier(g, path), path: path };
+      if (s.pick.editFi != null && a.feats[s.pick.editFi]) { feat.addons = a.feats[s.pick.editFi].addons || []; a.feats[s.pick.editFi] = feat; }
+      else a.feats.push(feat);
+      pickDone();
+    };
+    // click a walked-tree effect to re-open its tree, pre-walked
+    pane.querySelectorAll('[data-editfeat]').forEach(function (el) { el.onclick = function () { var fi = +el.getAttribute('data-editfeat'), f = a.feats[fi]; s.pick = { kind: 'effect', treeDom: f.domain, treePath: (f.path || []).slice(), editFi: fi }; renderBench(pane); }; });
     // tokens (needs/fits/takes-accepts/holds simplified via interfacesPanel wiring)
     wireInterfaces(pane, a);
     // limits
@@ -578,7 +642,14 @@
   function renderDocument(pane) {
     var s = sec(pane), a = s.art, d = DERIVE(a);
     var plate = a.plate ? plateFig(a, d) : '<div class="tk2-plate-empty"><div>— no plate —</div></div>';
-    var feats = a.feats.map(function (f) { var an = C.anchorOf(f.domain, f.grade); var ad = (f.addons || []).map(function (x) { return esc(x.name); }).join(', '); return '<div class="tk2-docfeat">' + esc(f.domain) + ' g' + f.grade + (an ? ' <span class="tk2-mut">— ' + esc(an.bar) + '</span>' : '') + (ad ? ' <span class="tk2-mut">+ ' + ad + '</span>' : '') + '</div>'; }).join('') || '<div class="tk2-mut">stats only</div>';
+    var feats = a.feats.map(function (f) {
+      var ad = (f.addons || []).map(function (x) { return esc(x.name); }).join(', '), body;
+      if (f.path && f.path.length) {
+        var g = TR.get(f.domain); body = esc(f.domain) + ' g' + f.grade + ' <span class="tk2-mut">— ' + esc(TR.crumbs(g, f.path).join(' › ')) + '</span>';
+        var acts = TR.collect(g, f.path, 'act'); if (acts.length) body += ' <span class="tk2-mut">▸ ' + esc(acts.join(', ')) + '</span>';
+      } else { var an = C.anchorOf(f.domain, f.grade); body = esc(f.domain) + ' g' + f.grade + (an ? ' <span class="tk2-mut">— ' + esc(an.bar) + '</span>' : ''); }
+      return '<div class="tk2-docfeat">' + body + (ad ? ' <span class="tk2-mut">+ ' + ad + '</span>' : '') + '</div>';
+    }).join('') || '<div class="tk2-mut">stats only</div>';
     var gen = a.addons.map(function (x) { return esc(x.name); }).filter(Boolean).join(', ');
     var ifs = [];
     a.ports.needs.forEach(function (n) { if (n.token) ifs.push('consumes: ' + esc(n.token) + (n.rate ? ' /' + esc(n.rate) : '')); });

@@ -285,6 +285,30 @@
 .tk2-genadd-h { font-family:var(--head); font-size:10px; letter-spacing:1.5px; color:var(--ink); text-transform:uppercase; opacity:.6; }
 .tk2-addeb { font-family:var(--mono); font-size:10px; color:var(--ink); opacity:.65; }
 
+/* EFFECT TREE picker (cran 5) — ink on white, straight lines */
+.tk2-tree-head { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.tk2-tree-dom { font-family:var(--head); letter-spacing:1px; font-size:14px; }
+.tk2-tree-wrap { max-height:52vh; overflow:auto; border:2px solid var(--ink); background:#fff; }
+.tk2-tree { display:block; }
+.tk2-tree-g { font-family:var(--mono); font-size:11px; fill:#aaa; }
+.tk2-troot { font-family:var(--head); font-size:12px; fill:var(--ink); letter-spacing:1px; }
+.tk2-tedge { stroke:#bbb; stroke-width:1.5; fill:none; }
+.tk2-tedge.on { stroke:var(--ink); stroke-width:2.5; }
+.tk2-tnode { cursor:pointer; }
+.tk2-tnode rect { fill:#fff; stroke:var(--ink); stroke-width:2; }
+.tk2-tnode text { font-family:var(--mono); font-size:11px; fill:var(--ink); pointer-events:none; }
+.tk2-tnode:hover rect { fill:#eee; }
+.tk2-tnode.on rect { fill:var(--ink); }
+.tk2-tnode.on text { fill:#fff; }
+.tk2-tree-crumb { margin-top:6px; font-family:var(--mono); font-size:12px; }
+.tk2-tree-chips { margin-top:5px; display:flex; flex-wrap:wrap; gap:5px; }
+.tk2-tchip { font-family:var(--mono); font-size:11px; border:2px solid var(--ink); padding:0 5px; }
+.tk2-tchip.act { background:var(--ink); color:#fff; }
+.tk2-tchip.need { border-style:dashed; color:#666; }
+.tk2-fdom { font-family:var(--head); letter-spacing:1px; cursor:pointer; }
+.tk2-fedit { cursor:pointer; }
+.tk2-fedit:hover { text-decoration:underline; }
+
 /* PINS — annotations on the plate (cran 4) */
 .tk2-plate-wrap { position:relative; display:block; line-height:0; }
 .tk2-plate-wrap .tk2-plate-img { display:block; width:100%; height:auto; }

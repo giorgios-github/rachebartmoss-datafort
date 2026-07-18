@@ -93,6 +93,7 @@
     if (f.when != null) o.when = str(f.when);
     if (f.note != null) o.note = str(f.note);
     var ad = arr(f.addons).map(normAddon); if (ad.length) o.addons = ad;   // addons tied to THIS effect
+    var pa = arr(f.path).map(str); if (pa.length) o.path = pa;             // walked effect-tree path (cran 5); grade = its depth
     return o;
   }
   function normPorts(p) {
