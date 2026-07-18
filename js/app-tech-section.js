@@ -35,6 +35,12 @@
   function originBody(a) {
     return ORIGINS.map(function (o) { return '<button class="tk2-pk-row' + (o[0] === a.origin ? ' is-sel' : '') + '" data-pkorigin="' + o[0] + '"><span class="tk2-pd-h">' + o[0] + '</span> <span class="tk2-mut">· ' + esc(o[1]) + '</span></button>'; }).join('');
   }
+  function modBody(a) {
+    var body = '';
+    C.modsFor(a.cls).forEach(function (g) { body += '<div class="tk2-pk-sec">' + g.group.toUpperCase() + '</div><div class="tk2-pd-l">' + g.list.map(function (m) { return '<button class="tk2-rung" data-pkmod="' + esc(m) + '">' + esc(m) + '</button>'; }).join('') + '</div>'; });
+    body += '<div class="tk2-pk-sec">CUSTOM</div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="modification custom…"><button class="tk2-chip" data-pkcustom="mod">+ ajouter</button></div>';
+    return body;
+  }
   // effect PICKER (popup): every domain with its full grade ladder — you SEE what a
   // higher grade gives, and can pick that grade directly. Suggested-for-class on top.
   function domainRows(list) {
@@ -48,6 +54,7 @@
     var title, body;
     if (pick.kind === 'effect') { title = 'CHOISIR UN EFFET <span class="tk2-mut">— clique un grade</span>'; body = effectBody(a); }
     else if (pick.kind === 'token') { title = 'AJOUTER <span class="tk2-mut">— ' + esc(pick.tkind) + '</span>'; body = tokenBody(a, pick.tkind); }
+    else if (pick.kind === 'mod') { title = 'AJOUTER UN MOD'; body = modBody(a); }
     else if (pick.kind === 'class') { title = 'CLASSE DE L’OBJET'; body = classBody(a); }
     else { title = 'ORIGINE'; body = originBody(a); }
     return '<div class="tk2-modal" data-pkscrim><div class="tk2-modal-box"><div class="tk2-modal-h">' + title + '<span class="tk2-bar-sp"></span><span class="tk2-modal-x" data-pkclose>✕</span></div><div class="tk2-modal-b">' + body + '</div></div></div>';
@@ -182,7 +189,7 @@
             sub('flavor', '<textarea class="tk2-flavor" data-f="flavor" placeholder="le mot du maker — aucun effet mécanique…">' + esc(a.flavor) + '</textarea>') +
             '<div class="tk2-two">' +
               sub('limites', help('ce qui le bride — chaque limite baisse l’OP') + a.limits.map(function (l, i) { return '<div class="tk2-line"><input data-lim="' + i + '" value="' + esc(l.text) + '" placeholder="ex. 30 min d’autonomie"><button class="tk2-x" data-dellim="' + i + '">✕</button></div>'; }).join('') + '<button class="tk2-add" data-addlim>+ limite</button>') +
-              sub('mods', help('un bonus sur une stat de la feuille (cran 2)') + a.mods.map(function (m, i) { return '<div class="tk2-line"><input class="tk2-mt" data-mod="' + i + '" data-k="target" value="' + esc(m.target) + '" placeholder="wearer.MA.jump"><input class="tk2-mv" data-mod="' + i + '" data-k="value" value="' + esc(m.value) + '" placeholder="+3"><button class="tk2-x" data-delmod="' + i + '">✕</button></div>'; }).join('') + '<button class="tk2-add" data-addmod>+ mod</button>') +
+              sub('mods', help('un bonus sur une stat de la feuille (cran 2)') + a.mods.map(function (m, i) { return '<div class="tk2-line"><input class="tk2-mt" data-mod="' + i + '" data-k="target" value="' + esc(m.target) + '" placeholder="wearer.MA.jump"><input class="tk2-mv" data-mod="' + i + '" data-k="value" value="' + esc(m.value) + '" placeholder="+3"><button class="tk2-x" data-delmod="' + i + '">✕</button></div>'; }).join('') + '<button class="tk2-add" data-openpk data-pkkind="mod">＋ mod…</button>') +
             '</div>' +
             '<div class="tk2-two">' +
               sub('lignée', help('raffine un objet existant → le DC baisse à chaque itération') + '<div class="tk2-line"><input data-f="lin-ref" value="' + esc(a.lineage ? a.lineage.refines : '') + '" placeholder="raffine… (nom/ID)"><label class="tk2-tier">itér <input type="number" min="0" max="6" data-f="lin-steps" value="' + (a.lineage ? a.lineage.steps : 0) + '"></label></div><div class="tk2-mut">bonus DC −' + d.lineBonus + linLive + '</div>') +
@@ -229,7 +236,8 @@
     pane.querySelectorAll('[data-pktok]').forEach(function (b) { b.onclick = function () { var v = b.getAttribute('data-pktok'), k = s.pick && s.pick.tkind; if (k === 'needs') a.ports.needs.push({ token: v, rate: '' }); else if (k === 'fits') a.ports.fits.push(v); pickDone(); }; });
     pane.querySelectorAll('[data-pkcls]').forEach(function (b) { b.onclick = function () { a.cls = b.getAttribute('data-pkcls'); pickDone(); }; });
     pane.querySelectorAll('[data-pkorigin]').forEach(function (b) { b.onclick = function () { a.origin = b.getAttribute('data-pkorigin'); pickDone(); }; });
-    pane.querySelectorAll('[data-pkcustom]').forEach(function (b) { b.onclick = function () { var box = b.parentNode.querySelector('.tk2-pk-cin'), v = box ? box.value.trim() : ''; if (!v) return; var kind = b.getAttribute('data-pkcustom'); if (kind === 'effect') a.feats.push({ domain: v.toUpperCase(), grade: 1 }); else { var k = s.pick && s.pick.tkind; if (k === 'needs') a.ports.needs.push({ token: v, rate: '' }); else if (k === 'fits') a.ports.fits.push(v); } pickDone(); }; });
+    pane.querySelectorAll('[data-pkmod]').forEach(function (b) { b.onclick = function () { a.mods.push({ target: b.getAttribute('data-pkmod'), value: '', when: 'modded' }); pickDone(); }; });
+    pane.querySelectorAll('[data-pkcustom]').forEach(function (b) { b.onclick = function () { var box = b.parentNode.querySelector('.tk2-pk-cin'), v = box ? box.value.trim() : ''; if (!v) return; var kind = b.getAttribute('data-pkcustom'); if (kind === 'effect') a.feats.push({ domain: v.toUpperCase(), grade: 1 }); else if (kind === 'mod') a.mods.push({ target: v, value: '', when: 'modded' }); else { var k = s.pick && s.pick.tkind; if (k === 'needs') a.ports.needs.push({ token: v, rate: '' }); else if (k === 'fits') a.ports.fits.push(v); } pickDone(); }; });
     // tokens (needs/fits/takes-accepts/holds simplified via interfacesPanel wiring)
     wireInterfaces(pane, a);
     // limits
@@ -239,7 +247,6 @@
     pane.querySelectorAll('[data-dellat]').forEach(function (b) { b.onclick = function () { a.latent.splice(+b.getAttribute('data-dellat'), 1); commit(pane); renderBench(pane); }; });
     // mods
     pane.querySelectorAll('[data-mod]').forEach(function (inp) { inp.oninput = function () { a.mods[+inp.getAttribute('data-mod')][inp.getAttribute('data-k')] = inp.value; commit(pane); refreshDerived(pane); }; });
-    pane.querySelector('[data-addmod]').onclick = function () { a.mods.push({ target: '', value: '', when: 'when worn' }); M.normalize(a); commit(pane); renderBench(pane); };
     pane.querySelectorAll('[data-delmod]').forEach(function (b) { b.onclick = function () { a.mods.splice(+b.getAttribute('data-delmod'), 1); commit(pane); renderBench(pane); }; });
     // latent
     pane.querySelectorAll('[data-lat]').forEach(function (inp) { inp.oninput = function () { a.latent[+inp.getAttribute('data-lat')].text = inp.value; commit(pane); }; });

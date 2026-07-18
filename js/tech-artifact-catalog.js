@@ -42,6 +42,20 @@
     'SONIC':      { skill: 'Sonar Tech', bars: ['amplificateur', 'ping sonar', 'ultrason', 'stun sonique', 'brise-résonance', 'sonique létal', 'onde de choc'] },
     'RESTRAIN':   { skill: 'Weaponsmith', bars: ['collier', 'filet', 'toile gluante', 'mousse adhésive', 'poigne de stase', 'champ de contention', 'inéluctable'] },
     'FABRICATE':  { skill: 'Basic Tech', bars: ['multitool', 'kit de terrain', 'imprimante portable', 'fab de munitions', 'imprimante matière', 'nano-forge', 'fab universelle'] },
+    // ── harvested from the Ultra Chrome catalogue (breadth of CP2020 gear) ──
+    'RECORD':     { skill: 'Electronics', bars: ['note', 'photo', 'audio', 'vidéo', 'multi-cam', 'braindance', 'archive plein-sens'] },
+    'VISION':     { skill: 'Cyber Tech', bars: ['lunettes', 'zoom', 'bas-niveau', 'infrarouge', 'thermographique', 'multi-spectral', 'vision totale'] },
+    'ANALYZE':    { skill: 'Electronics', bars: ['jauge', 'détecteur simple', 'analyse chimique', 'diagnostic médical', 'détecteur de mensonge', 'scan profond', 'omniscient'] },
+    'CLOAK':      { skill: 'Electronics', bars: ['peinture mate', 'anti-reflet', 'absorbe le radar', 'baffle IR', 'ablatif laser', 'furtif multi-spectral', 'signature nulle'] },
+    'SEAL':       { skill: 'Basic Tech', bars: ['coupe-vent', 'étanche', 'masque à air', 'combi NBC', 'scaphandre', 'anti-pression', 'cycle fermé'] },
+    'FLY':        { skill: 'AV Tech', bars: ['saut plané', 'glisse', 'jetpack court', 'hover', 'vol soutenu', 'supersonique', 'orbital'] },
+    'HAUL':       { skill: 'Basic Tech', bars: ['sangle', 'sac de charge', 'treuil', 'grue', 'remorque', 'portique', 'levage lourd'] },
+    'ILLUMINATE': { skill: 'Basic Tech', bars: ['lueur', 'lampe', 'torche', 'projecteur', 'illuminateur IR', 'strobe aveuglant', 'soleil portatif'] },
+    'DEMOLISH':   { skill: 'Demolitions', bars: ['pétard', 'charge', 'C6', 'brèche dirigée', 'démolition', 'charge sculptée', 'rase un bloc'] },
+    'BROADCAST':  { skill: 'Electronics', bars: ['talkie', 'radio', 'TV', 'faisceau serré', 'relais', 'maillage', 'couverture satellite'] },
+    'TRANSLATE':  { skill: 'Electronics', bars: ['lexique', 'phrases', 'temps réel', 'argot', 'toutes langues', 'intention', 'façade télépathique'] },
+    'STYLE':      { skill: 'Wardrobe & Style', bars: ['propre', 'soigné', 'urban flash', 'edgerunner', 'haute couture', 'icône', 'légende vivante'] },
+    'SURVIVE':    { skill: 'Basic Tech', bars: ['briquet', 'kit de survie', 'abri', 'eau potable', 'autonomie longue', 'base mobile', 'écosystème'] },
   };
   var DOMAINS = Object.keys(ANCHORS);
   function isKnownDomain(d) { return !!ANCHORS[String(d || '').toUpperCase()]; }
@@ -62,12 +76,12 @@
 
   // ── standard tokens (buyable). Anything not here = custom (craft/salvage). ──
   var TOKENS = {
-    ammo: ['9mm', '10mm', '5.56', '5.45', '7.62', '12ga', '.50', 'he-84', 'thermo-84', 'smart-84'],
-    mount: ['torso-std', 'face-std', 'rail-std', 'turret-mount-b', 'tube-84', 'borg-frame-std'],
-    power: ['cell power-c', 'cell power-d', 'fuel-cell', 'micro-fusion'],
-    port: ['neural-port', 'interface-plug', 'data-port', 'control-link'],
-    format: ['shard-std', 'chip-std', 'deck-std'],
-    consumable: ['cartridge filter-std', 'coolant', 'medpack'],
+    ammo: ['.22', '9mm', '10mm', '11mm', '.38', '.357', '.44', '.45 ACP', '5.56', '5.45', '7.62', '12ga', '10ga', '20ga', '.50', '12.7mm', '15mm', '20mm', '25mm', '30mm', '37mm', 'he-84', 'thermo-84', 'smart-84', 'arrow', 'bolt', 'flechette', 'dart', 'rocket-2.75', 'railgun-slug'],
+    mount: ['torso-std', 'face-std', 'rail-std', 'underbarrel-rail', 'gyro-mount', 'sling', 'bipod', 'tripod', 'turret-mount-b', 'pintle-turret', 'hardpoint', 'weapon-pod', 'shoulder-mount', 'cyberlimb-mount', 'tube-84', 'borg-frame-std'],
+    power: ['cell power-c', 'cell power-d', 'battery-b', 'power-cell', 'capacitor', 'fuel-cell', 'et-charge', 'solar', 'chooh2', 'micro-fusion', 'nuclear-core'],
+    port: ['neural-port', 'neural-link', 'interface-plug', 'chipware-socket', 'data-port', 'cybermodem', 'control-link', 'dataline', 'satellite-uplink'],
+    format: ['shard-std', 'chip-std', 'memchip', 'braindance-chip', 'skillchip', 'credchip', 'deck-std', 'mu'],
+    consumable: ['cartridge filter-std', 'air-canister', 'drug-dose', 'blood-pack', 'coolant', 'cutting-fuel', 'chaff', 'flare', 'smoke', 'detonator', 'medpack'],
   };
   var STD = {};
   Object.keys(TOKENS).forEach(function (g) { TOKENS[g].forEach(function (t) { STD[t.toLowerCase()] = g; }); });
@@ -149,11 +163,24 @@
   };
   function suggestFor(cls) { var s = SUGGEST[cls] || { domains: [], tokens: [] }; return { domains: s.domains.filter(isKnownDomain), tokens: s.tokens.slice() }; }
 
+  // ── common MODIFICATIONS (harvested from Ultra Chrome), grouped ──
+  var MODS = {
+    firearm: ['silencieux', 'viseur laser', 'lunette', 'red-dot', 'smartgun link', 'chargeur étendu', 'chargeur tambour', 'crosse pliante', 'compensateur de recul', 'lance-grenade sous-canon', 'bipied', 'conversion full-auto', 'détente à cheveu', 'munition perce-armure', 'munition HE', 'munition électrothermique', 'canon sans étui', 'finition sans empreintes'],
+    armor: ['plaques d’insert (+SP)', 'couche ablative laser', 'déplacement thermique', 'absorbant radar', 'ignifugé', 'anti-stun (signal-retardant)', 'panneau vidéo/polychromique', 'stockage dissimulé'],
+    cyber: ['smartgun link', 'option bas-niveau/IR/thermo', 'anti-éblouissement', 'blindage EMP', 'peau réaliste (realskin)', 'articulations verrouillables', 'portée étendue', 'pop-up/rétractable', 'os indétectable', 'compartiment creux', 'coût d’humanité réduit'],
+    vehicle: ['blindage (+SP)', 'tourelle', 'plaques réactives', 'revêtement furtif', 'pneus increvables', 'vitres blindées', 'treuil', 'bélier renforcé', 'kit amphibie', 'pod d’armes', 'soute cargo', 'pilote auto', 'siège éjectable'],
+    electronics: ['mémoire +MU', 'processeur rapide', 'blindage EMP', 'datashielding', 'chiffrement', 'uplink satellite', 'portée étendue', 'dead man’s handle', 'brouillage-proof'],
+    general: ['finition custom', 'sans empreintes', 'qualité supérieure', 'miniaturisation', 'commande vocale', 'module GPS', 'abonnement de mise à jour', 'revêtement auto-nettoyant'],
+  };
+  var MOD_GROUPS = { weapon: ['firearm', 'general'], ammo: ['firearm'], cyberware: ['cyber', 'general'], vehicle: ['vehicle', 'general'], carrier: ['vehicle', 'electronics'], electronics: ['electronics', 'general'], data: ['electronics'], gear: ['armor', 'general'], drug: ['general'] };
+  function modsFor(cls) { return (MOD_GROUPS[cls] || ['general']).map(function (g) { return { group: g, list: MODS[g] || [] }; }); }
+
   window.TechCatalog = {
     ANCHORS: ANCHORS, DOMAINS: DOMAINS, anchorOf: anchorOf, isKnownDomain: isKnownDomain, skillForDomain: skillForDomain,
     CLASSES: CLASSES, skillForClass: skillForClass,
     TOKENS: TOKENS, allTokens: allTokens, isStandard: isStandard,
     SUGGEST: SUGGEST, suggestFor: suggestFor,
+    MODS: MODS, modsFor: modsFor,
     presets: presets, PRESETS: PRESETS,
   };
 })();
