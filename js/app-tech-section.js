@@ -66,11 +66,14 @@
   function effectBody(a, pick) {
     pick = pick || {};
     if (!pick.treeDom) {
-      var sug = C.suggestFor(a.cls).domains;
+      var noStrike = function (d) { return d !== 'STRIKE'; };   // STRIKE is superseded by its weapon systems
+      var sug = C.suggestFor(a.cls).domains.filter(noStrike);
+      var ws = (TR.WEAPON_SYSTEMS || []);
       var row = function (d) { var an = C.anchorOf(d, 1); return '<button class="tk2-pk-row" data-treedom="' + d + '"><span class="tk2-pd-h">' + esc(d) + '</span> <span class="tk2-mut">· ' + (TR.has(d) ? 'tree' : 'ladder') + (an ? ' · ' + esc(an.skill) : '') + '</span></button>'; };
       var body = '';
+      body += '<div class="tk2-pk-sec">WEAPON SYSTEMS <span class="tk2-mut">— STRIKE</span></div>' + ws.map(row).join('');
       if (sug.length) body += '<div class="tk2-pk-sec">SUGGESTED FOR ' + esc(a.cls.toUpperCase()) + '</div>' + sug.map(row).join('');
-      body += '<div class="tk2-pk-sec">ALL EFFECTS</div>' + C.DOMAINS.map(row).join('');
+      body += '<div class="tk2-pk-sec">ALL EFFECTS</div>' + C.DOMAINS.filter(noStrike).map(row).join('');
       body += '<div class="tk2-pk-sec">EXOTIC DOMAIN</div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="domain name…"><button class="tk2-chip" data-pkcustom="effect">+ add (g1)</button></div>';
       return body;
     }
