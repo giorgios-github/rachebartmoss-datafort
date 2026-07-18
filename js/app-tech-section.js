@@ -14,8 +14,8 @@
   var ORIGINS = [['HANDMADE', 'bricolé — visserie dépareillée'], ['SALVAGE', 'récupéré — vis de donneur'], ['CORP PULL', 'arraché au corpo — torx'], ['FACTORY', 'usine — visserie captive']];
   function effectBody(a) {
     var sug = C.suggestFor(a.cls).domains, body = '';
-    if (sug.length) body += '<div class="tk2-pk-sec">SUGGÉRÉ POUR ' + esc(a.cls.toUpperCase()) + '</div>' + domainRows(sug);
-    body += '<div class="tk2-pk-sec">TOUS LES EFFETS</div>' + domainRows(C.DOMAINS);
+    if (sug.length) body += '<div class="tk2-pk-sec">SUGGÉRÉ POUR ' + esc(a.cls.toUpperCase()) + '</div>' + domainTable(sug);
+    body += '<div class="tk2-pk-sec">TOUS LES EFFETS</div>' + domainTable(C.DOMAINS);
     body += '<div class="tk2-pk-sec">DOMAINE EXOTIQUE</div><div class="tk2-pk-custom"><input class="tk2-pk-cin" placeholder="nom du domaine…"><button class="tk2-chip" data-pkcustom="effect">+ ajouter (g1)</button></div>';
     return body;
   }
@@ -43,12 +43,17 @@
   }
   // effect PICKER (popup): every domain with its full grade ladder — you SEE what a
   // higher grade gives, and can pick that grade directly. Suggested-for-class on top.
-  function domainRows(list) {
-    return list.map(function (dm) {
+  function domainTable(list) {
+    var head = '<tr><th class="tk2-tcorner">DOMAINE</th>';
+    for (var g = 1; g <= 6; g++) head += '<th>g' + g + '</th>';
+    head += '</tr>';
+    var rows = list.map(function (dm) {
       var an1 = C.anchorOf(dm, 1); if (!an1) return '';
-      var ladder = ''; for (var g = 1; g <= 6; g++) { var an = C.anchorOf(dm, g); ladder += '<button class="tk2-rung" data-pkdom="' + dm + '" data-pkg="' + g + '"><b>g' + g + '</b> ' + esc(an.bar) + '</button>'; }
-      return '<div class="tk2-pd"><div class="tk2-pd-h">' + dm + ' <span class="tk2-mut">· ' + esc(an1.skill) + '</span></div><div class="tk2-pd-l">' + ladder + '</div></div>';
+      var cells = '';
+      for (var g = 1; g <= 6; g++) { var an = C.anchorOf(dm, g); cells += '<td><button class="tk2-cell" data-pkdom="' + dm + '" data-pkg="' + g + '">' + esc(an.bar) + '</button></td>'; }
+      return '<tr><th class="tk2-tdom">' + dm + '<span class="tk2-mut">' + esc(an1.skill) + '</span></th>' + cells + '</tr>';
     }).join('');
+    return '<div class="tk2-etab-wrap"><table class="tk2-etab"><thead>' + head + '</thead><tbody>' + rows + '</tbody></table></div>';
   }
   function pickerModal(a, pick) {
     var title, body;
@@ -143,10 +148,15 @@
   function featRow(f, i) {
     var an = C.anchorOf(f.domain, f.grade);
     return '<div class="tk2-feat" data-fi="' + i + '">' +
-      '<input class="tk2-fd" data-fi="' + i + '" list="tk2-domains" value="' + esc(f.domain) + '">' +
-      '<span class="tk2-meter" data-fi="' + i + '">' + gradeMeter(f.grade) + '</span>' +
-      '<span class="tk2-anchor">' + (an ? esc(an.bar) + ' <span class="tk2-mut">· </span>' + skillLink(an.skill) : '<span class="tk2-mut">domaine libre (exotique)</span>') + '</span>' +
-      '<button class="tk2-x" data-delfeat="' + i + '" title="retirer">✕</button></div>';
+      '<div class="tk2-feat-top">' +
+        '<input class="tk2-fd" data-fi="' + i + '" list="tk2-domains" value="' + esc(f.domain) + '">' +
+        '<span class="tk2-meter" data-fi="' + i + '">' + gradeMeter(f.grade) + '</span>' +
+        '<span class="tk2-fg">g' + f.grade + '</span>' +
+        '<span class="tk2-feat-sp"></span>' +
+        '<button class="tk2-x" data-delfeat="' + i + '" title="retirer">✕</button>' +
+      '</div>' +
+      '<div class="tk2-feat-cap">' + (an ? '<span class="tk2-cap">' + esc(an.bar) + '</span> <span class="tk2-mut">·</span> ' + skillLink(an.skill) : '<span class="tk2-mut">domaine libre (exotique) · Basic Tech</span>') + '</div>' +
+    '</div>';
   }
   function tokenRow(kind, i, val, extra) {
     return '<span class="tk2-tok"><input list="tk2-tokens" data-tok="' + kind + '" data-ti="' + i + '" value="' + esc(val) + '" placeholder="jeton…">' +

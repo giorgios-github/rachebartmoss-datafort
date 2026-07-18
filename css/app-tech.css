@@ -261,3 +261,29 @@
 .tk2-pk-row.is-sel .tk2-mut { color:#ccc; }
 .tk2-pk-custom { display:flex; gap:6px; align-items:center; }
 .tk2-pk-cin { flex:1; }
+
+/* ══ richer EFFETS rows + effect-picker table ══ */
+/* enriched feature card (two lines, capability prominent) */
+.tk2-panel.hero .tk2-feat { display:block; border:2px solid var(--ink); padding:6px 8px; margin-bottom:6px; }
+.tk2-feat-top { display:flex; align-items:center; gap:8px; }
+.tk2-fd { width:130px; font-family:var(--head); letter-spacing:1px; }
+.tk2-panel.hero .tk2-meter { font-size:19px; letter-spacing:3px; }
+.tk2-fg { font-family:var(--head); font-size:13px; }
+.tk2-feat-sp { flex:1; }
+.tk2-feat-cap { margin-top:5px; font-size:13px; }
+.tk2-cap { font-weight:bold; }
+.tk2-panel.hero .tk2-panel-b { gap:8px; }
+.tk2-panel.hero > .tk2-panel-h { font-size:15px; }
+.tk2-panel.hero .tk2-help { font-size:12px; }
+.tk2-panel.hero .tk2-add { font-size:12px; padding:3px 12px; }
+
+/* effect picker as a domain × grade TABLE */
+.tk2-etab-wrap { overflow-x:auto; margin-bottom:8px; }
+.tk2-etab { width:100%; border-collapse:collapse; table-layout:fixed; }
+.tk2-etab th, .tk2-etab td { border:1px solid var(--ink); vertical-align:top; padding:0; }
+.tk2-etab thead th { background:var(--ink); color:#fff; font-family:var(--head); letter-spacing:1px; font-size:11px; text-align:center; padding:3px 4px; }
+.tk2-tcorner { width:118px; text-align:left !important; padding-left:8px !important; }
+.tk2-tdom { text-align:left; padding:4px 6px; font-family:var(--head); letter-spacing:1px; font-size:12px; white-space:nowrap; background:#fff; }
+.tk2-tdom .tk2-mut { display:block; font-family:var(--mono); font-size:9px; letter-spacing:0; font-weight:normal; }
+.tk2-cell { display:block; width:100%; height:100%; min-height:34px; background:#fff; color:var(--ink); border:none; border-radius:0; padding:4px 6px; text-align:left; cursor:pointer; font-family:var(--mono); font-size:11px; line-height:1.25; }
+.tk2-cell:hover { background:var(--ink); color:#fff; }
