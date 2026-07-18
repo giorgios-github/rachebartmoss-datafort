@@ -96,3 +96,89 @@
 .tech-stage.is-cutfull { align-items: flex-start; }
 .tech-stage.is-cutfull .tech-plate { max-width: 100%; width: 100%; }
 .tech-stage.is-cutfull .tech-src { width: 100%; height: auto; }
+
+/* ══ TECH artifact editor (cran 1) — charter: ink/white, 2px, square, mono/head ══ */
+.tk2-pane { display:flex; flex-direction:column; height:100%; background:#fff; color:var(--ink); font-family:var(--mono); }
+.tk2-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 12px; border-bottom:2px solid var(--ink); }
+.tk2-title { font-family:var(--head); letter-spacing:3px; font-size:14px; }
+.tk2-bar-sp { flex:1; }
+.tk2-pane input, .tk2-pane textarea, .tk2-pane select { font-family:var(--mono); font-size:12px; color:var(--ink); background:#fff; border:2px solid var(--ink); border-radius:0; padding:3px 6px; }
+.tk2-pane input:focus, .tk2-pane textarea:focus { outline:2px solid var(--ink); outline-offset:-2px; }
+.tk2-name { font-family:var(--head); letter-spacing:1px; font-size:14px; min-width:200px; flex:0 1 auto; }
+.tk2-cls { width:110px; }
+.tk2-tier { font-size:11px; display:inline-flex; align-items:center; gap:4px; }
+.tk2-tier input { width:44px; }
+.tk2-imp { flex:1; min-width:160px; }
+
+/* library */
+.tk2-lib { flex:1; overflow:auto; padding:14px; }
+.tk2-sect { font-family:var(--head); letter-spacing:2px; font-size:13px; margin:14px 0 8px; }
+.tk2-sect:first-child { margin-top:0; }
+.tk2-count { border:2px solid var(--ink); padding:0 6px; font-family:var(--mono); font-size:11px; }
+.tk2-hint, .tk2-mut { color:#666; font-weight:normal; }
+.tk2-empty { border:2px dashed var(--ink); padding:18px; text-align:center; color:#666; }
+.tk2-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px; }
+.tk2-card { text-align:left; background:#fff; border:2px solid var(--ink); padding:8px 10px; cursor:pointer; display:flex; flex-direction:column; gap:4px; font-family:var(--mono); color:var(--ink); transition:background .12s,color .12s; }
+.tk2-card:hover { background:var(--ink); color:#fff; }
+.tk2-card:hover .tk2-card-c, .tk2-card:hover .tk2-card-d, .tk2-card:hover .tk2-card-m { color:#fff; }
+.tk2-card-h { display:flex; justify-content:space-between; gap:6px; align-items:baseline; }
+.tk2-card-n { font-family:var(--head); letter-spacing:1px; font-size:13px; }
+.tk2-card-c { font-size:11px; color:#666; }
+.tk2-card-d { font-size:11px; }
+.tk2-card-m { font-size:11px; color:#666; }
+
+/* bench */
+.tk2-body { flex:1; display:flex; gap:0; overflow:hidden; }
+.tk2-plate { flex:0 0 33%; border-right:2px solid var(--ink); padding:10px; display:flex; flex-direction:column; gap:6px; overflow:auto; }
+.tk2-plate-img { display:block; max-width:100%; height:auto; border:2px solid var(--ink); }
+.tk2-plate-empty { border:2px dashed var(--ink); flex:1; min-height:200px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:#888; }
+.tk2-plate-cap { font-size:10px; color:#666; }
+.tk2-fiche { flex:1; overflow:auto; padding:10px; display:flex; flex-direction:column; gap:8px; }
+.tk2-flavor { width:100%; min-height:40px; resize:vertical; }
+.tk2-panel { border:2px solid var(--ink); }
+.tk2-panel-h { background:var(--ink); color:#fff; padding:2px 8px; font-family:var(--head); letter-spacing:2px; font-size:12px; }
+.tk2-panel-b { padding:6px 8px; display:flex; flex-direction:column; gap:5px; }
+.tk2-two { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.tk2-feat { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.tk2-fd { width:110px; }
+.tk2-meter { letter-spacing:2px; font-size:15px; cursor:pointer; user-select:none; }
+.tk2-gc { cursor:pointer; }
+.tk2-gc:hover { background:var(--ink); color:#fff; }
+.tk2-anchor { flex:1; font-size:11px; }
+.tk2-x { border:none; background:none; color:var(--ink); cursor:pointer; font-size:12px; padding:0 3px; }
+.tk2-x:hover { color:#fff; background:var(--ink); }
+.tk2-line { display:flex; gap:5px; align-items:center; }
+.tk2-line input { flex:1; }
+.tk2-mt { flex:2; } .tk2-mv { flex:1; }
+.tk2-if { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.tk2-if-l { font-size:11px; color:#666; width:44px; }
+.tk2-tok { display:inline-flex; align-items:center; gap:2px; }
+.tk2-tok input { width:auto; min-width:80px; }
+.tk2-rate { width:56px !important; }
+.tk2-add { border:2px solid var(--ink); background:#fff; cursor:pointer; padding:1px 8px; font-family:var(--mono); }
+.tk2-add:hover { background:var(--ink); color:#fff; }
+.tk2-who { display:inline-flex; gap:6px; font-size:10px; color:#666; flex-wrap:wrap; }
+.tk2-who label { display:inline-flex; align-items:center; gap:2px; }
+
+/* nomenclature + production */
+.tk2-nomen { border-top:2px solid var(--ink); }
+.tk2-nomen-h { background:var(--ink); color:#fff; padding:2px 12px; font-family:var(--head); letter-spacing:2px; font-size:12px; }
+.tk2-nomen-t { width:100%; border-collapse:collapse; font-size:11px; }
+.tk2-nomen-t td { padding:2px 12px; border-bottom:1px solid #ccc; }
+.tk2-nomen-t .tk2-r { text-align:right; }
+.tk2-prod { border-top:2px solid var(--ink); background:var(--ink); color:#fff; display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:5px 12px; font-size:12px; }
+.tk2-prod-l { font-family:var(--head); letter-spacing:2px; }
+.tk2-prod .tk2-mut { color:#aaa; }
+.tk2-req { font-size:11px; }
+
+/* document */
+.tk2-doc-card { flex:1; overflow:auto; margin:14px auto; max-width:460px; border:2px solid var(--ink); }
+.tk2-doc-head { display:flex; justify-content:space-between; padding:5px 10px; border-bottom:2px solid var(--ink); font-family:var(--head); letter-spacing:2px; font-size:13px; }
+.tk2-doc-plate { padding:8px; text-align:center; }
+.tk2-doc-plate .tk2-plate-img { margin:0 auto; }
+.tk2-doc-plate .tk2-plate-empty { min-height:100px; }
+.tk2-doc-flavor { padding:4px 10px; border-top:2px solid var(--ink); color:#333; font-size:11px; }
+.tk2-doc-body { display:flex; gap:10px; padding:8px 10px; border-top:2px solid var(--ink); font-size:11px; }
+.tk2-doc-col { flex:1; display:flex; flex-direction:column; gap:3px; }
+.tk2-doc-foot { border-top:2px solid var(--ink); padding:4px 10px; font-size:11px; }
+@media (max-width:900px){ .tk2-body{flex-direction:column;} .tk2-plate{flex-basis:auto;border-right:none;border-bottom:2px solid var(--ink);} .tk2-two{grid-template-columns:1fr;} }

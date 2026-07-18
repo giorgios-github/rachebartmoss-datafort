@@ -12,7 +12,8 @@
    MORE polygons drawn full-page on the source (live preview line, draggable
    points); outside the union stays present but FADES INSIDE THE PRESS
    ITSELF (ordered Bayer mask on the ink — still strictly 1-bit), dosed by BACKDROP.
-   Exposes window.TechSection { render(tab, pane) }. */
+   Exposed as window.TechPress { mount(pane, opts) } — a MODE (the plate tool) of
+   the TECH bench; opts.onAttach(plate) / opts.onExit let the bench reclaim control. */
 (function () {
   'use strict';
   var INK = 17;                       // #111
@@ -515,12 +516,13 @@
     }, 70);
   }
 
-  function render(tab, pane) {
-    var s = st(pane);
+  function mount(pane, opts) {
+    var s = st(pane); pane._techOpts = opts = opts || {};
     pane.classList.add('tech-pane');
     pane.innerHTML =
       '<div class="tech-bar">' +
-        '<span class="tech-title">TECH · PRESS</span>' +
+        (opts.onExit ? '<button class="app-btn tech-back">← ATELIER</button>' : '') +
+        '<span class="tech-title">PRESSE</span>' +
         '<span class="tech-modes">' + MODES.map(function (m) {
           return '<button class="app-btn" data-mode="' + m.key + '" title="' + m.title + '">' + m.label + '</button>';
         }).join('') + '</span>' +
@@ -533,6 +535,7 @@
         '<button class="app-btn tech-reset tech-need-img">↺ RESET</button>' +
         '<button class="app-btn tech-import">⇪ IMPORT</button>' +
         '<button class="app-btn tech-export tech-need-img">▤ EXPORT PNG</button>' +
+        (opts.onAttach ? '<button class="app-btn tech-attach tech-need-img">✓ POSER SUR LA FICHE</button>' : '') +
         '<input type="file" class="tech-file" accept="image/*" style="display:none">' +
       '</div>' +
       '<div class="tech-ctrl">' + SLIDERS.filter(function (S) { return s.adv || !S[6]; }).map(function (S) {
@@ -544,6 +547,12 @@
       '<div class="tech-tones"></div>' +
       '<div class="tech-stage"></div>';
 
+    if (opts.onExit) pane.querySelector('.tech-back').onclick = function () { opts.onExit(); };
+    if (opts.onAttach) pane.querySelector('.tech-attach').onclick = function () {
+      if (!s.rgba) return;
+      var c = pane.querySelector('.tech-canvas'); if (!c) return;
+      opts.onAttach({ png: c.toDataURL('image/png'), w: s.w, h: s.h, name: s.name });
+    };
     pane.querySelector('.tech-import').onclick = function () { pane.querySelector('.tech-file').click(); };
     pane.querySelector('.tech-file').onchange = function (e) {
       var f = e.target.files && e.target.files[0];
@@ -577,7 +586,7 @@
     pane.querySelector('.tech-adv').onclick = function () {
       s.adv = !s.adv;
       try { localStorage.setItem(LS_ADV, s.adv ? '1' : '0'); } catch (e) {}
-      render(tab, pane);
+      mount(pane, opts);
     };
     var pipBtn = pane.querySelector('.tech-tool-pip');
     if (pipBtn) pipBtn.onclick = function () { s.tool = s.tool === 'pip' ? 'none' : 'pip'; redraw(pane); };
@@ -605,22 +614,28 @@
       };
     });
 
-    // drag & drop anywhere on the pane
-    pane.addEventListener('dragover', function (e) { e.preventDefault(); pane.classList.add('tech-over'); });
-    pane.addEventListener('dragleave', function () { pane.classList.remove('tech-over'); });
-    pane.addEventListener('drop', function (e) {
-      e.preventDefault(); pane.classList.remove('tech-over');
-      var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-      if (f && /^image\//.test(f.type)) loadBlob(pane, f, f.name);
-    });
+    // drag & drop anywhere on the pane — registered ONCE per pane (mount re-runs on
+    // every ADVANCED toggle; unguarded addEventListener would stack duplicates).
+    if (!pane._techDrag) {
+      pane._techDrag = 1;
+      pane.addEventListener('dragover', function (e) { if (!pane.querySelector('.tech-stage')) return; e.preventDefault(); pane.classList.add('tech-over'); });
+      pane.addEventListener('dragleave', function () { pane.classList.remove('tech-over'); });
+      pane.addEventListener('drop', function (e) {
+        if (!pane.querySelector('.tech-stage')) return;
+        e.preventDefault(); pane.classList.remove('tech-over');
+        var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (f && /^image\//.test(f.type)) loadBlob(pane, f, f.name);
+      });
+    }
     if (!pane._techUp) {
-      pane._techUp = function () { var s2 = st(pane); s2._drag = null; };
+      pane._techUp = function () { if (!pane.querySelector('.tech-stage')) return; var s2 = st(pane); s2._drag = null; };
       document.addEventListener('mouseup', pane._techUp);
     }
-    // paste (⌘V) while this pane is on screen
+    // paste (⌘V) — only while the press is actually mounted (its .tech-stage exists);
+    // once the bench reclaims the pane the handler must no-op, not swallow pastes.
     if (!pane._techPaste) {
       pane._techPaste = function (e) {
-        if (!document.body.contains(pane) || pane.style.display === 'none') return;
+        if (!document.body.contains(pane) || pane.style.display === 'none' || !pane.querySelector('.tech-stage')) return;
         var items = (e.clipboardData && e.clipboardData.items) || [];
         for (var i = 0; i < items.length; i++) if (/^image\//.test(items[i].type)) {
           loadBlob(pane, items[i].getAsFile(), 'paste');
@@ -632,8 +647,8 @@
     redraw(pane);
   }
 
-  window.TechSection = {
-    render: render,
+  window.TechPress = {
+    mount: mount,
     _press: {
       defaults: defaults, clusterize: clusterize, chanOf: chanOf, boundaryBits: boundaryBits,
       otsu: otsu, pressTrame: pressTrame, pressSeuil: pressSeuil, pressTrait: pressTrait,
