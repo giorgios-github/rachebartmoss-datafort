@@ -250,3 +250,14 @@
 .tk2-rung { font-family:var(--mono); font-size:11px; text-align:left; background:#fff; color:var(--ink); border:2px solid var(--ink); border-radius:0; padding:1px 7px; cursor:pointer; }
 .tk2-rung:hover { background:var(--ink); color:#fff; }
 .tk2-rung b { font-weight:normal; text-decoration:underline; margin-right:3px; }
+
+/* ══ unified picker: pill triggers + class/origin rows + custom input ══ */
+.tk2-pill { letter-spacing:1px; }
+.tk2-pill::after { content:' \25BE'; font-size:0.85em; }   /* ▾ signals a picker */
+.tk2-pk-row { display:block; width:100%; text-align:left; background:#fff; color:var(--ink); border:2px solid var(--ink); border-radius:0; padding:4px 8px; margin-bottom:5px; cursor:pointer; font-family:var(--mono); }
+.tk2-pk-row:hover { background:var(--ink); color:#fff; }
+.tk2-pk-row:hover .tk2-mut { color:#ccc; }
+.tk2-pk-row.is-sel { background:var(--ink); color:#fff; }
+.tk2-pk-row.is-sel .tk2-mut { color:#ccc; }
+.tk2-pk-custom { display:flex; gap:6px; align-items:center; }
+.tk2-pk-cin { flex:1; }
