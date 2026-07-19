@@ -9,11 +9,13 @@
   var LS = 'bartmoss_tech_artifacts';
   var esc = function (t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
   var isKnown = function (d) { return C.isKnownDomain(d); };
-  var DERIVE = function (a) { return M.derive(a, { isKnownDomain: isKnown, addonPrice: C.addonPrice }); };
+  var DERIVE = function (a) { return M.derive(a, { isKnownDomain: isKnown, addonPrice: C.addonPrice,
+    takesOf: function (f) { return (f.path && f.path.length && TR.has(f.domain)) ? TR.collect(TR.get(f.domain), f.path, 'takes') : []; } }); };
   function addonEbTag(a, name) { var eb = M.addonEb(a, name, { addonPrice: C.addonPrice }); var e = C.addonPrice(name); var scaled = !!(e && e.mult != null); return '<span class="tk2-addeb" title="' + (scaled ? 'cost scales with the object’s complexity' : 'addon cost') + '">' + (scaled ? '~' : '') + eb + 'eb</span>'; }
   function addonPriceStr(a, name) { var eb = M.addonEb(a, name, { addonPrice: C.addonPrice }); var e = C.addonPrice(name); return ((e && e.mult != null) ? '~' : '') + eb + 'eb' + ((e && e.mult != null) ? ' · ∝ complexity' : ''); }
   function allAddonCount(a) { var n = a.addons.length; a.feats.forEach(function (f) { n += (f.addons || []).length; }); return n; }
-  var GATE = function (a, skills) { return M.gate(a, skills, { skillForClass: C.skillForClass, skillForDomain: C.skillForDomain }); };
+  var GATE = function (a, skills) { return M.gate(a, skills, { skillForClass: C.skillForClass, skillForDomain: C.skillForDomain,
+    needsOf: function (f) { return (f.path && f.path.length && TR.has(f.domain)) ? TR.collect(TR.get(f.domain), f.path, 'need') : []; } }); };
   // ── the BUILDER = the current player's OWN sheet (the one shown in /party/me),
   // picked up automatically from the session — no manual linking. GM = fiat. ──
   function builderInfo() { var B = window.Shell && window.Shell.bridge && window.Shell.bridge(); var sess = B && B.sess; return { role: (sess && sess.role) || 'gm', sheetId: sess && sess.sheetId }; }
@@ -48,7 +50,8 @@
       var ic = r.status === 'ok' ? '✓' : r.status === 'push' ? '⚠ +' + r.push : '✗';
       return '<span class="tk2-gr tk2-gr-' + r.status + '">' + esc(r.skill) + ' <b>' + r.have + '</b>/' + r.need + ' ' + ic + (r.isClass ? ' <span class="tk2-mut">class</span>' : '') + '</span>';
     }).join('');
-    var tail = g.locks.length ? '<span class="tk2-mut">missing: ' + esc(g.locks.join(', ')) + '</span>' : (g.instability ? '<span class="tk2-mut">instability +' + g.instability + '</span>' : '');
+    var miss = g.locks.slice().concat((g.cross || []).map(function (c) { return c.domain + ' effect ≥ g' + c.grade; }));
+    var tail = miss.length ? '<span class="tk2-mut">missing: ' + esc(miss.join(', ')) + '</span>' : (g.instability ? '<span class="tk2-mut">instability +' + g.instability + '</span>' : '');
     return '<div class="tk2-gate tk2-gate-' + (g.buildable ? (g.pushes.length ? 'push' : 'ok') : 'locked') + '"><span class="tk2-gate-h">' + esc(builder.name || 'you') + '</span><span class="tk2-gate-v">' + verdict + '</span><span class="tk2-gate-rows">' + rows + '</span>' + tail + '</div>';
   }
   function refreshGate(pane) { var s = sec(pane); if (!s.art) return; var el = pane.querySelector('.tk2-gate-wrap'); if (el) el.innerHTML = gateStrip(s.art, s.builder); }

@@ -5,7 +5,8 @@
    Authoring: a nested literal per domain (short keys, dense to write):
      { l:label, cap:caption, act:action, tag:addon-filter, need:requires,
        sc:{max,per} (° dial), add:true (□ stackable), needsAll:[ids] (⬡ convergence),
-       arch:archetype-name (corpo g6 end-state), bridge:'net'|'data', kids:[…] }
+       arch:archetype-name (corpo g6 end-state), bridge:'net'|'data',
+       need:'node:DOMAIN@g' (HARD cross-effect dep), takes:'class' (grants a mount slot), kids:[…] }
    Domains without an authored tree fall back to a LINEAR spine built from
    TechCatalog.ANCHORS[domain].bars — i.e. the old g1..g6 ladder, verbatim.
 
@@ -484,7 +485,7 @@
       var n = { id: id, tier: tier, parent: parentId, label: lit.l, cap: lit.cap || '',
         act: lit.act || null, tag: lit.tag || null, need: lit.need || null,
         scale: lit.sc || null, arch: lit.arch || null, bridge: lit.bridge || null,
-        add: !!lit.add, needsAll: lit.needsAll || null, kids: [] };
+        add: !!lit.add, needsAll: lit.needsAll || null, takes: lit.takes || null, kids: [] };
       nodes[id] = n; (byTier[tier] || (byTier[tier] = [])).push(id);
       if (parentId) { edges.push({ from: parentId, to: id }); nodes[parentId].kids.push(id); }
       (lit.kids || []).forEach(function (c) { walk(c, id, tier + 1); });

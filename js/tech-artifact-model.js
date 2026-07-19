@@ -132,6 +132,10 @@
     p.addons = arr(p.addons).map(normAddon);
     // mods = wearer bonuses fed to the sheet — { target: <stat|skill>, value }
     p.mods = arr(p.mods).map(function (m) { return { target: str(m.target || ''), value: str(m.value != null ? m.value : ''), when: str(m.when || 'when worn') }; });
+    // mounted = other objects socketed into this one (composition, via a `takes` mount slot). Compact child
+    // snapshots; their feats/mods aggregate into this object's LEVEL. The socketing UI comes with the trees.
+    p.mounted = arr(p.mounted).map(function (m) { return { slot: str(m.slot || ''), name: str(m.name || ''), feats: arr(m.feats).map(normFeat),
+      mods: arr(m.mods).map(function (x) { return { target: str(x.target || ''), value: str(x.value != null ? x.value : ''), when: str(x.when || 'when worn') }; }) }; });
     p.lineage = p.lineage ? { refines: str(p.lineage.refines || ''), steps: Math.max(0, Math.round(+p.lineage.steps || 0)) } : null;
     p.latent = arr(p.latent).map(function (x) { return { text: str(x.text || x), domain: str(x.domain || '').toUpperCase(), grade: x.grade != null ? clampGrade(x.grade) : null, who: normWho(x.who) }; });
     p.stats = (p.stats && typeof p.stats === 'object') ? p.stats : {};
@@ -149,6 +153,25 @@
   function nodeCount(p) { return p.feats.reduce(function (s, f) { return s + featNodes(f); }, 0); }   // total walked features (breadth)
   function sophistication(p) { var W = TUNING.gradeW; return p.feats.reduce(function (s, f) { return s + (W[clampGrade(f.grade)] || 0); }, 0); }  // convex (depth)
   function corpoCount(p) { return p.feats.filter(function (f) { return f.grade >= TUNING.grade.max; }).length; }   // # corpo-monopoly (g6) domains
+  // a cross-effect dependency: `node:COMPUTE@4` = this feature needs the object to ALSO carry a COMPUTE ≥ g4
+  // (a hard substrate gate). `node:LINK` with no @g defaults to grade 1. Anything else (node:X.sub, plain
+  // resource needs like 'power'/'seal') is NOT a cross-dep and is ignored here.
+  function crossNeed(s) { var m = /^node:([a-z0-9-]+)(?:@([0-6]))?$/i.exec(String(s || '').trim()); return m ? { domain: m[1].toUpperCase(), grade: m[2] != null ? +m[2] : 1 } : null; }
+  function gradeOfDomain(p, dom) { dom = String(dom || '').toUpperCase(); return p.feats.reduce(function (m, f) { return String(f.domain).toUpperCase() === dom ? Math.max(m, f.grade || 0) : m; }, 0); }
+  // unmet cross-effect deps for the whole object. needsOf(feat) → the raw `need` strings on that feat's active
+  // nodes (the caller supplies it — it owns the effect-tree). Returns [{domain, grade}] the object is missing.
+  function crossMissing(p, needsOf) {
+    if (!needsOf) return [];
+    var want = {};
+    p.feats.forEach(function (f) { (needsOf(f) || []).forEach(function (s) { var c = crossNeed(s); if (c && c.domain !== String(f.domain).toUpperCase()) want[c.domain] = Math.max(want[c.domain] || 0, c.grade); }); });
+    return Object.keys(want).filter(function (d) { return gradeOfDomain(p, d) < want[d]; }).map(function (d) { return { domain: d, grade: want[d] }; });
+  }
+  // ── COMPOSITION (adapter mounts) — a node `takes:'class'` grants a mount slot; an object whose FITS matches
+  // sockets in and its effects AGGREGATE. Infra only here (level/effects roll up); the socketing UI ships with
+  // the trees that declare the mount nodes. `mounted` stays empty on every current object, so this is inert.
+  function effectiveFeats(p) { var out = p.feats.slice(); (p.mounted || []).forEach(function (m) { (m.feats || []).forEach(function (f) { out.push(f); }); }); return out; }
+  function mountsGranted(p, takesOf) { if (!takesOf) return []; var out = [], seen = {}; p.feats.forEach(function (f) { (takesOf(f) || []).forEach(function (c) { c = str(c); if (c && !seen[c.toLowerCase()]) { seen[c.toLowerCase()] = 1; out.push(c); } }); }); return out; }
+  function fitsSlot(childFits, slotClass) { slotClass = str(slotClass).toLowerCase(); return arr(childFits).some(function (t) { return str(t).toLowerCase() === slotClass; }); }
   // at-a-glance object level (pure over a feats array — works from a sheet snapshot too)
   function headline(feats) {
     feats = feats || [];
@@ -230,7 +253,7 @@
 
     return {
       gradeTop: gt, gradeSum: gs, nFeats: nF, nInterfaces: nI, nExotic: nExotic,
-      nodes: nodes, sophist: soph, corpo: corpo, level: headline(p.feats),
+      nodes: nodes, sophist: soph, corpo: corpo, level: headline(effectiveFeats(p)), mounts: mountsGranted(p, opts.takesOf),
       dc: dc, dcLineage: dcLineage, lineBonus: lineBonus, addonsEb: Math.round(addonsEb), addonDc: Math.round(addonDc * 10) / 10,
       op: op, prodEb: prodEb, prodHours: prodHours, streetEb: streetEb,
       ingredients: ingr,
@@ -262,7 +285,9 @@
       rows.push({ skill: sk, need: n, have: have, status: status, push: push, isClass: !!isClass[sk] });
     });
     rows.sort(function (a, b) { return (b.isClass ? 1 : 0) - (a.isClass ? 1 : 0) || (a.status === 'locked' ? -1 : 1); });
-    return { rows: rows, locks: locks, pushes: pushes, instability: Math.round(instab * 10) / 10, buildable: locks.length === 0, classSkill: cs };
+    var cross = crossMissing(p, opt.needsOf);   // hard substrate gate: a feature needs another effect present on the object
+    return { rows: rows, locks: locks, pushes: pushes, instability: Math.round(instab * 10) / 10,
+      cross: cross, buildable: locks.length === 0 && cross.length === 0, classSkill: cs };
   }
 
   // ── compact one-line record (library copy/import) ──
@@ -276,6 +301,7 @@
     if (p.limits.length) o.limits = p.limits;
     if (p.addons.length) o.addons = p.addons;
     if (p.mods.length) o.mods = p.mods;
+    if (p.mounted && p.mounted.length) o.mounted = p.mounted;
     if (p.lineage) o.lineage = p.lineage;
     if (p.latent.length) o.latent = p.latent;
     if (Object.keys(p.stats).length) o.stats = p.stats;
@@ -290,6 +316,8 @@
     newId: newId, blank: blank, normalize: normalize, derive: derive, gate: gate,
     gradeTop: gradeTop, gradeSum: gradeSum, ingredients: ingredients, addonEb: addonEb,
     nodeCount: nodeCount, sophistication: sophistication, corpoCount: corpoCount, headline: headline,
+    crossNeed: crossNeed, crossMissing: crossMissing, gradeOfDomain: gradeOfDomain,
+    effectiveFeats: effectiveFeats, mountsGranted: mountsGranted, fitsSlot: fitsSlot,
     toJSON: toJSON, fromJSON: fromJSON, clone: clone,
   };
 })();
