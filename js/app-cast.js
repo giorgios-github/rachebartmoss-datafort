@@ -139,6 +139,9 @@
         case 'cast.play': arm({ kind: 'cast', castId: fx.castId, rule: rule.name, label: '▸ ' + (rule.name || 'reveal') }); return Promise.resolve();
         case 'reveal.clock': { var t = targetClock(fx, ev, c.state); arm({ kind: 'clock', clockId: t ? t.json.id : fx.clockId, rule: rule.name, label: '◔ ' + (rule.name || 'clock') }); return Promise.resolve(); }
         case 'loot.grant': arm({ kind: 'loot', lootId: fx.lootId, rule: rule.name, label: '⛃ ' + (rule.name || 'loot') }); return Promise.resolve();
+        // ── Net run effects (docs/net-handoff-MAIN.md §RUN) — armed like every player-facing reveal ──
+        case 'reveal.node': arm({ kind: 'node', run: fx.runId || null, node: fx.node || 'next', rule: rule.name, label: '⊚ ' + (rule.name || 'reveal node') }); return Promise.resolve();
+        case 'dispatch': arm({ kind: 'dispatch', run: fx.runId || null, rule: rule.name, label: '☈ ' + (rule.name || 'dispatch force') }); return Promise.resolve();
         default: return Promise.resolve();
       }
     }
@@ -197,6 +200,8 @@
       if (item.kind === 'cast') Store.resolve({ type: 'cast', id: item.castId }).then(function (h) { if (h) play(h.json); });
       else if (item.kind === 'clock') Store.resolve({ type: 'clock', id: item.clockId }).then(function (h) { if (h) playClock(h.json); });
       else if (item.kind === 'loot') { var b = br(); if (b.grantLoot) b.grantLoot(item.lootId); else logLine('⚠ loot.grant non branché (' + (item.lootId || '?') + ')'); }
+      else if (item.kind === 'node') { if (window.CastRun) window.CastRun.revealTarget(item.run, item.node); }
+      else if (item.kind === 'dispatch') { if (window.CastRun) window.CastRun.dispatchToCombat(item.run); }
       refreshPending();
     }
     function dismiss(pid) { _pending = _pending.filter(function (p) { return p.id !== pid; }); refreshPending(); }
@@ -208,6 +213,257 @@
     return { emit: emit, emitClockChange: emitClockChange, fireManual: fireManual, pending: function () { return _pending; }, confirm: confirm, dismiss: dismiss, resetFired: resetFired };
   })();
   window.CastRules = Rules;
+
+  /* ═══ CAST × NET — reactive run layer ═══
+     (docs/net-handoff-MAIN.md §RUN ⑤/⑥/⑦ · docs/net-interface-contract.md §4)
+     CAST instantiated for a Net run. Over the shared `run` object — which rides
+     the campaign OVERVIEW map (v1: single active run, SOLO) — CAST owns:
+       (a) DEPTH + TRACE→body clocks — tagged clock docs, watched by the engine;
+       (b) per-viewer fog of the fort grid — 1 reveal flag per ICE/file, pure mask;
+       (c) trace-full → dispatch — an armed effect that seeds the owner's force at
+           the party's MEAT position and hands off to combat-ui;
+       (d) the unified initiative queue — deck/ICE actors injected into combatMeta.
+     NET owns the run's structure + board UI; DATA owns host.datafort + NetModel.
+     No new DOC_TYPE, no new broadcast primitive (castReveal stays frozen — used
+     only for the ⑥ spectator view). The reactions are ordinary auto-seeded `rule`
+     docs, so they appear + stay editable in the RULES rail. */
+  var CastRun = (function () {
+    function camp() { return (br().sess || {}).camp || null; }
+    function logRun(msg) { var b = br(); if (b.logSession) { try { b.logSession(msg); } catch (e) {} } }
+    function ov() { var c = camp(); return (c && c.getOverview) ? (c.getOverview() || {}) : {}; }
+    function getRun() { return ov().run || null; }
+    function putRun(run) { var c = camp(); if (c && c.setOverview) c.setOverview({ run: run }); return run; }
+    function runById(id) { var r = getRun(); return (r && (!id || r.id === id)) ? r : null; }
+
+    /* NetModel (js/net-model.js → window.NetModel, owner DATA) is the SINGLE source
+       of truth for deck/fort action budgets + fort difficulty band. CAST does not
+       duplicate the formulas; fail fast if it isn't loaded (the run layer needs it). */
+    function NM() { var m = window.NetModel; if (!m) throw new Error('CastRun requires window.NetModel (net-model.js) — not loaded'); return m; }
+
+    /* ── (a) lifecycle : DEPTH + TRACE clocks + seeded reactions ── */
+    function begin(opts) {
+      opts = opts || {};
+      var df = opts.datafort || {};
+      var runnerSheetId = opts.runnerSheetId || null;
+      var runId = App.uid('run');
+      var depthMax = opts.depthMax || Math.max(4, (df.subgrid && df.subgrid.h) || 6);
+      var traceMax = opts.traceMax || 10;
+      return Promise.all([
+        Store.create('clock', { name: 'DEPTH', max: depthMax, value: 0, color: '#1a7a2e', style: 'bar', props: { kind: 'depth', run: runId, public: true } }),
+        Store.create('clock', { name: 'TRACE → body', max: traceMax, value: 0, color: '#c0392b', style: 'bar', props: { kind: 'trace', run: runId, player: runnerSheetId, public: true } })
+      ]).then(function (cl) {
+        var depthId = cl[0].json.id, traceId = cl[1].json.id;
+        return Promise.all([
+          Store.create('rule', { name: 'Trace complete → dispatch', enabled: true, when: { src: 'clock.full', clockId: traceId }, then: [{ fx: 'dispatch', runId: runId }], once: false, firedAt: null, props: { run: runId } }),
+          Store.create('rule', { name: 'Depth breach → reveal node', enabled: true, when: { src: 'clock.cross', clockId: depthId, dir: 'up' }, then: [{ fx: 'reveal.node', runId: runId, node: 'next' }], once: false, firedAt: null, props: { run: runId } })
+        ]).then(function () {
+          var run = {
+            id: runId,
+            hostId: opts.hostId || null,
+            runnerSheetId: runnerSheetId,
+            netrunner: opts.netrunner || {},           // cs.netrunner — NetModel.deckStats reads its deck
+            securityLevel: opts.securityLevel != null ? opts.securityLevel : 2,  // City Grid Security Level (LDL table p.147, default 2)
+            datafort: df,                              // snapshot for mask/dispatch (NET may pass live)
+            fogMode: opts.fogMode || 'hybrid',         // full | hybrid | fog  (§1: Full B / Hybride C défaut / Fog A)
+            round: 1,
+            initiative: [],                            // [{kind:'meat'|'deck'|'ice', ref, order}]
+            actionsLeft: { runner: 0, fort: 0 },       // runner 1+Speed · fort 1+⌊CPU/2⌋
+            runnerPos: opts.runnerPos || { x: 0, y: 0 },
+            sightRadius: opts.sightRadius || 8,
+            depth: { clockRef: { type: 'clock', id: depthId } },
+            trace: { clockRef: { type: 'clock', id: traceId } },
+            reveal: {},                                // { [iceOrFileId]: true }
+            force: opts.force || null,                 // dispatch descriptor (owner force) — GM-editable
+            district: opts.district || (df.serverLocation && df.serverLocation.district) || null,
+            lastBeat: '',
+            status: 'active'                           // active | dumped | flatlined | jacked-out
+          };
+          resetRound(run);
+          putRun(run);
+          refreshSide();
+          logRun('▸ Netrun started — DEPTH/TRACE armed' + (run.district ? ' @ ' + run.district : ''));
+          return run;
+        });
+      });
+    }
+
+    function end(runId, how) {
+      var run = runById(runId) || getRun(); if (!run) return Promise.resolve();
+      run.status = how || 'jacked-out';
+      clearCombatActors(run);
+      putRun(run);
+      var refs = [run.depth && run.depth.clockRef, run.trace && run.trace.clockRef].filter(Boolean);
+      return Promise.all(refs.map(function (r) { return Store.resolve(r); })).then(function (hits) {
+        return Promise.all(hits.map(function (h) { return h ? Store.del(h.ref) : null; }));
+      }).then(function () {
+        return Store.index('rule').then(function (rows) {
+          return Promise.all(rows.filter(function (r) { return (r.json.props || {}).run === run.id; }).map(function (r) { return Store.del(r.ref); }));
+        });
+      }).then(function () {
+        var c = camp(); if (c && c.setOverview) c.setOverview({ run: null });
+        refreshSide();
+        logRun('■ Netrun ended — ' + run.status);
+      });
+    }
+
+    /* ── clocks : drive from the board / GM, feed the engine ── */
+    function bumpClock(clockRef, by) {
+      if (!clockRef) return Promise.resolve(null);
+      return Store.resolve(clockRef).then(function (h) {
+        if (!h) return null;
+        var k = h.json, before = k.value || 0, max = k.max || 6;
+        var after = Math.max(0, Math.min(max, before + (parseInt(by, 10) || 0)));
+        if (after === before) return k;
+        k.value = after;
+        return Store.put(h.ref, k).then(function () {
+          refreshSide();
+          if (window.CastRules) return CastRules.emitClockChange(k, before, after).then(function () { return k; });
+          return k;
+        });
+      });
+    }
+    function bumpDepth(runId, by) { var run = runById(runId) || getRun(); return run ? bumpClock(run.depth.clockRef, by) : Promise.resolve(); }
+    function bumpTrace(runId, by) { var run = runById(runId) || getRun(); return run ? bumpClock(run.trace.clockRef, by) : Promise.resolve(); }
+
+    /* ── (b) per-viewer fog : pure mask. GM sees all; players see per fogMode +
+         the per-ICE/file reveal flags (never per cell). ── */
+    function isGmViewer(v) { return v === 'gm' || (v && v.role === 'gm'); }
+    function scanned(run, x, y) { var p = run.runnerPos || { x: 0, y: 0 }, r = run.sightRadius || 8; return Math.max(Math.abs(x - p.x), Math.abs(y - p.y)) <= r; }
+    function maskGrid(datafort, run, viewer) {
+      run = run || getRun() || {};
+      datafort = datafort || run.datafort || {};
+      var sub = datafort.subgrid || { w: 0, h: 0, cells: [] };
+      var mode = run.fogMode || 'hybrid';
+      var reveal = run.reveal || {};
+      var full = isGmViewer(viewer) || mode === 'full';
+      function masked(cell, seen) {
+        if (!seen) return { x: cell.x, y: cell.y, kind: 'fog', revealed: false };                // whole cell hidden (Fog A)
+        if (cell.kind === 'ice' && !reveal[cell.ref]) return { x: cell.x, y: cell.y, kind: 'unknown', revealed: false }; // structure seen, ICE identity masked
+        return { x: cell.x, y: cell.y, kind: cell.kind, ref: cell.ref, revealed: true };
+      }
+      var cells = (sub.cells || []).map(function (cell) {
+        if (full) return { x: cell.x, y: cell.y, kind: cell.kind, ref: cell.ref, revealed: true };
+        // Hybride (C, default): structure always a silhouette — only ICE/file identity is gated.
+        // Fog (A): nothing but line-of-sight (from runnerPos) + flagged occupants.
+        var seen = mode === 'hybrid' ? true : (scanned(run, cell.x, cell.y) || (cell.ref && !!reveal[cell.ref]));
+        return masked(cell, seen);
+      });
+      function redact(list) {
+        return (list || []).map(function (o) {
+          if (full || reveal[o.id]) return Object.assign({}, o, { revealed: true });
+          return { id: o.id, revealed: false };                                                   // no name/class/str leaked to the rendered view
+        });
+      }
+      return { fog: !full, mode: mode, w: sub.w, h: sub.h, runnerPos: run.runnerPos || null, cells: cells, ice: redact(datafort.ice), files: redact(datafort.files) };
+    }
+    function reveal(runId, id) { var run = runById(runId) || getRun(); if (!run || !id) return; run.reveal = run.reveal || {}; run.reveal[id] = true; putRun(run); refreshSide(); }
+    function revealNext(run) {
+      run = run || getRun(); if (!run) return;
+      run.reveal = run.reveal || {};
+      var df = run.datafort || {}, pool = (df.ice || []).concat(df.files || []);
+      var hidden = pool.filter(function (o) { return o && o.id && !run.reveal[o.id]; });
+      if (hidden.length) { run.reveal[hidden[0].id] = true; putRun(run); refreshSide(); logRun('⊚ Revealed — ' + (hidden[0].name || hidden[0].id)); }
+    }
+    function revealTarget(runId, target) { var run = runById(runId) || getRun(); if (!run) return; if (!target || target === 'next') revealNext(run); else reveal(run.id, target); }
+    function revealAll(runId) { var run = runById(runId) || getRun(); if (!run) return; var df = run.datafort || {}; run.reveal = {}; (df.ice || []).concat(df.files || []).forEach(function (o) { if (o && o.id) run.reveal[o.id] = true; }); putRun(run); refreshSide(); }
+    function resetReveal(runId) { var run = runById(runId) || getRun(); if (!run) return; run.reveal = {}; putRun(run); refreshSide(); }
+
+    /* ── (d) unified initiative : deck/ICE actors → combatMeta.order (one round,
+         two views). Injected only while a meat combat is active; a standalone run
+         keeps its own run.initiative. Combatants are well-formed so the current
+         combat-ui renders them without a wound sheet. ── */
+    function iceName(run, id) { var ice = ((run.datafort || {}).ice || []).filter(function (i) { return i && i.id === id; })[0]; return ice ? (ice.name || 'ICE') : 'ICE'; }
+    function computeInitiative(run) {
+      var init = [{ kind: 'deck', ref: run.runnerSheetId, order: 0 }];
+      ((run.datafort || {}).ice || []).forEach(function (ice, i) { if (ice && ice.id) init.push({ kind: 'ice', ref: ice.id, order: i + 1 }); });
+      run.initiative = init;
+    }
+    function resetRound(run) { run.actionsLeft = { runner: NM().deckStats(run.netrunner).actions, fort: NM().actsOf(run.datafort) }; computeInitiative(run); }
+    function actorId(run, e) { return 'run:' + run.id + ':' + e.kind + ':' + (e.ref || e.order); }
+    function actorCombatant(run, e) {
+      return { id: actorId(run, e), kind: e.kind, runId: run.id,
+        name: e.kind === 'deck' ? 'RUNNER · deck' : ('ICE · ' + iceName(run, e.ref)),
+        init: null, wounds: 0, status: {}, stats: {}, visible: true, updatedAt: Date.now() };
+    }
+    function injectCombat(run) {
+      var c = camp(); if (!c || !c.combatMeta) return;
+      var m = c.combatMeta(); if (!m || !m.active) return;                                        // only when synced with a meat scene
+      var order = (m.order || []).slice();
+      (run.initiative || []).forEach(function (e) {
+        if (e.kind === 'meat') return;
+        var cb = actorCombatant(run, e); if (c.putCombatant) c.putCombatant(cb.id, cb);
+        if (order.indexOf(cb.id) < 0) order.push(cb.id);
+      });
+      if (c.setCombatMeta) c.setCombatMeta(Object.assign({}, m, { order: order }));
+    }
+    function clearCombatActors(run) {
+      var c = camp(); if (!c || !c.combatMeta) return;
+      var pfx = 'run:' + run.id + ':';
+      (c.allCombatants ? c.allCombatants() : []).forEach(function (cb) { if (cb && cb.id && String(cb.id).indexOf(pfx) === 0 && c.removeCombatant) c.removeCombatant(cb.id); });
+      var m = c.combatMeta() || {}, order = (m.order || []).filter(function (id) { return String(id).indexOf(pfx) !== 0; });
+      if (c.setCombatMeta) c.setCombatMeta(Object.assign({}, m, { order: order }));
+    }
+    function syncInitiative(runId) { var run = runById(runId) || getRun(); if (!run) return; computeInitiative(run); putRun(run); injectCombat(run); }
+    function spend(runId, who) { var run = runById(runId) || getRun(); if (!run) return; run.actionsLeft = run.actionsLeft || {}; if (run.actionsLeft[who] > 0) run.actionsLeft[who]--; putRun(run); }
+    function nextRound(runId) { var run = runById(runId) || getRun(); if (!run) return; run.round = (run.round || 1) + 1; resetRound(run); putRun(run); injectCombat(run); logRun('↻ Round ' + run.round); }
+
+    /* ── (c) dispatch : trace full → owner force at the party's MEAT position →
+         combat-ui. Strong GM agency: the suggestion is a starting point; the GM
+         edits the force in combat setup and narrates the scene. ── */
+    function resolveForce(run) {
+      if (run.force && run.force.units && run.force.units.length) return run.force;
+      var df = run.datafort || {}, tier = NM().difficulty(df, { securityLevel: run.securityLevel }).band;
+      var n = tier === 'black' ? 4 : (tier === '3' ? 3 : 2);
+      var owner = (df.owner && df.owner.name) || (run.owner && run.owner.name) || 'Corporate';
+      var units = []; for (var i = 0; i < n; i++) units.push({ name: owner + ' security', stats: { REF: 7, BODY: 6, INT: 5, COOL: 6, TECH: 5, EMP: 4, MA: 7 } });
+      return { label: owner + ' security team', units: units };
+    }
+    function forceCombatant(run, unit, i) {
+      var id = 'run:' + run.id + ':dispatch:' + i;
+      var seed = { role: unit.name || 'Security', stats: unit.stats || { REF: 7, BODY: 6, INT: 5, COOL: 6, TECH: 5, EMP: 4, MA: 7 }, skills: unit.skills || {} };
+      if (window.CombatEngine && CombatEngine.makeCombatant) {
+        var cb = CombatEngine.makeCombatant({ id: id, kind: 'npc', name: unit.name || 'Security', sheet: seed });
+        cb.dispatchOf = run.id; return cb;
+      }
+      var s = seed.stats;
+      return { id: id, kind: 'npc', name: unit.name || 'Security', init: null, wounds: 0, status: {}, stats: s, ref: s.REF, body: s.BODY, ma: s.MA, visible: true, dispatchOf: run.id, updatedAt: Date.now() };
+    }
+    function dispatchToCombat(runId) {
+      var run = runById(runId) || getRun(); if (!run) { logRun('⚠ dispatch — run introuvable'); return; }
+      var c = camp(); if (!c) return;
+      var force = resolveForce(run);
+      var m = (c.combatMeta && c.combatMeta()) || {};
+      var order = (m.order || []).slice();
+      force.units.forEach(function (u, i) { var cb = forceCombatant(run, u, i); if (c.putCombatant) c.putCombatant(cb.id, cb); order.push(cb.id); });
+      if (c.setCombatMeta) c.setCombatMeta(Object.assign({ round: 1, turnIdx: 0, settings: (m.settings || { mode: 'hybrid', npcVis: 'full' }), startedAt: Date.now() }, m, { active: true, order: order }));
+      if (c.logCombat) c.logCombat({ msg: '☈ Dispatch — ' + force.label + ' inbound @ ' + (run.district || 'party position') });
+      run.lastBeat = 'TRACE FULL — ' + force.label + ' dispatched'; putRun(run);
+      logRun('☈ Dispatch : ' + force.label + ' → ' + (run.district || 'position party') + ' (' + force.units.length + ' unit' + (force.units.length === 1 ? '' : 's') + ')');
+      if (window.Shell && Shell.switchSection) { try { Shell.switchSection('combat'); } catch (e) {} }
+    }
+
+    /* ── (⑥) spectator cast view : the two gauges, via the frozen castReveal ── */
+    function castView(runId) {
+      var run = runById(runId) || getRun(); if (!run) return Promise.resolve();
+      return Promise.all([Store.resolve(run.depth.clockRef), Store.resolve(run.trace.clockRef)]).then(function (r) {
+        var d = r[0] && r[0].json, t = r[1] && r[1].json, b = br();
+        if (!b.castReveal) return;
+        var txt = 'NETRUN\n\nDEPTH   ' + (d ? (d.value || 0) + ' / ' + (d.max || 6) : '—') +
+          '\nTRACE   ' + (t ? (t.value || 0) + ' / ' + (t.max || 10) : '—') + (run.lastBeat ? '\n\n' + run.lastBeat : '');
+        b.castReveal({ kind: 'event', title: 'NETRUN', blocks: [{ type: 'text', mode: 'panel', size: 'xl', text: txt }] });
+      });
+    }
+
+    return {
+      begin: begin, end: end,
+      bumpDepth: bumpDepth, bumpTrace: bumpTrace, bumpClock: bumpClock,
+      maskGrid: maskGrid, reveal: reveal, revealTarget: revealTarget, revealNext: revealNext, revealAll: revealAll, resetReveal: resetReveal,
+      syncInitiative: syncInitiative, spend: spend, nextRound: nextRound,
+      dispatchToCombat: dispatchToCombat, resolveForce: resolveForce,
+      castView: castView, get: getRun
+    };
+  })();
+  window.CastRun = CastRun;
 
   /* ═══ SIDEBAR ═══ */
   function renderSide(host) {
@@ -404,7 +660,7 @@
   /* — rule editor (when → then). Clock selectors carry a concrete id OR a templated
        kind (any heat/trace clock of the same player: player:'$trigger'). — */
   var WHEN_SRC = [['clock.cross', 'clock crosses threshold'], ['clock.full', 'clock fills'], ['clock.empty', 'clock empties'], ['cast.played', 'cast-view played'], ['manual', 'manual only']];
-  var FX_KINDS = [['cast.play', 'play cast-view (armed)'], ['reveal.clock', 'reveal clock (armed)'], ['clock.advance', 'advance clock'], ['clock.set', 'set clock'], ['loot.grant', 'grant loot (armed)'], ['log', 'log line']];
+  var FX_KINDS = [['cast.play', 'play cast-view (armed)'], ['reveal.clock', 'reveal clock (armed)'], ['reveal.node', 'reveal fort node (armed)'], ['clock.advance', 'advance clock'], ['clock.set', 'set clock'], ['loot.grant', 'grant loot (armed)'], ['dispatch', 'dispatch owner force (armed)'], ['log', 'log line']];
   function clockOptions(clocks, sel) {
     var cur = sel && sel.clockId ? 'id:' + sel.clockId : (sel && sel.clockKind ? 'kind:' + sel.clockKind : '');
     var opts = '<option value=""' + (cur === '' ? ' selected' : '') + '>— none —</option>';
@@ -430,6 +686,8 @@
         if (fx.fx === 'clock.advance') params += '<input type="number" data-fxby="' + i + '" value="' + (fx.by != null ? fx.by : 1) + '" style="width:56px" title="by">';
         if (fx.fx === 'clock.set') params += '<input type="number" data-fxval="' + i + '" value="' + (fx.value != null ? fx.value : 0) + '" style="width:56px" title="value">';
       } else if (fx.fx === 'loot.grant') params = '<input data-fxloot="' + i + '" value="' + esc(fx.lootId || '') + '" placeholder="loot id">';
+      else if (fx.fx === 'reveal.node') params = '<input data-fxnode="' + i + '" value="' + esc(fx.node || 'next') + '" placeholder="node id (or next)"><input data-fxrun="' + i + '" value="' + esc(fx.runId || '') + '" placeholder="run id (auto)">';
+      else if (fx.fx === 'dispatch') params = '<input data-fxrun="' + i + '" value="' + esc(fx.runId || '') + '" placeholder="run id (auto = active run)">';
       else if (fx.fx === 'log') params = '<input data-fxtext="' + i + '" value="' + esc(fx.text || '') + '" placeholder="log text">';
       return '<div class="ru-fx">' + head + ' ' + params + '</div>';
     }
@@ -474,6 +732,8 @@
       body.querySelectorAll('[data-fxby]').forEach(function (n) { n.oninput = function () { ru.then[+n.getAttribute('data-fxby')].by = parseInt(n.value, 10) || 0; poke(); }; });
       body.querySelectorAll('[data-fxval]').forEach(function (n) { n.oninput = function () { ru.then[+n.getAttribute('data-fxval')].value = parseInt(n.value, 10) || 0; poke(); }; });
       body.querySelectorAll('[data-fxloot]').forEach(function (t) { t.oninput = function () { ru.then[+t.getAttribute('data-fxloot')].lootId = t.value; poke(); }; });
+      body.querySelectorAll('[data-fxnode]').forEach(function (t) { t.oninput = function () { ru.then[+t.getAttribute('data-fxnode')].node = t.value; poke(); }; });
+      body.querySelectorAll('[data-fxrun]').forEach(function (t) { t.oninput = function () { ru.then[+t.getAttribute('data-fxrun')].runId = t.value || undefined; poke(); }; });
       body.querySelectorAll('[data-fxtext]').forEach(function (t) { t.oninput = function () { ru.then[+t.getAttribute('data-fxtext')].text = t.value; poke(); }; });
     }
   }

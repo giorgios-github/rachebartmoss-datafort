@@ -90,6 +90,16 @@
       var isTurn = actv && actv.id === c.id;
       var sel = selectedC();
       var isSel = sel && sel.id === c.id;
+      // Net-run actors (CAST's window.CastRun injects deck/ICE actions into the
+      // shared order): a compact initiative row — no wounds/status/combat sheet.
+      if (c.kind === 'deck' || c.kind === 'ice') {
+        return '<div class="cbt-lrow' + (isSel ? ' sel' : '') + (isTurn ? ' turn' : '') + '" data-sel="' + esc(c.id) + '">' +
+          '<span class="cbt-linit">' + (c.init == null ? '—' : c.init) + '</span>' +
+          '<div class="cbt-lmain"><div class="cbt-ltop">' +
+            '<span class="cbt-lname">' + esc(c.name) + '</span>' +
+            '<span class="cbt-lkind">' + (c.kind === 'deck' ? 'DECK' : 'ICE') + '</span>' +
+          '</div></div></div>';
+      }
       var lvl = viewLevel(c);
       var nameHidden = lvl === 'name';
       return '<div class="cbt-lrow' + (isSel ? ' sel' : '') + (isTurn ? ' turn' : '') + (c.status.dead ? ' dead' : '') + '" data-sel="' + esc(c.id) + '">' +
@@ -114,6 +124,16 @@
 
     /* ── right: condensed combat sheet of the selected combatant ── */
     function condensedSheet(c) {
+      // Net-run actor (deck/ICE): no meat combat sheet — it resolves on the deck board.
+      if (c.kind === 'deck' || c.kind === 'ice') {
+        var av = activeC(), it = av && av.id === c.id;
+        return '<div class="cs-sheet"><div class="cs-head">' +
+          '<span class="cs-init">' + (c.init == null ? '—' : c.init) + '</span>' +
+          '<span class="cs-name">' + esc(c.name) + '</span>' +
+          '<span class="cs-kind">' + (c.kind === 'deck' ? 'DECK' : 'ICE') + '</span>' +
+          (it ? '<span class="cs-turn">● ACTIVE TURN</span>' : '') +
+          '</div><div class="cs-hidden">Net-run actor — resolved on the deck board (⑤/⑦).</div></div>';
+      }
       var lvl = viewLevel(c);
       var actv = activeC(), isTurn = actv && actv.id === c.id;
       var editable = canAct(c) || isGM();
@@ -208,6 +228,9 @@
           '<span class="cck-idle-t">' + (can ? "Your turn isn't this combatant." : esc(actv ? actv.name : '—') + ' is acting.') + '</span>' +
           (actv ? '<button class="cck-big" id="cck-goactive">⊙ Go to ' + esc(actv.name) + '</button>' : '') + '</div>';
       }
+      // Net-run actor's turn (deck-action / ICE-action): no meat action tiles —
+      // the runner/GM declares + resolves it on the deck board, then advances.
+      if (sel.kind === 'deck' || sel.kind === 'ice') return '<div class="cck cck-idle"><span class="cck-idle-t">Net-run actor — resolve it on the deck board (⑤/⑦), then advance the round.</span></div>';
       if (!canAct(sel)) return '<div class="cck cck-idle"><span class="cck-idle-t">Watching — the GM resolves this turn.</span></div>';
       if (sel.status.dead) return '<div class="cck cck-idle"><span class="cck-idle-t">' + esc(sel.name) + ' is out of the fight.</span></div>';
 
@@ -238,7 +261,7 @@
             '<div class="cck-fx">Active cyber: ' + [sel.cyberFx.smartgun ? 'Smartgun +2 to-hit' : '', sel.cyberFx.scope ? 'Targeting scope +1' : '', sel.cyberFx.painEditor ? 'Pain editor (no stun)' : ''].filter(Boolean).join(' · ') + '</div>' : '');
       } else if (act.step === 'aim') {
         var w = act.weapon;
-        var targets = combatants().filter(function (t) { return t.id !== sel.id && !t.status.dead; });
+        var targets = combatants().filter(function (t) { return t.id !== sel.id && !t.status.dead && t.kind !== 'deck' && t.kind !== 'ice'; });
         html += '<div class="cck-sec"><div class="cck-lbl">TARGET</div><div class="cck-opts">' + targets.map(function (t) {
           return '<button class="cck-opt' + (act.targetId === t.id ? ' sel' : '') + '" data-target="' + esc(t.id) + '">' + esc(t.name) + ' ' + woundChip(t) + '</button>';
         }).join('') + '</div></div>';
