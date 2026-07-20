@@ -42,6 +42,12 @@
     'SONIC':      { skill: 'Sonar Tech', bars: ['amplifier', 'sonar ping', 'ultrasound', 'sonic stun', 'resonance breaker', 'lethal sonic', 'shockwave'] },
     'RESTRAIN':   { skill: 'Weaponsmith', bars: ['collar', 'net', 'sticky web', 'adhesive foam', 'stasis grip', 'containment field', 'inescapable'] },
     'FABRICATE':  { skill: 'Basic Tech', bars: ['multitool', 'field kit', 'portable printer', 'ammo fab', 'matter printer', 'nano-forge', 'universal fab'] },
+    // ── FAB family: how a thing gets MADE (each fab method its own base-tree) ──
+    'FAB-ADDITIVE':    { skill: 'Basic Tech', bars: ['glue stick', 'filament printer', 'resin vat', 'powder-bed metal', 'multi-material cell', 'prints working machines', 'self-replicating fab-cell'] },
+    'FAB-SUBTRACTIVE': { skill: 'Gyro Tech', bars: ['hand file', 'bench drill', '3-axis router', '5-axis mill', 'EDM and waterjet', 'sub-micron cell', 'angstrom-true optics'] },
+    'FAB-CHEM':        { skill: 'Pharmaceuticals', bars: ['bathtub cook', 'stirred tank', 'work-up train', 'flow reactor', 'designer catalyst', 'any molecule to order', 'autonomous plant'] },
+    'FAB-FORGE':       { skill: 'Basic Tech', bars: ['charcoal forge', 'sand cast', 'die cast', 'press forge', 'vacuum superalloy', 'single-crystal grow', 'metamaterial armour'] },
+    'BIOFAB':          { skill: 'Pharmaceuticals', bars: ['petri dish', 'sterile incubator', 'stirred bioreactor', 'scaffold graft', 'whole-organ vat', 'living machines', 'designer organism'] },
     // ── harvested from the Ultra Chrome catalogue (breadth of CP2020 gear) ──
     'RECORD':     { skill: 'Electronics', bars: ['note', 'photo', 'audio', 'video', 'multi-cam', 'braindance', 'full-sense archive'] },
     'VISION':     { skill: 'Cyber Tech', bars: ['goggles', 'zoom', 'low-light', 'infrared', 'thermographic', 'multi-spectral', 'total vision'] },
@@ -56,6 +62,12 @@
     'TRANSLATE':  { skill: 'Electronics', bars: ['lexicon', 'phrases', 'real-time', 'slang', 'all languages', 'intent', 'telepathic front'] },
     'STYLE':      { skill: 'Wardrobe & Style', bars: ['clean', 'sharp', 'urban flash', 'edgerunner', 'haute couture', 'icon', 'living legend'] },
     'SURVIVE':    { skill: 'Basic Tech', bars: ['lighter', 'survival kit', 'shelter', 'clean water', 'long endurance', 'mobile base', 'ecosystem'] },
+    // ── new categories: keeping a thing shut, and letting a thing change shape ──
+    'SECURITY':   { skill: 'Electronic Security', bars: ['latch', 'keyed lock', 'coded lock', 'biometric lock', 'active countermeasures', 'layered corp vault', 'nothing gets in'] },
+    'MORPH':      { skill: 'Basic Tech', bars: ['folds flat', 'collapsible', 'swappable modules', 'tool-less reconfigure', 'powered transform', 'self-reconfiguring', 'programmable matter'] },
+    'MIND':       { skill: 'Cyber Tech', bars: ['hunch', 'mood read', 'sense record', 'braindance playback', 'emotion capture', 'persona overlay', 'wears a mind'] },
+    'CONTAIN':    { skill: 'Basic Tech', bars: ['pocket', 'crate', 'sealed drum', 'pressure vessel', 'climate hold', 'blast vault', 'holds what walls cannot'] },
+    'EMIT':       { skill: 'Pharmaceuticals', bars: ['puff', 'smoke can', 'screening cloud', 'multispectral obscurant', 'targeted plume', 'area flood', 'a weather of your own'] },
   };
   var DOMAINS = Object.keys(ANCHORS);
   function isKnownDomain(d) { return !!ANCHORS[String(d || '').toUpperCase()]; }
@@ -185,6 +197,8 @@
     mobility: ['gyro stabilizer', 'reinforced servos', 'cargo rack', 'quick-release harness', 'shock dampers', 'grip treads'],
     medchem:  ['dose regulator', 'sterile reservoir', 'auto-injector', 'cold-chain liner', 'overflow valve'],
     core:     ['high-capacity cell', 'fast-charge port', 'solar trickle panel', 'hot-swap module', 'hardened housing'],
+    fab:      ['tool changer', 'sealed enclosure', 'fume extraction', 'feedstock hopper', 'in-process gauge', 'waste conveyor', 'lights-out controller', 'calibration jig'],
+    security: ['tamper seal', 'intrusion log', 'proximity token', 'duress code', 'alarm shriek', 'backup power', 'anti-pick shroud'],
   };
   var DOMAIN_FAMILY = {
     STRIKE: 'weapon', SHOCK: 'weapon', BURN: 'weapon', PROJECT: 'weapon', DEMOLISH: 'weapon', SONIC: 'weapon',
@@ -195,6 +209,8 @@
     MOVE: 'mobility', FLY: 'mobility', HAUL: 'mobility', BOOST: 'mobility', RESTRAIN: 'mobility', SURVIVE: 'mobility',
     HEAL: 'medchem', INJECT: 'medchem', 'FILTER-AIR': 'medchem', REPAIR: 'medchem', FABRICATE: 'medchem',
     POWER: 'core', STORE: 'core', GUIDE: 'core', STYLE: 'core',
+    'FAB-ADDITIVE': 'fab', 'FAB-SUBTRACTIVE': 'fab', 'FAB-CHEM': 'fab', 'FAB-FORGE': 'fab', BIOFAB: 'fab',
+    SECURITY: 'security', MORPH: 'mobility', MIND: 'signal', CONTAIN: 'core', EMIT: 'medchem',
   };
   var GENERIC_ADDONS = ['miniaturization', 'hardened', 'waterproofed', 'modular', 'concealed', 'lightweighted', 'fingerprint-free', 'reinforced', 'voice control', 'self-cleaning'];
   function familyOfDomain(dom) { return DOMAIN_FAMILY[String(dom || '').toUpperCase()] || null; }
@@ -264,6 +280,7 @@
     emitter: ['beam focuser', 'heat shroud', 'pulse tuner'],
     driver: ['capacitor bank', 'cooling shroud', 'arc suppressor'],
     core: ['high-capacity cell', 'fast-charge port', 'hot-swap module', 'solar trickle panel'],
+    cell: ['spare cell', 'fast-charge port', 'high-density pack', 'thermal cutoff'],
     edge: ['mono-hone', 'quick-draw sheath', 'serrated spine'],
     wire: ['spool guard', 'tension reel', 'grip loop'],
     impact: ['shock cushion', 'counterweight head'],
@@ -282,10 +299,72 @@
     program: ['payload slot', 'stealth wrapper', 'auto-update'],
     drive: ['run-flat tires', 'skid plate', 'all-weather tread', 'nitro tank'],
     flight: ['reserve chute', 'altimeter', 'vector nozzle'],
+    // FAB family — the machine that makes the thing
+    nozzle: ['hardened nozzle', 'multi-material head', 'heated bore', 'auto-wipe'],
+    vat: ['resin heater', 'level sensor', 'inert cover', 'quick-drain'],
+    crucible: ['pour controller', 'thermal jacket', 'slag skimmer', 'inert cover'],
+    spindle: ['tool changer', 'through-spindle coolant', 'auto-balancer', 'touch probe'],
+    reactor: ['jacket heater', 'pressure relief', 'inline analytics', 'blast shield'],
+    matrix: ['lattice designer', 'clean chamber', 'atom-scale calibration'],
+    // SHOCK
+    arc: ['insulated grip', 'arc shield', 'charge indicator'],
+    coil: ['capacitor bank', 'field tuner', 'cooling loop'],
+    // batches 3-6: offense, perception, signal, stealth/environment
+    torch: ['spare fuel bottle', 'striker', 'flashback arrestor', 'nozzle set'],
+    lance: ['spare rod', 'insulated grip', 'oxygen feed', 'strike igniter'],
+    charge: ['safe-arm interlock', 'timer fuze', 'remote detonator', 'shaped liner'],
+    horn: ['focusing horn', 'baffle ring', 'mount clamp'],
+    resonator: ['tuning fork set', 'frequency preset', 'vibration mount'],
+    injector: ['spare cartridge', 'dose regulator', 'quick-purge line'],
+    snare: ['spare cartridge', 'quick-release cutter', 'tension gauge'],
+    lens: ['lens cap', 'anti-glare coating', 'filter ring', 'spare optic'],
+    overlay: ['HUD overlay', 'custom reticle', 'colour-blind palette', 'auto-brightness'],
+    reel: ['spare storage reel', 'quick-eject', 'index tab'],
+    beacon: ['spare beacon', 'long-life cell', 'tamper switch', 'burst schedule'],
+    antenna: ['boosted antenna', 'directional horn', 'mast extension', 'weatherproof radome'],
+    relay: ['spare relay node', 'mesh pairing', 'solar trickle', 'weather casing'],
+    codec: ['extra language pack', 'slang dictionary', 'low-bandwidth mode', 'offline cache'],
+    holo: ['projector lens', 'scene library', 'ambient-light compensator', 'silent fan'],
+    phantom: ['decoy library', 'signature randomiser', 'burn-after-use profile'],
+    ice: ['signature updates', 'sandbox layer', 'alert relay'],
+    camo: ['pattern library', 'season swap', 'anti-glint coat', 'quick-change skin'],
+    dye: ['refill cartridge', 'fast-set catalyst', 'UV-stable pigment'],
+    seal: ['spare gasket', 'pressure test port', 'lubricant kit', 'quick-seal patch'],
+    scar: ['patch kit', 'sealant charge', 'abrasion guard'],
+    gill: ['spare membrane', 'silt prefilter', 'flow booster'],
+    lock: ['spare key', 'tamper witness', 'anti-pick shroud', 'duress code'],
+    shell: ['spare panel', 'quick-release catch', 'impact liner', 'colour skin'],
+    swarm: ['spare units', 'recall beacon', 'charging nest', 'firmware sync'],
+    // batches 7-8: flight, movement, body, logistics, containment, repair, emission, shielding
+    rotor: ['blade de-ice', 'pitch trim', 'spare blades', 'strike guard'],
+    thrust: ['heat shroud', 'intake screen', 'fuel reserve', 'vector trim'],
+    lift: ['ballast trim', 'patch kit', 'tie-down set'],
+    limb: ['joint seals', 'spare actuator', 'shin guard', 'footpad set'],
+    tread: ['run-flat core', 'spare track link', 'mud scraper'],
+    grip: ['spare pads', 'grip cleaner', 'fall-arrest line'],
+    fin: ['fin guard', 'anti-foul coat', 'spare blade'],
+    auger: ['spare cutter head', 'spoil chute', 'bit sharpener'],
+    exo: ['reinforced servos', 'load harness', 'quick-release', 'padding kit'],
+    wire: ['shielded loom', 'spare lead', 'surge clamp'],
+    dose: ['spare cartridge', 'dose lockout', 'sterile purge', 'occlusion alarm'],
+    stasis: ['rewarm kit', 'coolant reserve', 'vitals tag'],
+    arm: ['tool turret', 'wrist joint', 'grip pads', 'haptic governor'],
+    mount: ['adapter plate', 'quick release', 'dovetail rail', 'bus router'],
+    crate: ['lidded top', 'strap cage', 'liner bag', 'stack feet'],
+    pod: ['seal gasket', 'stack lock', 'handle set'],
+    tank: ['relief valve', 'level gauge', 'bung seal', 'pump riser'],
+    vessel: ['tamper seal', 'inspection port', 'lifting lugs', 'label plate'],
+    smoke: ['refill canister', 'wind trim', 'timed bloom'],
+    foam: ['reserve tank', 'nozzle set', 'cure booster'],
+    chaff: ['refill magazine', 'burst timer', 'dipole cut'],
+    ablate: ['spare tiles', 'peel ply', 'edge trim'],
+    deflector: ['anchor feet', 'firing slit', 'wheel base'],
+    ward: ['charge coil', 'node sync', 'ward beacon', 'flicker gate'],
   };
   // a minimal "never empty" floor per family, when at least one class was unlocked
   var DOMAIN_BASE = { weapon: ['sling mount'], optics: ['lens cap'], signal: ['spare battery'],
-    armor: ['quick-release'], mobility: ['maintenance port'], medchem: ['sterile reservoir'], core: ['fast-charge port'] };
+    armor: ['quick-release'], mobility: ['maintenance port'], medchem: ['sterile reservoir'], core: ['fast-charge port'],
+    fab: ['dust cover'], security: ['tamper seal'] };
 
   // groups of addons for an effect: one section per unlocked class (from walked-node tags),
   // + a minimal domain base; or the whole domain family if nothing was unlocked (legacy/untagged).

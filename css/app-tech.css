@@ -328,6 +328,33 @@
 .tk2-tnode.is-ok:hover .tk2-tg { fill:#ddd !important; }
 .tk2-tnode.is-ok .tk2-tlabel { fill:#555; }
 .tk2-tnode.is-on .tk2-tlabel { fill:var(--ink); font-weight:bold; }
+/* hard lock: an unmet cross-effect dep closes the node AND everything under it.
+   Ghosted outline on pure white — no fill, so the branch reads as "not yours yet". */
+.tk2-tnode.is-locked { cursor:not-allowed; }
+.tk2-tnode.is-locked .tk2-tg { stroke:#ccc; }
+.tk2-tnode.is-locked .tk2-tlabel { fill:#bbb; }
+.tk2-tnode.is-locked:hover .tk2-tg { fill:#fff !important; }
+/* the window that follows the pointer over a locked node — says what is still missing */
+/* the tree's own frame — anchors the unlock flash without scrolling with the graph */
+.tk2-tree-frame { position:relative; overflow:hidden; }
+/* one-shot flash: the node just picked is required by other nodes. Slides out of the right
+   edge, holds, then slides back in. Both moves stay inside the 80–180ms motion rule. */
+.tk2-unlock { position:absolute; top:8px; right:0; z-index:3; pointer-events:none;
+  background:var(--ink); color:#fff; border:2px solid var(--ink); border-right:0;
+  padding:3px 9px; font-family:var(--mono); font-size:11px; white-space:nowrap; line-height:1.45;
+  animation:tk2-unlockin 160ms ease-out; transition:transform 160ms ease-in; }
+.tk2-unlock b { display:block; }
+.tk2-unlock span { display:block; color:#bbb; font-size:10px; letter-spacing:.04em; }
+.tk2-unlock.is-out { transform:translateX(101%); }
+@keyframes tk2-unlockin { from { transform:translateX(101%); } to { transform:translateX(0); } }
+.tk2-locktip { display:none; position:fixed; z-index:60; pointer-events:none;
+  background:#fff; border:2px solid var(--ink); padding:6px 9px; max-width:260px;
+  font-family:var(--mono); font-size:12px; line-height:1.5; color:var(--ink); }
+.tk2-locktip.is-on { display:block; }
+.tk2-lt-h { display:block; font-weight:bold; }
+.tk2-lt-l { display:block; font-size:10px; letter-spacing:.08em; color:#888; margin-top:3px; }
+.tk2-lt-n { display:block; background:var(--ink); color:#fff; padding:1px 5px; margin-top:2px; }
+.tk2-lt-v { display:block; margin-top:4px; color:#888; }
 /* juice: only JUST-added nodes/edges animate (the render diffs the active set) */
 .tk2-gpop { transform-box:fill-box; transform-origin:center; }
 .tk2-tnode.is-fresh .tk2-gpop { animation:tk2-pop .16s ease-out; }

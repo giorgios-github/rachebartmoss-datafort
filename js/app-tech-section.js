@@ -81,6 +81,9 @@
       return body;
     }
     var g = TR.get(pick.treeDom), path = pick.treePath || [];
+    // hard lock: what the object ALREADY carries decides how deep this tree opens. Nodes whose
+    // cross-effect dep is unmet — and everything under them — are greyed out and unpickable.
+    var locks = TR.crossLocks(g, function (d) { return M.gradeOfDomain(a, d); }, pick.treeDom);
     // juice: diff the active set vs the last render so only JUST-added nodes animate (pop / edge-in / pull)
     var gr = TR.grade(g, path), curOn = TR.activeIds(path), fresh = {};
     if (pick._prevOn) curOn.forEach(function (id) { if (pick._prevOn.indexOf(id) < 0) fresh[id] = 1; });
@@ -91,6 +94,14 @@
     var chips = TR.collect(g, path, 'act').map(function (x) { return '<span class="tk2-tchip act">▸ ' + esc(x) + '</span>'; }).join('') +
       TR.collect(g, path, 'tag').map(function (x) { return '<span class="tk2-tchip">unlocks +' + esc(x) + '</span>'; }).join('') +
       TR.collect(g, path, 'need').map(function (x) { return '<span class="tk2-tchip need">' + esc(x) + '</span>'; }).join('');
+    // one-shot flash, consumed on render: this pick raised the domain far enough to open gates elsewhere
+    var u = pick._unlocked, unl = '';
+    if (u && u.count) {
+      var shown = u.trees.slice(0, 3), rest = u.trees.length - shown.length;
+      unl = '<div class="tk2-unlock" data-unlock><b>⬡ unlocks ' + u.count + ' node' + (u.count > 1 ? 's' : '') + '</b>' +
+        '<span>in ' + shown.map(esc).join(' · ') + (rest > 0 ? ' +' + rest : '') + '</span></div>';
+    }
+    pick._unlocked = 0;
     var dials = TR.activeIds(path).map(function (id) { return g.nodes[id]; }).filter(function (n) { return n && n.scale; });
     var dialHtml = dials.map(function (n) { var v = TR.scaleOf(path, n.id) || 1; return '<span class="tk2-dial">' + esc(n.label) + ' ° <button class="tk2-dstep" data-dial="' + n.id + '" data-dd="-1">−</button><b>' + v + '</b><button class="tk2-dstep" data-dial="' + n.id + '" data-dd="1">+</button> <span class="tk2-mut">' + esc(n.scale.per || '') + ' — requires ×' + v + '</span></span>'; }).join('');
     return '<div class="tk2-tree-head"><button class="tk2-chip" data-treeback>← effects</button>' +
@@ -99,10 +110,37 @@
         '<span class="tk2-bar-sp"></span>' +
         '<button class="app-btn tk2-treeadd' + (bumped ? ' is-bumped' : '') + '"' + (path.length ? '' : ' disabled') + '>' + (pick.editFi != null ? 'SET' : 'ADD') + ' · g' + gr + '</button></div>' +
       '<div class="tk2-tree-desc" data-treedesc><span class="tk2-mut">hover a node to read what it does</span></div>' +
-      treeSvg(g, path, fresh) +
+      '<div class="tk2-tree-frame">' + treeSvg(g, path, fresh, locks) + unl + '</div>' +
       '<div class="tk2-tree-crumb">' + crumb + '</div>' +
       (dialHtml ? '<div class="tk2-tree-dials">' + dialHtml + '</div>' : '') +
       (chips ? '<div class="tk2-tree-chips">' + chips + '</div>' : '');
+  }
+  // Every cross-effect gate in the whole corpus, indexed by the domain it demands:
+  // domain → [{tree, grade}]. Built once — walking 43 trees on every click would be silly.
+  var _gates = null;
+  function gateIndex() {
+    if (_gates) return _gates;
+    _gates = {};
+    Object.keys(TR.TREES).forEach(function (k) {
+      var gg = TR.get(k);
+      Object.keys(gg.nodes).forEach(function (id) {
+        var m = /^node:([a-z0-9-]+)(?:@([0-6]))?$/i.exec(String(gg.nodes[id].need || '').trim());
+        if (!m) return;
+        var d = m[1].toUpperCase();
+        if (d === k) return;                       // a tree never gates on its own domain
+        (_gates[d] = _gates[d] || []).push({ tree: k, grade: m[2] != null ? +m[2] : 1 });
+      });
+    });
+    return _gates;
+  }
+  // raising DOMAIN from g0 to g1 opens which gates, in which OTHER trees?
+  function unlocksAcross(dom, g0, g1) {
+    if (g1 <= g0) return null;
+    var hit = (gateIndex()[dom] || []).filter(function (x) { return x.grade > g0 && x.grade <= g1; });
+    if (!hit.length) return null;
+    var trees = [], seen = {};
+    hit.forEach(function (x) { if (!seen[x.tree]) { seen[x.tree] = 1; trees.push(x.tree); } });
+    return { count: hit.length, trees: trees };
   }
   function glyphSvg(kind, on) {
     var f = on ? '#111' : '#fff';
@@ -111,8 +149,8 @@
     if (kind === 'conv') return '<polygon class="tk2-tg" points="0,-7 6,-3.5 6,3.5 0,7 -6,3.5 -6,-3.5" fill="' + f + '"/>';
     return '<circle class="tk2-tg" r="6" fill="' + f + '"/>';
   }
-  function treeSvg(g, path, fresh) {
-    fresh = fresh || {};
+  function treeSvg(g, path, fresh, locks) {
+    fresh = fresh || {}; locks = locks || {};
     var L = TR.layout(g), on = {}; TR.activeIds(path).forEach(function (id) { on[id] = 1; });
     on[g.root] = 1;   // the base is always "on" so the trunk to the chosen branch lights up
     var svg = '';
@@ -124,16 +162,20 @@
     svg += '<circle class="tk2-tbase" cx="' + R.x.toFixed(1) + '" cy="' + R.y.toFixed(1) + '" r="5"/>';   // the base, under the title — the trunk starts here
     Object.keys(g.nodes).forEach(function (id) {
       if (id === g.root) return;
-      var n = g.nodes[id], p = L.pos[id], k = TR.kindOf(n), act = !!on[id];
-      var st = act ? 'on' : 'ok';   // convergence-pull: every node is reachable (a ⬡ pulls its reqs), so nothing is "blocked"
-      var tip = (n.cap || '') + (n.need ? (n.cap ? ' · ' : '') + 'needs ' + n.need : '') + (n.needsAll ? (n.cap || n.need ? ' · ' : '') + 'needs all: ' + n.needsAll.map(function (r) { return g.nodes[r] ? g.nodes[r].label : r; }).join(', ') : '');
+      var n = g.nodes[id], p = L.pos[id], k = TR.kindOf(n), act = !!on[id], lk = locks[id];
+      var st = act ? 'on' : (lk ? 'locked' : 'ok');   // a ⬡ pulls its own reqs; only an unmet cross-effect dep closes a branch
+      var lkTxt = lk ? lk.needs.map(function (r) { return r.domain + ' ≥ g' + r.grade; }).join(' + ') : '';
+      var tip = (lk ? '⊘ LOCKED — needs ' + lkTxt + (n.cap ? ' · ' : '') : '') +
+        (n.cap || '') + (n.need ? (n.cap ? ' · ' : '') + 'needs ' + n.need : '') + (n.needsAll ? (n.cap || n.need ? ' · ' : '') + 'needs all: ' + n.needsAll.map(function (r) { return g.nodes[r] ? g.nodes[r].label : r; }).join(', ') : '');
+      var lkAttr = lk ? ' data-lockneed="' + esc(lkTxt) + '" data-lockvia="' + esc(lk.own ? '' : lk.via) + '"' : '';
       var dv = act && n.scale ? '<text class="tk2-tdialv" y="21" text-anchor="middle">×' + (TR.scaleOf(path, id) || 1) + '</text>' : '';
-      svg += '<g class="tk2-tnode tk2-t-' + k + ' is-' + st + (fresh[id] ? ' is-fresh' : '') + '" data-treenode="' + id + '" transform="translate(' + p.x.toFixed(1) + ',' + p.y.toFixed(1) + ')">' +
-        (tip ? '<title>' + esc(tip) + '</title>' : '') +
+      svg += '<g class="tk2-tnode tk2-t-' + k + ' is-' + st + (fresh[id] ? ' is-fresh' : '') + '" data-treenode="' + id + '"' + lkAttr + ' transform="translate(' + p.x.toFixed(1) + ',' + p.y.toFixed(1) + ')">' +
+        (tip && !lk ? '<title>' + esc(tip) + '</title>' : '') +   // locked nodes get the instant window instead
         '<text class="tk2-tlabel" y="-13" text-anchor="middle">' + esc(n.label) + (n.scale ? '°' : '') + (n.act ? ' ▸' : '') + '</text>' +
         '<g class="tk2-gpop">' + glyphSvg(k, act) + '</g>' + dv + '</g>';
     });
-    return '<div class="tk2-tree-wrap"><svg class="tk2-tree" width="' + L.W.toFixed(0) + '" height="' + L.H.toFixed(0) + '" viewBox="0 0 ' + L.W.toFixed(0) + ' ' + L.H.toFixed(0) + '">' + svg + '</svg></div>';
+    return '<div class="tk2-tree-wrap"><svg class="tk2-tree" width="' + L.W.toFixed(0) + '" height="' + L.H.toFixed(0) + '" viewBox="0 0 ' + L.W.toFixed(0) + ' ' + L.H.toFixed(0) + '">' + svg + '</svg></div>' +
+      '<div class="tk2-locktip" data-locktip></div>';   // hover window: what a greyed node still needs
   }
   // keep the tree's scroll across re-renders; center on the title on first open
   function saveTreeScroll(pane, s) { if (!s.pick) return; var tw = pane.querySelector('.tk2-tree-wrap'); if (tw) s.pick.treeScroll = { x: tw.scrollLeft, y: tw.scrollTop }; }
@@ -463,10 +505,49 @@
     // ── effect-tree walk (inside the effect picker) ──
     pane.querySelectorAll('[data-treedom]').forEach(function (b) { b.onclick = function () { s.pick.treeDom = b.getAttribute('data-treedom'); s.pick.treePath = []; s.pick.treeScroll = null; renderBench(pane); }; });
     var tback = pane.querySelector('[data-treeback]'); if (tback) tback.onclick = function () { s.pick.treeDom = null; s.pick.treePath = []; s.pick.treeScroll = null; renderBench(pane); };
-    pane.querySelectorAll('[data-treenode]').forEach(function (nd) { nd.onclick = function () { saveTreeScroll(pane, s); var g = TR.get(s.pick.treeDom); s.pick.treePath = TR.toggle(g, s.pick.treePath || [], nd.getAttribute('data-treenode')); renderBench(pane); }; });
+    pane.querySelectorAll('[data-treenode]').forEach(function (nd) { nd.onclick = function () {
+      if (nd.classList.contains('is-locked')) return;
+      saveTreeScroll(pane, s); var g = TR.get(s.pick.treeDom), id = nd.getAttribute('data-treenode');
+      var dom = String(s.pick.treeDom).toUpperCase();
+      // what this object already carries in the domain, NOT counting the feature being edited
+      var base = a.feats.reduce(function (m, f, i) {
+        return (i !== s.pick.editFi && String(f.domain).toUpperCase() === dom) ? Math.max(m, f.grade || 0) : m;
+      }, 0);
+      var g0 = Math.max(base, TR.grade(g, s.pick.treePath || []) || 0);
+      s.pick.treePath = TR.toggle(g, s.pick.treePath || [], id);
+      var g1 = Math.max(base, TR.grade(g, s.pick.treePath) || 0);
+      s.pick._unlocked = unlocksAcross(dom, g0, g1);   // gates this pick opens in the OTHER trees
+      renderBench(pane);
+    }; });
     pane.querySelectorAll('[data-dial]').forEach(function (b) { b.onclick = function () { saveTreeScroll(pane, s); var g = TR.get(s.pick.treeDom), id = b.getAttribute('data-dial'), dd = +b.getAttribute('data-dd'), n = g.nodes[id], cur = TR.scaleOf(s.pick.treePath, id) || 1, mx = (n.scale && n.scale.max) || 3; s.pick.treePath = TR.setScale(s.pick.treePath, id, Math.max(1, Math.min(mx, cur + dd))); renderBench(pane); }; });
+    // the unlock flash holds ~2.2s, then slides back out (the slide itself stays inside the 80–180ms motion rule)
+    var unl = pane.querySelector('[data-unlock]');
+    if (unl) setTimeout(function () { unl.classList.add('is-out'); }, 2200);
+    // ── locked node → a window at the pointer saying exactly what is still missing ──
+    var ltip = pane.querySelector('[data-locktip]');
+    if (ltip) {
+      var placeTip = function (e) {
+        var pad = 14, w = ltip.offsetWidth, h = ltip.offsetHeight;
+        var x = e.clientX + pad, y = e.clientY + pad;
+        if (x + w > window.innerWidth - 8) x = e.clientX - w - pad;    // flip before it runs off screen
+        if (y + h > window.innerHeight - 8) y = e.clientY - h - pad;
+        ltip.style.left = Math.max(8, x) + 'px'; ltip.style.top = Math.max(8, y) + 'px';
+      };
+      pane.querySelectorAll('[data-lockneed]').forEach(function (nd) {
+        nd.addEventListener('mouseenter', function (e) {
+          var g = TR.get(s.pick.treeDom), n = g.nodes[nd.getAttribute('data-treenode')], via = nd.getAttribute('data-lockvia');
+          ltip.innerHTML = '<span class="tk2-lt-h">⊘ ' + esc(n ? n.label : '') + '</span>' +
+            '<span class="tk2-lt-l">REQUIRES</span>' +
+            nd.getAttribute('data-lockneed').split(' + ').map(function (r) { return '<span class="tk2-lt-n">' + esc(r) + '</span>'; }).join('') +
+            (via ? '<span class="tk2-lt-v">blocked upstream at ' + esc(via) + '</span>' : '');
+          ltip.classList.add('is-on'); placeTip(e);
+        });
+        nd.addEventListener('mousemove', placeTip);
+        nd.addEventListener('mouseleave', function () { ltip.classList.remove('is-on'); });
+      });
+    }
     var tdesc = pane.querySelector('[data-treedesc]');
-    if (tdesc) pane.querySelectorAll('[data-treenode]').forEach(function (nd) { nd.onmouseenter = function () { var g = TR.get(s.pick.treeDom), n = g.nodes[nd.getAttribute('data-treenode')]; if (!n) return; tdesc.innerHTML = '<b>' + esc(n.label) + '</b>' + (n.cap ? ' — ' + esc(n.cap) : '') + (n.act ? ' <span class="tk2-tchip act">▸ ' + esc(n.act) + '</span>' : '') + (n.scale ? ' <span class="tk2-mut">◇ ° ' + esc(n.scale.per || 'dial') + '</span>' : '') + (n.add ? ' <span class="tk2-mut">□ stackable</span>' : '') + (n.tag ? ' <span class="tk2-mut">unlocks +' + esc(n.tag) + ' addons</span>' : '') + (n.need ? ' <span class="tk2-mut">(needs ' + esc(n.need) + ')</span>' : '') + (n.needsAll ? ' <span class="tk2-mut">⬡ needs all: ' + esc(n.needsAll.map(function (r) { return g.nodes[r] ? g.nodes[r].label : r; }).join(', ')) + '</span>' : ''); }; });
+    if (tdesc) pane.querySelectorAll('[data-treenode]').forEach(function (nd) { nd.onmouseenter = function () { var g = TR.get(s.pick.treeDom), n = g.nodes[nd.getAttribute('data-treenode')]; if (!n) return; tdesc.innerHTML = (nd.classList.contains('is-locked') ? '<span class="tk2-tchip need">⊘ locked</span> ' : '') + '<b>' + esc(n.label) + '</b>' + (n.cap ? ' — ' + esc(n.cap) : '') + (n.act ? ' <span class="tk2-tchip act">▸ ' + esc(n.act) + '</span>' : '') + (n.scale ? ' <span class="tk2-mut">◇ ° ' + esc(n.scale.per || 'dial') + '</span>' : '') + (n.add ? ' <span class="tk2-mut">□ stackable</span>' : '') + (n.tag ? ' <span class="tk2-mut">unlocks +' + esc(n.tag) + ' addons</span>' : '') + (n.need ? ' <span class="tk2-mut">(needs ' + esc(n.need) + ')</span>' : '') + (n.needsAll ? ' <span class="tk2-mut">⬡ needs all: ' + esc(n.needsAll.map(function (r) { return g.nodes[r] ? g.nodes[r].label : r; }).join(', ')) + '</span>' : ''); }; });
     var tadd = pane.querySelector('.tk2-treeadd'); if (tadd && !tadd.disabled) tadd.onclick = function () {
       var g = TR.get(s.pick.treeDom), path = s.pick.treePath || []; if (!path.length) return;
       var feat = { domain: s.pick.treeDom, grade: TR.grade(g, path), path: path };
