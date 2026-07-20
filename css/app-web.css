@@ -917,6 +917,118 @@
 .net-beats { display: flex; flex-direction: column; gap: 3px; }
 .net-beat { font-size: 11px; color: var(--ink, #111); border-bottom: 1px solid var(--line-dk, #ddd); padding: 3px 0; }
 .net-flash { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 1002; background: #fff; color: var(--ink, #111); border: 2px solid var(--ink, #111); padding: 6px 14px; font-family: var(--mono, monospace); font-size: 12px; }
+.net-in { font: inherit; font-size: 12px; border: 2px solid var(--ink, #111); background: #fff; color: var(--ink, #111); padding: 3px 6px; width: 100%; box-sizing: border-box; }
+/* GM run banner — persistent, clickable; body-fixed so it shows across sections */
+.net-gm-runbar { position: fixed; top: 10px; right: 14px; z-index: 1001; font: inherit; font-family: var(--mono, monospace); font-size: 12px; letter-spacing: .02em; background: #fff; color: var(--ink, #111); border: 2px solid var(--ink, #111); padding: 6px 12px; cursor: pointer; transition: background 120ms ease, color 120ms ease; }
+.net-gm-runbar:hover { background: var(--ink, #111); color: #fff; }
+
+/* ── THE RUN, rendered in-section (web-stage '/run'), not a fullscreen overlay ── */
+.web-stage-run { height: 100%; min-height: 0; overflow: hidden; padding: 0; }
+.web-stage-run .net-run { height: 100%; }
+.net-run-body-l { font-size: 12px; color: var(--muted, #666); }
+.net-run-end { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 24px; }
+.net-run-end-t { font-family: var(--head, sans-serif); font-weight: 600; font-size: 22px; letter-spacing: .12em; }
+.net-run-end-s { font-size: 13px; color: var(--muted, #666); max-width: 460px; }
+.net-run-end .net-beats { max-width: 440px; text-align: left; }
+/* remembered / line-of-sight cell states (raycast) */
+.net-rg-mem { color: var(--muted, #666); background-image: repeating-linear-gradient(45deg, var(--ink, #111) 0, var(--ink, #111) .5px, transparent .5px, transparent 9px); }
+.net-rg-los { outline: 2px dotted var(--ink, #111); outline-offset: -2px; }
+.net-rg-awake { outline: 2px solid var(--ink, #111); outline-offset: -2px; }
+/* player POV: gauges flank the grid */
+.net-run-pl .net-run-mid { flex-direction: row; align-items: center; gap: 14px; }
+.net-run-gridwrap { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.net-g-side { width: 100px; flex: none; }
+.net-body-tally { margin-top: 10px; border: 2px solid var(--ink, #111); padding: 5px 7px; font-size: 12px; font-weight: 700; }
+.net-actbar { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.net-mini.on { background: var(--ink, #111); color: #fff; }
+.net-resolve { border: 2px solid var(--ink, #111); padding: 8px; margin-bottom: 8px; }
+.net-resolve-t { font-size: 12px; margin-bottom: 6px; }
+.net-resolve-t i { color: var(--muted, #666); }
+.net-resolve .net-in { margin-bottom: 6px; }
+.net-resolve-go { width: 100%; }
+/* SYSOP: play-the-fort rail + nested piece menus + trace strip */
+.net-sysop-play .net-run-h:first-child { margin-top: 0; }
+.net-ai { display: flex; align-items: center; gap: 8px; border: 2px solid var(--ink, #111); padding: 5px 7px; margin-bottom: 6px; }
+.net-ai-l { font-size: 11px; font-weight: 700; }
+.net-ai-none { color: var(--muted, #666); font-size: 11px; }
+.net-sel { font: inherit; font-size: 11px; border: 2px solid var(--ink, #111); background: #fff; color: var(--ink, #111); padding: 1px 4px; }
+.net-auto { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-bottom: 8px; }
+.net-ice-list { display: flex; flex-direction: column; margin-bottom: 8px; }
+.net-icep { border: 2px solid var(--ink, #111); margin-bottom: -2px; }
+.net-icep.on { position: relative; z-index: 1; }
+.net-icep-h { display: flex; flex-direction: column; text-align: left; width: 100%; font: inherit; background: #fff; border: 0; color: var(--ink, #111); padding: 5px 7px; cursor: pointer; transition: background 120ms ease, color 120ms ease; }
+.net-icep-h:hover, .net-icep.on .net-icep-h { background: var(--ink, #111); color: #fff; }
+.net-icep-n { font-size: 12px; font-weight: 600; }
+.net-icep-m { font-size: 10px; opacity: .8; }
+.net-icep-menu { border-top: 2px solid var(--ink, #111); padding: 6px 7px; }
+.net-icep-sug { font-size: 10px; color: var(--muted, #666); margin-bottom: 5px; }
+.net-icep-acts { display: flex; flex-wrap: wrap; gap: 4px; }
+.net-run-gm .net-run-body { grid-template-columns: 1fr 322px; }
+.net-run-gm .net-run-mid { align-items: flex-start; }
+.net-run-strip { flex: none; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 8px 14px; border-top: 2px solid var(--ink, #111); font-size: 12px; }
+.net-strip-cd { display: inline-flex; align-items: center; gap: 6px; }
+.net-in-n { width: 34px; text-align: center; }
+
+/* ── ⑤ RUN — POV joueur (look §5) : top inversé · grille héros · jauges verticales ── */
+.net-run-top.net-inv { background: var(--ink, #111); border-bottom: 0; }
+.net-run-top.net-inv .net-run-t, .net-run-top.net-inv .net-run-rd, .net-run-top.net-inv .net-run-body-l { color: #fff; }
+.net-run-top.net-inv .net-run-t { font-size: 16px; letter-spacing: .06em; }
+.net-run-top.net-inv .net-run-body-l { font-size: 13px; }
+.net-run-pl .net-run-stage { flex: 1; min-height: 0; display: grid; grid-template-columns: 216px 1fr 300px; grid-template-rows: 1fr auto; grid-template-areas: "soft pov log" "turn turn log"; }
+.net-a-soft { grid-area: soft; border-right: 2px solid var(--ink, #111); padding: 10px; overflow: auto; }
+.net-pov { grid-area: pov; min-width: 0; min-height: 0; display: flex; align-items: stretch; justify-content: center; gap: 14px; padding: 14px; overflow: auto; }
+.net-a-log { grid-area: log; border-left: 2px solid var(--ink, #111); padding: 12px; overflow: auto; display: flex; flex-direction: column; }
+.net-run-turn { grid-area: turn; border-top: 2px solid var(--ink, #111); display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px 16px; }
+/* SOFTWARE rail */
+.net-a-soft .net-prog { flex-direction: row; align-items: baseline; gap: 8px; }
+.net-prog-g { font-size: 13px; width: 14px; text-align: center; flex: none; }
+.net-prog-n { flex: 1; font-size: 13px; font-weight: 600; }
+.net-prog-s { font-size: 11px; opacity: .8; }
+.net-mu { font-size: 12px; font-weight: 700; padding: 6px 2px 10px; border-bottom: 2px solid var(--ink, #111); margin-bottom: 8px; }
+.net-body-h { margin-top: 0; }
+.net-body-tally { font-size: 15px; font-weight: 700; }
+.net-body-tally b { font-size: 17px; }
+.net-body-note { font-size: 11px; color: var(--muted, #666); margin-top: 3px; }
+/* vertical gauges flanking the grid */
+.net-vg { display: flex; flex-direction: column; align-items: center; flex: none; width: 58px; }
+.net-vg-l { font-size: 11px; letter-spacing: .08em; font-weight: 700; text-transform: uppercase; margin-bottom: 6px; align-self: flex-start; }
+.net-vg-bar { flex: 1; width: 18px; border: 2px solid var(--ink, #111); background: #fff; position: relative; min-height: 120px; }
+.net-vg-bar span { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--ink, #111); }
+.net-vg-p { position: absolute; top: 4px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 700; background: #fff; padding: 0 2px; }
+.net-vg-foot { font-size: 10px; color: var(--muted, #666); margin-top: 6px; text-align: center; line-height: 1.25; }
+/* the grid = hero */
+.net-run-pl .net-run-gridwrap { align-self: center; }
+.net-pov-cap { font-size: 11px; color: var(--muted, #666); margin-bottom: 8px; }
+.net-pov-count { font-size: 11px; color: var(--muted, #666); margin-top: 6px; }
+.net-run-pl .net-rg-c { width: 34px; height: 34px; font-size: 14px; }
+.net-run-pl .net-rg-run { font-size: 17px; }
+/* §5: the run is strictly ink-on-white — no accent/néon. ICE = filled black + white skull. */
+.net-run .net-rg-run { color: var(--ink, #111); }
+.net-run .net-rg-pos { outline-color: var(--ink, #111); }
+.net-run .net-rg-ice { background: var(--ink, #111); color: #fff; }
+.net-run .net-rg-core { background: var(--ink, #111); color: #fff; }   /* §5: core / Black Ops = filled black */
+.net-run .net-rg-awake { outline-color: var(--ink, #111); }
+/* the datafort edge-fade on the run grid — pitch = cell size + 2px gap, so the faded
+   extension lines align with the real cells. reach = 3 pitches on each side. */
+.net-run-pl .net-run-field { --gf-cx: 36px; --gf-cy: 36px; --gf-px: 108px; --gf-py: 108px; }
+.net-run-gm .net-run-field { --gf-cx: 32px; --gf-cy: 32px; --gf-px: 96px; --gf-py: 96px; }
+/* LOG rail */
+.net-a-log .net-beats { flex: 1; }
+.net-beat-top { font-weight: 700; border-bottom: 0; padding-bottom: 8px; margin-bottom: 4px; }
+.net-log-foot { font-size: 10px; color: var(--muted, #666); border-top: 2px solid var(--ink, #111); padding-top: 6px; margin-top: 8px; }
+/* YOUR TURN bar */
+.net-turn-l { font-family: var(--head, sans-serif); font-weight: 700; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; }
+.net-turn-act { background: var(--ink, #111); color: #fff; font-size: 13px; padding: 7px 14px; min-width: 220px; }
+.net-turn-act-empty { background: #fff; color: var(--muted, #666); border: 2px solid var(--ink, #111); }
+.net-turn-roll-l { font-size: 12px; color: var(--muted, #666); }
+.net-turn-in { font: inherit; font-size: 16px; font-weight: 700; text-align: center; width: 64px; border: 2px solid var(--ink, #111); background: #fff; color: var(--ink, #111); padding: 4px 6px; }
+.net-turn-go { font: inherit; font-size: 13px; font-weight: 700; background: var(--ink, #111); color: #fff; border: 2px solid var(--ink, #111); padding: 7px 14px; cursor: pointer; transition: background 120ms ease, color 120ms ease; }
+.net-turn-go:hover { background: #fff; color: var(--ink, #111); }
+.net-turn-go:disabled { opacity: .4; cursor: default; }
+.net-turn-alt { flex-basis: 100%; font-size: 11px; color: var(--muted, #666); margin-top: 2px; }
+.net-alt { font: inherit; font-size: 11px; background: none; border: 0; color: var(--ink, #111); cursor: pointer; padding: 0; text-decoration: underline; }
+.net-alt:hover { color: var(--ink, #111); text-decoration: none; }
+.net-alt.on { font-weight: 700; text-decoration: none; }
 
 /* City tile = drill-in to its subgrid */
 .net-dcell-city { cursor: pointer; }

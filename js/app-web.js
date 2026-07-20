@@ -68,7 +68,7 @@
   function presetKeys(preset) { return preset.keys === '*' ? allBlockKeys() : preset.keys.slice(); }
   function connectable(site, reach) { return (reach || 0) >= reachNeeded(site); }
   function reachOfComputer(c) { if (!c) return 0; var r = (typeof c.reach === 'number' ? c.reach : 0); if (c.perk === 'signal' && c.connection === 'cellular') r += 1; return Math.max(0, Math.min(4, r)); }
-  function reachOfDeck(json) { var nr = json && json.netrunner; return (nr && nr.deckId) ? 2 : 0; }
+  function reachOfDeck(json) { return NetModel.deckStats(json && json.netrunner).reach; }   // deck reach ([BWB], via NetModel)
   function effectiveReach(json) { if (!json) return 0; return Math.max(reachOfComputer(json.net && json.net.computer), reachOfDeck(json)); }
   // Device / render gating — a player needs a machine, and its POWER caps what renders.
   function deviceOf(json) { return json && json.net && json.net.computer; }
@@ -1765,7 +1765,7 @@
   function navTo(url) { if (!url) return; if (url.indexOf('grid:') !== 0 && url.charAt(0) !== '/') url = 'grid://' + url; var a = activeTab(); if (a.url && a.url !== url) { a.back = a.back || []; a.back.push({ url: a.url, title: a.title }); if (a.back.length > 60) a.back.shift(); a.fwd = []; } a.url = url; if (url === '/home') a.title = 'Home'; else if (url === '/home/map') a.title = 'Map'; paintChrome(); paintStage(); }
   function goBack() { var a = activeTab(); if (!a.back || !a.back.length) return; a.fwd = a.fwd || []; a.fwd.push({ url: a.url, title: a.title }); var p = a.back.pop(); a.url = p.url; a.title = p.title || p.url; paintChrome(); paintStage(); }
   function goForward() { var a = activeTab(); if (!a.fwd || !a.fwd.length) return; a.back = a.back || []; a.back.push({ url: a.url, title: a.title }); var n = a.fwd.pop(); a.url = n.url; a.title = n.title || n.url; paintChrome(); paintStage(); }
-  function paintStage() { var stage = document.getElementById('web-stage'); if (!stage) return; var a = activeTab(); if (a.url === '/home') { stage.className = 'web-stage'; stage.removeAttribute('style'); renderBrowserHome(stage); } else if (a.url === '/home/map') { stage.className = 'web-stage'; stage.removeAttribute('style'); renderAtlas(stage); } else openAddress(a.url, stage); stage.scrollTop = 0; }
+  function paintStage() { var stage = document.getElementById('web-stage'); if (!stage) return; clearRunLive(); var a = activeTab(); if (a.url === '/home') { stage.className = 'web-stage'; stage.removeAttribute('style'); renderBrowserHome(stage); } else if (a.url === '/home/map') { stage.className = 'web-stage'; stage.removeAttribute('style'); renderAtlas(stage); } else if (a.url === '/run') { stage.className = 'web-stage web-stage-run'; stage.removeAttribute('style'); renderRunSection(stage); } else { openAddress(a.url, stage); stage.scrollTop = 0; } if (!isPlayer()) refreshGmRunBanner(); }
 
   /* /home — pinned · bookmarks (groups) · history (player→json.net, GM→meta.ui.web) */
   function webGet() { if (isPlayer()) { var j = playerJson(); return (j && j.net) || {}; } return App.uiGet('web', {}) || {}; }
@@ -1890,6 +1890,7 @@
     doc.record = doc.record || { uploadDate: Date.now(), broadcast: doc.broadcast, hostId: doc.hostId || null, serverAddress: '', infraId: null };
     doc.grid = doc.grid || { x: CENTER.x, y: CENTER.y }; ensurePages(doc);
     var _tab = isPlayer() ? 'blocks' : 'info', _page = homePage(doc);
+    var _drag = null, _palCat = 0, _palQ = '';   // MUST be initialized before the first setTab() → paintBlocksTab (var-hoist bug: else _palQ is undefined at first paint)
     body.innerHTML =
       '<div class="web-comp"><div class="web-comp-left">' +
         '<div class="web-comp-row"><input class="dtf-name" id="web-name" value="' + esc(doc.name || '') + '" placeholder="Site name"><button class="dt-btn" id="web-open">open ↗</button></div>' +
@@ -1899,9 +1900,9 @@
     body.querySelector('#web-name').oninput = function (e) { doc.name = e.target.value; poke(); };
     body.querySelector('#web-open').onclick = function () { Shell.openTool('web-browse'); setTimeout(function () { navTo(pageUrl(doc, _page)); }, 60); };
     body.querySelectorAll('.web-et').forEach(function (b) { b.onclick = function () { setTab(b.getAttribute('data-et')); }; });
-    setTab(_composerTab ? _composerTab : (isPlayer() ? 'blocks' : 'info')); _composerTab = null; preview();
+    setTab(_composerFortId === doc.id ? 'fort' : (isPlayer() ? 'blocks' : 'info')); _composerFortId = null;   // setTab() now calls preview()
 
-    function setTab(t2) { _tab = t2; body.querySelectorAll('.web-et').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-et') === t2); }); var comp = body.querySelector('.web-comp'); if (comp) comp.classList.toggle('web-comp-fort', t2 === 'fort'); var c = body.querySelector('#web-edit-body'); if (!c) return; if (_tab === 'info') (isPlayer() ? paintPlayerMeta : paintMeta)(c); else if (_tab === 'blocks') paintBlocksTab(c); else if (_tab === 'access') paintAccess(c); else if (_tab === 'ads') paintAds(c); else if (_tab === 'fort') renderFortBuilder(c, doc, ref, poke); else paintStyle(c); }
+    function setTab(t2) { _tab = t2; body.querySelectorAll('.web-et').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-et') === t2); }); var comp = body.querySelector('.web-comp'); if (comp) comp.classList.toggle('web-comp-fort', t2 === 'fort'); var c = body.querySelector('#web-edit-body'); if (!c) return; if (_tab === 'info') (isPlayer() ? paintPlayerMeta : paintMeta)(c); else if (_tab === 'blocks') paintBlocksTab(c); else if (_tab === 'access') paintAccess(c); else if (_tab === 'ads') paintAds(c); else if (_tab === 'fort') renderFortBuilder(c, doc, ref, poke); else paintStyle(c); preview(); }
     function paintAds(c) {
       c.innerHTML = '<p class="dt-hint">Ads on your site come from <b>Ad slot</b> blocks. More slots = more revenue per visit, but they drag your traffic down — find the sweet spot. Sign a rate with an ad network.</p><div id="web-ads-body">…</div>';
       Store.index('site').then(function (all) {
@@ -2130,7 +2131,7 @@
       var bar = c.querySelector('#web-pagebar');
       bar.innerHTML = doc.pages.map(function (p, i) { return '<button class="web-page-tab' + (p === _page ? ' on' : '') + '" data-pg="' + i + '">' + esc(p.name || 'page') + (p.home ? ' ⌂' : '') + '</button>'; }).join('') + '<button class="web-page-add" id="web-pgadd">+ page</button>';
       bar.querySelectorAll('[data-pg]').forEach(function (b) { b.onclick = function () { _page = doc.pages[+b.getAttribute('data-pg')]; paintBlocksTab(c); preview(); }; });
-      var add = bar.querySelector('#web-pgadd'); if (add) add.onclick = function () { App.prompt('New page', 'Page name', 'Page', function (n) { n = (n || '').trim() || 'Page'; var pg = { id: uid('pg'), name: n, slug: slugify(n), home: false, blocks: [] }; doc.pages.push(pg); _page = pg; poke(); paintBlocksTab(c); }); };
+      var add = bar.querySelector('#web-pgadd'); if (add) add.onclick = function () { App.prompt('New page', 'Page name', 'Page', function (n) { n = (n || '').trim() || 'Page'; var pg = { id: uid('pg'), name: n, slug: slugify(n), home: false, blocks: [] }; doc.pages.push(pg); _page = pg; poke(); paintBlocksTab(c); preview(); }); };
       var ctl = c.querySelector('#web-pagectl');
       ctl.innerHTML = '<button data-prename>rename</button><button data-phome>set home</button><button data-playout>' + (_page.layout === 'app' ? 'layout: app ▣' : 'layout: flow ▤') + '</button><button data-pleft>◄</button><button data-pright>►</button>' + (doc.pages.length > 1 ? '<button data-pdel class="web-del">delete</button>' : '');
       ctl.querySelector('[data-prename]').onclick = function () { App.prompt('Rename page', 'Page name', _page.name || '', function (n) { n = (n || '').trim(); if (!n) return; _page.name = n; if (!_page.home) _page.slug = slugify(n); poke(); paintBlocksTab(c); }); };
@@ -2141,21 +2142,21 @@
       ctl.querySelector('[data-pright]').onclick = function () { var i = doc.pages.indexOf(_page); if (i < doc.pages.length - 1) { doc.pages.splice(i, 1); doc.pages.splice(i + 1, 0, _page); poke(); paintBlocksTab(c); } };
       var del = ctl.querySelector('[data-pdel]'); if (del) del.onclick = function () { if (doc.pages.length <= 1) return; var i = doc.pages.indexOf(_page); doc.pages.splice(i, 1); if (_page.home && doc.pages[0]) { doc.pages[0].home = true; doc.pages[0].slug = ''; } _page = homePage(doc); poke(); paintBlocksTab(c); };
     }
-    var _drag = null, _palCat = 0, _palQ = '';
+    // (_drag / _palCat / _palQ are declared at the top of renderComposer — before the first setTab.)
     // Compact palette: a search box + one category at a time (56 blocks would be a wall).
     function paintPalette(c) {
       var p = c.querySelector('#web-palette');
       p.innerHTML = '<input class="web-pal-q" id="web-pal-q" placeholder="search blocks…"><div class="web-pal-cats" id="web-pal-cats"></div><div class="web-pal-list" id="web-pal-list"></div>';
-      var qi = p.querySelector('#web-pal-q'); qi.value = _palQ;
+      var qi = p.querySelector('#web-pal-q'); qi.value = _palQ || '';
       qi.oninput = function () { _palQ = qi.value; paintPalCats(); paintPalList(); };
       paintPalCats(); paintPalList();
       function paintPalCats() {
-        var box = p.querySelector('#web-pal-cats'), q = _palQ.trim();
+        var box = p.querySelector('#web-pal-cats'), q = (_palQ || '').trim();
         box.innerHTML = BLOCK_GROUPS.map(function (g, i) { return '<button class="web-pal-cat' + (!q && (_palCat || 0) === i ? ' on' : '') + '" data-cat="' + i + '">' + esc(g.label) + '</button>'; }).join('');
         box.querySelectorAll('[data-cat]').forEach(function (b) { b.onclick = function () { _palCat = +b.getAttribute('data-cat'); _palQ = ''; qi.value = ''; paintPalCats(); paintPalList(); }; });
       }
       function paintPalList() {
-        var box = p.querySelector('#web-pal-list'), q = _palQ.trim().toLowerCase(), keys;
+        var box = p.querySelector('#web-pal-list'), q = (_palQ || '').trim().toLowerCase(), keys;
         if (q) { keys = []; BLOCK_GROUPS.forEach(function (g) { g.keys.forEach(function (k) { if (blockRegistry[k] && keys.indexOf(k) < 0 && (blockRegistry[k].label.toLowerCase().indexOf(q) >= 0 || k.indexOf(q) >= 0)) keys.push(k); }); }); }
         else { var g = BLOCK_GROUPS[_palCat || 0]; keys = (g ? g.keys : []).filter(function (k) { return blockRegistry[k]; }); }
         if (isPlayer() && Array.isArray(doc.allowedBlocks)) keys = keys.filter(function (k) { return doc.allowedBlocks.indexOf(k) >= 0; });
@@ -2495,7 +2496,12 @@
 
   function setPresenceSite(siteId) { var c = camp(); if (c && c.setPresence) c.setPresence({ netSite: siteId, netHandle: myHandle() }); }
   var _runtime = false;
-  function ensureRuntime() { wireChipClicks(); if (_runtime) return; var s = br().sess; if (!s || !s.camp) return; _runtime = true; if (s.role === 'player' && s.camp.onOverview) { s.camp.onOverview(function () { settleDeliveries(); var v = document.getElementById('web-clock-v'); if (v) v.textContent = netClock() + 'h'; maybeOpenPlayerRun(); }); settleDeliveries(); maybeOpenPlayerRun(); } if (s.role === 'gm' && s.camp.onNetChange && s.camp.getNetPosts) { s.camp.onNetChange(function () { flushBoards(); }); } }
+  function ensureRuntime() { wireChipClicks(); if (_runtime) return; var s = br().sess; if (!s || !s.camp) return; _runtime = true; if (s.role === 'player' && s.camp.onOverview) { s.camp.onOverview(function () { settleDeliveries(); var v = document.getElementById('web-clock-v'); if (v) v.textContent = netClock() + 'h'; maybeOpenPlayerRun(); }); settleDeliveries(); maybeOpenPlayerRun(); } if (s.role === 'gm' && s.camp.onNetChange && s.camp.getNetPosts) { s.camp.onNetChange(function () { flushBoards(); }); } if (s.role === 'gm' && s.camp.onOverview) { s.camp.onOverview(function () { maybeSurfaceGmRun(); }); maybeSurfaceGmRun(); }
+    // Site/datafort records are hub FILES with no server→client push. When the GM saves one,
+    // announce it over Yjs (overview.sitesRev) so players drop their stale Store cache and
+    // re-render — otherwise a GM's tier/fort edit never reaches the player's Cyberspace.
+    if (s.role === 'gm' && App && App.on && s.camp.setOverview) { App.on('entity:saved', function (e) { if (e && e.type === 'site') s.camp.setOverview({ sitesRev: Date.now() }); }); }
+  }
   var _flushT = null;
   function flushBoards() { clearTimeout(_flushT); _flushT = setTimeout(function () { Store.index('site').then(function (rows) { rows.forEach(function (r) { var changed = false; sitePages(r.json).forEach(function (pg) { var key = r.json.id + ':' + (pg.slug || 'main'); var posts = camp().getNetPosts(key) || []; if (!posts.length) return; if (posts.length !== (pg.board || []).length) { pg.board = posts.slice(); changed = true; } }); if (changed) Store.put(r.ref, r.json).catch(function () {}); }); }).catch(function () {}); }, 800); }
   // The default chat app (players ↔ players ↔ NPCs), seeded once per campaign by the GM.
@@ -2584,91 +2590,47 @@
   // 6 file types (net-canon §Axe 2). Grey/Black Ops = the loot (↔ Store entities).
   var FILE_TYPES = ['Inter-Office', 'Database', 'Business Records', 'Financial', 'Grey Ops', 'Black Ops'];
 
-  /* ── The fort model. A `datafort` facet stored ON the site (DATA owns the
-        shape, net-interface-contract §1). Difficulty is DERIVED, never stored. ── */
-  var NetModel = (function () {
-    function gatesFor(cpu) { var g = []; for (var i = 0; i < cpu; i++) g.push({ id: uid('gate'), str: 2 }); return g; }
-    function defSubgrid() { return { w: 12, h: 12, cells: [] }; }
-    function defFort(cpu) {
-      cpu = Math.max(1, Math.min(7, cpu || 1));
-      return { cpu: cpu, dataWallSTR: cpu, codeGates: gatesFor(cpu), ice: [], files: [], remotes: [], skills: [],
-        subgrid: defSubgrid(), security: 0, tier: 'grey', codesRotatedAt: 0, lastMaintained: 0, abandoned: false };
-    }
-    function ensure(site) {
-      if (!site.datafort) site.datafort = defFort(1);
-      var d = site.datafort;
-      if (d.cpu == null) d.cpu = 1;
-      if (!Array.isArray(d.codeGates)) d.codeGates = gatesFor(d.cpu);
-      if (!Array.isArray(d.ice)) d.ice = [];
-      if (!Array.isArray(d.files)) d.files = [];
-      if (!Array.isArray(d.remotes)) d.remotes = [];
-      if (!Array.isArray(d.skills)) d.skills = [];
-      if (!d.subgrid) d.subgrid = defSubgrid();
-      if (!d.tier) d.tier = 'grey';
-      return d;
-    }
-    // Derived from the tuple — canon net-canon §Axe 2. NEVER stored.
-    function intOf(d) { return 3 * (d.cpu || 1); }            // +3 INT / CPU
-    function memoryMU(d) { return 4 * (d.cpu || 1) * 10; }    // 4 mem/CPU × 10 MU
-    function wallSTR(d) { return Math.min(10, d.dataWallSTR != null ? d.dataWallSTR : (d.cpu || 1)); }
-    function fortActions(d) { return 1 + Math.floor((d.cpu || 1) / 2); } // 1 + ⌊CPU/2⌋
-    function isAI(d) { return intOf(d) >= 12; }
-    function gatesSTR(d) { return (d.codeGates || []).reduce(function (s, g) { return s + (g.str || 2); }, 0); }
-    function iceWeight(d) { return (d.ice || []).reduce(function (s, i) { return s + (i.str || 0) + (i.blackIce ? 4 : 0); }, 0); }
-    // A deterministic difficulty note (no die), derived from walls/gates/cpu/ice/tier.
-    function difficulty(d) {
-      if (!d) return 0;
-      var tierW = ({ grey: 0, '1': 2, '2': 5, '3': 9, black: 14 })[d.tier || 'grey'] || 0;
-      return wallSTR(d) * 2 + gatesSTR(d) + Math.floor(iceWeight(d)) + intOf(d) + tierW;
-    }
-    function difficultyLabel(n) { if (n < 12) return 'trivial'; if (n < 22) return 'soft'; if (n < 34) return 'hard'; if (n < 48) return 'brutal'; return 'suicide'; }
-    return { defFort: defFort, ensure: ensure, gatesFor: gatesFor, defSubgrid: defSubgrid,
-      intOf: intOf, memoryMU: memoryMU, wallSTR: wallSTR, fortActions: fortActions, isAI: isAI,
-      gatesSTR: gatesSTR, difficulty: difficulty, difficultyLabel: difficultyLabel };
-  })();
+  /* ── The fort model. The FORMULAS live in the shared window.NetModel
+        (js/net-model.js — DATA owns them, net-interface-contract §1). NET only
+        carries thin editing/normalizing helpers here and NEVER reimplements a
+        formula. Difficulty is DERIVED: NetModel.difficulty(df,{securityLevel})
+        returns {rating, band, breakdown, int, muCapacity, actions, …}. ── */
+  function defSubgrid() { return { w: 12, h: 12, cells: [] }; }                              // the run terrain — NET paints it
+  function gatesForCpu(cpu) { var g = []; for (var i = 0; i < cpu; i++) g.push({ id: NetModel._uid('gate'), str: 2, label: '' }); return g; } // 1 gate / CPU (canon)
+  function newDatafort(cpu) { var d = NetModel.blankDatafort({ cpu: cpu }); if (!d.subgrid) d.subgrid = defSubgrid(); return d; }
+  function ensureDf(site) {
+    if (!site.datafort) site.datafort = newDatafort(1);
+    var d = site.datafort;
+    if (d.cpu == null) d.cpu = 1;
+    if (!Array.isArray(d.codeGates) || !d.codeGates.length) d.codeGates = gatesForCpu(d.cpu);
+    if (!Array.isArray(d.ice)) d.ice = [];
+    if (!Array.isArray(d.files)) d.files = [];
+    if (!Array.isArray(d.remotes)) d.remotes = [];
+    if (!Array.isArray(d.skills)) d.skills = [];
+    if (!d.subgrid) d.subgrid = defSubgrid();
+    return d;
+  }
+  function wallSTR(d) { return Math.min(NetModel.MAX_STR, (d && d.dataWallSTR != null) ? d.dataWallSTR : ((d && d.cpu) || 1)); }
+  function gatesSTR(d) { return ((d && d.codeGates) || []).reduce(function (s, g) { return s + (g.str || 2); }, 0); }
+  function fortSecurity(site) { return 2; }  // Night City City Grid Security Level (LDL table p.147) — NET supplies it; enrich per-region later
+  function fortDiff(site) { return NetModel.difficulty(ensureDf(site), { securityLevel: fortSecurity(site) }); }
   // Every site/app projects a DEEP presence — its datafort (spine: 1 site ⇄ 1 datafort).
   // The facet is authored in the Fort tab; unauthored = a default Grey fort.
   function hasFort(site) { return !!site; }
   // A standalone datafort has no public façade (no design blocks) → shows only in DEEP.
   function hasSurface(site) { return !!(site && !site.deepOnly); }
-  function fortTier(site) { return (site && site.datafort && site.datafort.tier) || 'grey'; }
+  function fortTier(site) { return site ? fortDiff(site).band : 'grey'; }   // the derived ICON tier band (NetModel)
   function siteDistrict(site) { return (site && site.district) || DEFAULT_DISTRICT; }
 
-  /* ── Reference DB (adapter). v1 ships a minimal built-in ICE catalogue +
-        starter kit (net-canon §3.5 / §Axe 2); DATA supplies the full DB later. ── */
-  var NetRefs = {
-    ice: function () {
-      return [
-        { kind: 'Watchdog', class: 'Detection', str: 4, mu: 2 },
-        { kind: 'Bloodhound', class: 'Detection', str: 3, mu: 2, trace: true },
-        { kind: 'Pit Bull', class: 'Detection', str: 2, mu: 2, trace: true, mobile: true },
-        { kind: 'Hammer', class: 'Intrusion', str: 4, mu: 2 },
-        { kind: "Wizard's Book", class: 'Decryption', str: 6, mu: 3 },
-        { kind: 'Killer', class: 'Anti-IC', str: 4, mu: 2 },
-        { kind: 'Stun', class: 'Anti-Personnel', str: 4, mu: 3, blackIce: true },
-        { kind: 'Glue', class: 'Anti-Personnel', str: 4, mu: 3, blackIce: true, trace: true },
-        { kind: 'Zombie', class: 'Anti-Personnel', str: 5, mu: 6, blackIce: true },
-        { kind: 'Liche', class: 'Anti-Personnel', str: 5, mu: 6, blackIce: true },
-        { kind: 'Brainwipe', class: 'Anti-Personnel', str: 5, mu: 6, blackIce: true },
-        { kind: 'Hellhound', class: 'Anti-Personnel', str: 6, mu: 6, blackIce: true, mobile: true, trace: true }
-      ];
-    },
-    // Starter loadout when a runner has no authored programs (kit minimal, not the atelier).
-    starterKit: function () {
-      return [
-        { id: 'k-hammer', name: 'Hammer', kw: ['pierce'], class: 'Intrusion', str: 4, mu: 2, effect: 'Pierce a data wall (always alerts the system).' },
-        { id: 'k-cracker', name: 'Codecracker', kw: ['unlock'], class: 'Decryption', str: 3, mu: 1, effect: 'Break a code gate or a file lock.' },
-        { id: 'k-killer', name: 'Killer', kw: ['strike'], class: 'Anti-IC', str: 4, mu: 2, effect: 'Attack a hostile program until its STR hits 0.' },
-        { id: 'k-invis', name: 'Invisibility', kw: ['cloak'], class: 'Stealth', str: 3, mu: 1, effect: 'Stay unseen while a watcher’s Detection is below your STR.' },
-        { id: 'k-see', name: 'SeeYa', kw: ['seek'], class: 'Detection', str: 3, mu: 1, effect: 'Spot programs and ICE in range (a Sawtooth wave outs an AI).' },
-        { id: 'k-shield', name: 'Shield', kw: ['shield'], class: 'Protection', str: 3, mu: 1, effect: 'Absorb one attack against you.' },
-        { id: 'k-read', name: 'Databaser', kw: ['read'], class: 'Utility', str: 2, mu: 1, effect: 'Read the table of contents / a reached file.' }
-      ];
-    }
-  };
-  // Runner's loaded software: authored programs on the sheet, else the starter kit.
-  function runnerPrograms(sheetJson) { var p = sheetJson && sheetJson.net && sheetJson.net.programs; return (Array.isArray(p) && p.length) ? p : NetRefs.starterKit(); }
-  function deckSpeed(sheetJson) { var d = sheetJson && sheetJson.net && sheetJson.net.deck; var s = d && typeof d.speed === 'number' ? d.speed : (sheetJson && sheetJson.netrunner && sheetJson.netrunner.speed) || 0; return Math.max(0, s | 0); }
+  /* ── Reference DB — the ICE catalogue is DATA's data/net-ice.json (loaded once,
+        cached). ICE entries are created via NetModel.makeIceEntry. ── */
+  var _iceCat = null;
+  function loadIceCat(cb) { if (_iceCat) { cb(_iceCat); return; } fetch('data/net-ice.json').then(function (r) { return r.json(); }).then(function (a) { _iceCat = Array.isArray(a) ? a : []; cb(_iceCat); }).catch(function () { _iceCat = []; cb(_iceCat); }); }
+  function iceByName(name) { for (var i = 0; i < (_iceCat || []).length; i++) if (_iceCat[i].name === name) return _iceCat[i]; return (_iceCat || [])[0]; }
+  // Runner's loaded software: authored programs on cs.netrunner.programs, else the
+  // shared PRESET_LOADOUT (contract §3). NEVER cs.net.
+  function runnerPrograms(sheetJson) { var p = sheetJson && sheetJson.netrunner && sheetJson.netrunner.programs; return (Array.isArray(p) && p.length) ? p : NetModel.PRESET_LOADOUT; }
+  function deckSpeed(sheetJson) { return NetModel.deckStats(sheetJson && sheetJson.netrunner).speed; }
 
   /* ── Subgrid helpers (the run terrain). Cells stored sparse; absent = 'empty'.
         Kinds: wall | node | gate | ice | remote | core | empty. ── */
@@ -2754,7 +2716,7 @@
     log: function (msg) { var b = br(); if (b && b.logSession) b.logSession(msg); },
     // Dispatch (trace full): suggest the owner's force at the token's MEAT district.
     dispatchSuggestion: function (site, token) {
-      var d = NetModel.ensure(site), tier = d.tier || 'grey';
+      var d = ensureDf(site), tier = d.tier || 'grey';
       var force = ({ grey: 'a lone sysop / private security', '1': 'corporate security patrol', '2': 'a corp response team', '3': 'a Netwatch strike team', black: 'a Netwatch / corp black-ops kill team' })[tier];
       return { force: force, district: token || '—', tier: tier };
     }
@@ -2862,9 +2824,10 @@
   function reRenderAtlas(wrap) { var stg = atlasStageOf(wrap); if (stg) renderAtlas(stg); else paintAtlasMap(wrap, atlasState()); }
   // Live sync for GM AND players: token moves / weather / sediment repaint the map;
   // a site edit (name, tier, placement…) repaints the cards too.
+  var _lastSitesRev = null;
   function wireOverviewRefresh(wrap) {
     var c = camp();
-    if (c && c.onOverview && !_atlasOvWired) { _atlasOvWired = true; c.onOverview(function () { if (atlasState().zoom === 'fort') return; var s2 = document.getElementById('net-map-wrap'); if (s2) paintAtlasMap(s2, atlasState()); }); }
+    if (c && c.onOverview && !_atlasOvWired) { _atlasOvWired = true; c.onOverview(function () { var ov = (c.getOverview && c.getOverview()) || {}; if (ov.sitesRev !== _lastSitesRev) { _lastSitesRev = ov.sitesRev; if (window.Store && Store.invalidate) Store.invalidate('site'); } if (atlasState().zoom === 'fort') return; var s2 = document.getElementById('net-map-wrap'); if (s2) paintAtlasMap(s2, atlasState()); }); }
     if (App && App.on && !_atlasEntWired) { _atlasEntWired = true; App.on('entity:saved', function (e) { if (e && e.type && e.type !== 'site') return; if (atlasState().zoom === 'fort') return; var s2 = document.getElementById('net-map-wrap'); if (s2) paintAtlasMap(s2, atlasState()); }); }
   }
 
@@ -2997,7 +2960,7 @@
         (isPlayer() && !count ? '<div class="net-map-note">Nothing in reach in this district. Pan and zoom to explore.</div>' : '');
       wrap.querySelector('[data-back]').onclick = function () { saveAtlas(function (s) { s.zoom = 'city'; }); reRenderAtlas(wrap); };
       wrap.querySelectorAll('[data-site]').forEach(function (b) { b.onclick = function () { var r = byId(rows, b.getAttribute('data-site')); if (r) navTo(siteUrl(r.json)); }; });
-      wrap.querySelectorAll('[data-fort]').forEach(function (b) { b.onclick = function () { var id = b.getAttribute('data-fort'); _atlasFort = id; if (isPlayer()) { flashTool('Jack-in is a run — your GM opens it.'); var r = byId(rows, id); if (r) navTo(siteUrl(r.json)); } else { saveAtlas(function (s) { s.zoom = 'fort'; }); reRenderAtlas(wrap); } }; });
+      wrap.querySelectorAll('[data-fort]').forEach(function (b) { b.onclick = function () { var id = b.getAttribute('data-fort'); _atlasFort = id; if (isPlayer()) { selfJackIn(id); } else { saveAtlas(function (s) { s.zoom = 'fort'; }); reRenderAtlas(wrap); } }; });
       if (gm) {
         var af = wrap.querySelector('[data-addfort]'); if (af) af.onclick = function () { var fc = freeSubcell(rows, district); addFortAt(district, fc.x, fc.y); };
         wrap.querySelectorAll('[data-empty]').forEach(function (c) { c.addEventListener('contextmenu', function (e) { e.preventDefault(); var p = c.getAttribute('data-empty').split(','); addFortAt(district, +p[0], +p[1]); }); });
@@ -3018,7 +2981,7 @@
     if (deep) {
       var tier = fortTier(s), g = tier === 'grey' ? '○' : tier === '1' ? '□' : '■';
       var lab = TIER_LABEL[tier] + (tier === 'black' ? ' — lethal' : '');
-      var info = '<b>' + name + '</b><br>' + TIER_LABEL[tier] + ' datafort' + (isPlayer() ? '' : ' · difficulty ' + NetModel.difficulty(NetModel.ensure(s))) + '<br>' + esc(s.kind || 'site');
+      var info = '<b>' + name + '</b><br>' + TIER_LABEL[tier] + ' datafort' + (isPlayer() ? '' : ' · rating ' + fortDiff(s).rating) + '<br>' + esc(s.kind || 'site');
       return '<button class="net-sg-c net-sg-card net-sg-fort' + (tier === 'black' ? ' net-sg-black' : '') + '" data-fort="' + esc(s.id) + '"' + hv(info) + '><span class="net-sg-g">' + g + '</span><span class="net-sg-nm">' + name + '</span><span class="net-sg-lb">' + esc(lab) + '</span></button>';
     }
     var kind = esc(s.kind || 'site'), bc = esc(s.broadcast || 'citywide'), off = !isOnline(s);
@@ -3030,7 +2993,7 @@
     App.prompt('New datafort', 'Name', 'New datafort', function (name) {
       if (name == null) return;
       var site = blankSite((name || '').trim() || 'New datafort'); site.kind = 'host'; site.deepOnly = true; site.district = district; site.subcell = { x: x, y: y };
-      var d = NetModel.defFort(1); site.datafort = d;
+      var d = newDatafort(1); site.datafort = d;
       Store.create('site', site).then(function (made) { App.emit('entity:saved', { type: 'site' }); _atlasFort = made.json.id; openFortEditor(made.json.id); }).catch(function (e) { if (window.UI) UI.modal({ title: 'Could not create the fort', body: '<p>' + esc(String((e && e.message) || e)) + '</p>', actions: [{ label: 'OK', kind: 'primary' }] }); });
     });
   }
@@ -3078,9 +3041,10 @@
   }
   function pickIce(cb) {
     if (!window.UI) { cb(null); return; }
-    var cat = NetRefs.ice();
-    UI.modal({ title: 'Load ICE (catalogue)', body: '<div class="net-icepick">' + cat.map(function (i, idx) { return '<button class="net-icepick-b" data-i="' + idx + '"><span class="net-ip-k">' + (i.blackIce ? '† ' : '') + esc(i.kind) + '</span><span class="net-ip-m">' + esc(i.class) + ' · STR ' + i.str + ' · ' + i.mu + 'MU' + (i.mobile ? ' · ⟳ mobile' : '') + (i.trace ? ' · trace' : '') + '</span></button>'; }).join('') + '</div>', actions: [{ label: 'Cancel' }],
-      onShow: function (box) { box.querySelectorAll('[data-i]').forEach(function (b) { b.onclick = function () { UI.close(); var i = cat[+b.getAttribute('data-i')]; cb(Object.assign({ id: uid('ice') }, i, { pos: null })); }; }); } });
+    loadIceCat(function (cat) {
+      UI.modal({ title: 'Load ICE (catalogue)', body: '<div class="net-icepick">' + cat.map(function (i, idx) { return '<button class="net-icepick-b" data-i="' + idx + '"><span class="net-ip-k">' + (i.blackIce ? '† ' : '') + esc(i.name) + '</span><span class="net-ip-m">' + esc(i.class) + ' · STR ' + i.str + ' · ' + i.mu + 'MU' + (i.mobile ? ' · ⟳ mobile' : '') + (i.alert && i.alert !== 'none' ? ' · ' + esc(i.alert) : '') + '</span></button>'; }).join('') + '</div>', actions: [{ label: 'Cancel' }],
+        onShow: function (box) { box.querySelectorAll('[data-i]').forEach(function (b) { b.onclick = function () { UI.close(); cb(NetModel.makeIceEntry(cat[+b.getAttribute('data-i')])); }; }); } });
+    });
   }
 
   /* ═══════════════ ③ FORT EDITOR — the Fort tab, diegetic ═══════════════
@@ -3090,13 +3054,13 @@
      Fortress of their own site) use the same editor. */
   // The fort editor is a TAB inside the site editor (the app shell stays visible),
   // not a full-screen overlay. Opening it selects that tab.
-  var _composerTab = null;
-  function openFortEditor(siteId) { _composerTab = 'fort'; if (window.Shell && Shell.openEntity) Shell.openEntity('site', siteId, null); }
+  var _composerFortId = null;   // openFortEditor targets THIS site's Fort tab (not a global flag)
+  function openFortEditor(siteId) { _composerFortId = siteId; if (window.Shell && Shell.openEntity) Shell.openEntity('site', siteId, null); }
   // Autonomous entry — procure a server, then open the fort tab on a fresh fort-site.
   function newAutonomousFort() {
     procureServer(null, function (cfg) {
       var site = blankSite(cfg.name || 'New datafort'); site.kind = 'host'; site.deepOnly = true; site.district = cfg.district || DEFAULT_DISTRICT;
-      var d = NetModel.defFort(cfg.cpu || 1); d.tier = cfg.tier || 'grey'; if (cfg.wall) d.dataWallSTR = Math.max(1, Math.min(10, cfg.wall)); if (cfg.gates != null) { while (d.codeGates.length < cfg.gates) d.codeGates.push({ id: uid('gate'), str: 2 }); if (d.codeGates.length > cfg.gates) d.codeGates = d.codeGates.slice(0, cfg.gates); } site.datafort = d;
+      var d = newDatafort(cfg.cpu || 1); d.tier = cfg.tier || 'grey'; if (cfg.wall) d.dataWallSTR = Math.max(1, Math.min(10, cfg.wall)); if (cfg.gates != null) { while (d.codeGates.length < cfg.gates) d.codeGates.push({ id: uid('gate'), str: 2 }); if (d.codeGates.length > cfg.gates) d.codeGates = d.codeGates.slice(0, cfg.gates); } site.datafort = d;
       Store.create('site', site).then(function (made) { App.emit('entity:saved', { type: 'site' }); openFortEditor(made.json.id); }).catch(function (e) { if (window.UI) UI.modal({ title: 'Could not create the fort', body: '<p>' + esc(String((e && e.message) || e)) + '</p>', actions: [{ label: 'OK', kind: 'primary' }] }); });
     });
   }
@@ -3141,7 +3105,7 @@
   // A host's datafort holds a File for each site it hosts (their data lives on the server).
   function ensureHostFiles(site) {
     if (site.kind !== 'host') return Promise.resolve(false);
-    var d = NetModel.ensure(site);
+    var d = ensureDf(site);
     return Store.index('site').then(function (rows) {
       var changed = false, live = {};
       rows.forEach(function (r) { var s = r.json; if (s.id === site.id || s.hostId !== site.id) return; live[s.id] = 1; if (!(d.files || []).some(function (f) { return f.storeRef && f.storeRef.type === 'site' && f.storeRef.id === s.id; })) { d.files.push({ id: uid('file'), type: 'Inter-Office', mu: 1, storeRef: { type: 'site', id: s.id }, name: s.name, hosted: true }); changed = true; } });
@@ -3152,7 +3116,7 @@
   }
   // The fort builder, rendered INTO a container (the site editor's Fort tab).
   function renderFortBuilder(c, site, ref, poke, onBack) {
-    var d = NetModel.ensure(site);
+    var d = ensureDf(site);
     var tool = 'wall', sel = null, saveT = null, pz = null;
     function save() { clearTimeout(saveT); saveT = setTimeout(function () { Store.put(ref, site).then(function () { App.emit('entity:saved', { type: 'site' }); }).catch(function () {}); }, 300); }
     function setCpu(n) { n = Math.max(1, Math.min(7, n)); d.cpu = n; var g = d.codeGates || []; while (g.length < n) g.push({ id: uid('gate'), str: 2 }); if (g.length > n) g = g.slice(0, n); d.codeGates = g; if (d.dataWallSTR > 10) d.dataWallSTR = 10; }
@@ -3161,24 +3125,24 @@
       return '<div class="net-ed-h" style="margin-top:12px">Files <span class="net-fp-n">' + (d.files || []).length + '</span><button class="net-mini" data-add-file>+</button></div>' +
         ((d.files || []).length ? d.files.map(function (f, i) { return '<div class="net-fp-file"><span>' + esc(f.type || 'file') + '</span><span class="net-fp-fa">' + (f.storeRef ? '<span class="net-fp-loot">↔ ' + esc(f.name || 'loot') + '</span>' : '<button class="net-mini" data-link-file="' + i + '">link</button>') + '<button class="net-mini" data-rm-file="' + i + '">✕</button></span></div>'; }).join('') : '<div class="net-fp-empty">No files.</div>') +
         '<div class="net-ed-h" style="margin-top:10px">ICE <span class="net-fp-n">' + (d.ice || []).length + '</span><button class="net-mini" data-add-ice>+</button></div>' +
-        ((d.ice || []).length ? d.ice.map(function (ic, i) { return '<div class="net-fp-ice">' + (ic.blackIce ? '† ' : '') + esc(ic.kind || 'ICE') + ' <span class="net-fp-str">STR ' + (ic.str || 0) + '</span>' + (ic.mobile ? ' ⟳' : '') + (ic.pos ? '' : ' <span class="net-fp-diffl">·unplaced</span>') + '<button class="net-mini net-fp-icerm" data-rm-ice="' + i + '">✕</button></div>'; }).join('') : '<div class="net-fp-empty">No ICE.</div>') +
+        ((d.ice || []).length ? d.ice.map(function (ic, i) { return '<div class="net-fp-ice">' + (ic.blackIce ? '† ' : '') + esc(ic.name || 'ICE') + ' <span class="net-fp-str">STR ' + (ic.str || 0) + '</span>' + (ic.mobile ? ' ⟳' : '') + (ic.pos ? '' : ' <span class="net-fp-diffl">·unplaced</span>') + '<button class="net-mini net-fp-icerm" data-rm-ice="' + i + '">✕</button></div>'; }).join('') : '<div class="net-fp-empty">No ICE.</div>') +
         '<div class="net-ed-h" style="margin-top:10px">Remotes <span class="net-fp-n">' + (d.remotes || []).length + '</span><button class="net-mini" data-add-remote>+</button></div>' +
         ((d.remotes || []).length ? d.remotes.map(function (rm, i) { return '<div class="net-fp-file"><span>' + esc(rm.kind || 'remote') + '</span><button class="net-mini" data-rm-remote="' + i + '">✕</button></div>'; }).join('') : '<div class="net-fp-empty">No remotes.</div>');
     }
     function paint() {
-      var diff = NetModel.difficulty(d), sg = d.subgrid, w = sg.w || 12, h = sg.h || 12, int = NetModel.intOf(d);
+      var D = NetModel.difficulty(d, { securityLevel: fortSecurity(site) }), sg = d.subgrid, w = sg.w || 12, h = sg.h || 12;
       c.innerHTML =
         '<div class="net-ed net-ed-tab">' +
           '<div class="net-ed-top">' + (onBack ? '<button class="net-mini" data-fb-back>◄</button>' : '') + '<span class="net-ed-t">DATAFORT · ' + esc(site.name || 'fort') + '</span>' +
-            '<select class="net-sel" data-tier>' + FORT_TIERS.map(function (t) { return '<option value="' + t + '"' + (d.tier === t ? ' selected' : '') + '>' + TIER_LABEL[t] + '</option>'; }).join('') + '</select>' +
-            '<span class="net-ed-diff">INT ' + int + (int >= 12 ? ' · AI' : '') + ' · MU ' + NetModel.memoryMU(d) + ' · ' + NetModel.fortActions(d) + ' act/rd · diff <b>' + diff + '</b> (' + NetModel.difficultyLabel(diff) + ')</span>' +
+            '<select class="net-sel" data-tier><option value=""' + (!d.tier ? ' selected' : '') + '>— tier: ' + TIER_LABEL[D.band] + ' (derived) —</option>' + FORT_TIERS.map(function (t) { return '<option value="' + t + '"' + (d.tier === t ? ' selected' : '') + '>force ' + TIER_LABEL[t] + '</option>'; }).join('') + '</select>' +
+            '<span class="net-ed-diff">INT ' + D.int + (D.int >= 12 ? ' · AI' : '') + ' · MU ' + D.muCapacity + ' · ' + D.actions + ' act/rd · rating <b>' + D.rating + '</b> · ' + TIER_LABEL[D.band] + '</span>' +
             '<span class="net-ed-sp"></span><button class="dt-btn" data-server>Server ▸</button><button class="dt-btn" data-sketch>Auto-sketch</button><button class="dt-btn" data-run>Run test ▸</button></div>' +
           '<div class="net-ed-body">' +
             '<div class="net-ed-pal">' +
               '<div class="net-ed-h">Paint</div>' + TOOLS.map(function (t) { return '<button class="net-ed-tool' + (tool === t[0] ? ' on' : '') + '" data-tool="' + t[0] + '">' + t[1] + '</button>'; }).join('') +
               '<div class="net-ed-h" style="margin-top:10px">Hardware</div>' +
-                '<div class="net-ed-hw">' + fpStep('CPU', d.cpu + '/7', 'cpu') + fpStep('Wall', NetModel.wallSTR(d), 'wall') + '</div>' +
-                '<div class="net-ed-gates">Gates ' + (d.codeGates || []).length + ' · Σ' + NetModel.gatesSTR(d) + ' <button class="net-mini" data-gate="str">STR+</button></div>' +
+                '<div class="net-ed-hw">' + fpStep('CPU', d.cpu + '/7', 'cpu') + fpStep('Wall', wallSTR(d), 'wall') + '</div>' +
+                '<div class="net-ed-gates">Gates ' + (d.codeGates || []).length + ' · Σ' + gatesSTR(d) + ' <button class="net-mini" data-gate="str">STR+</button></div>' +
               '<div class="net-ed-h" style="margin-top:10px">Grid</div><div class="net-ed-size"><button class="net-mini" data-size="-">−</button><span>' + w + '×' + h + '</span><button class="net-mini" data-size="+">+</button></div>' +
               '<div class="net-ed-hint">Drag a cell to paint · drag the background to pan · wheel to zoom.</div>' +
             '</div>' +
@@ -3190,12 +3154,12 @@
       paintGrid(); paintInsp();
       c.querySelector('#net-ed-comp').innerHTML = comps(); wireComps();
       var fbBack = c.querySelector('[data-fb-back]'); if (fbBack && onBack) fbBack.onclick = onBack;
-      c.querySelector('[data-tier]').onchange = function (e) { d.tier = e.target.value; save(); paint(); };
+      c.querySelector('[data-tier]').onchange = function (e) { d.tier = e.target.value || null; save(); paint(); };
       c.querySelector('[data-server]').onclick = function () { procureServer(site, function (cfg) { if (cfg.cpu) { setCpu(cfg.cpu); if (cfg.tier) d.tier = cfg.tier; } if (cfg.wall) d.dataWallSTR = Math.max(1, Math.min(10, cfg.wall)); if (cfg.gates != null) { var g = d.codeGates || []; while (g.length < cfg.gates) g.push({ id: uid('gate'), str: 2 }); if (g.length > cfg.gates) g = g.slice(0, cfg.gates); d.codeGates = g; } if (cfg.district) site.district = cfg.district; save(); paint(); }); };
-      c.querySelector('[data-sketch]').onclick = function () { if (!(d.subgrid.cells || []).length || confirmSketch()) { autoSketch(d); save(); paint(); } };
+      c.querySelector('[data-sketch]').onclick = function () { if (!(d.subgrid.cells || []).length || confirmSketch()) { loadIceCat(function () { autoSketch(d); save(); paint(); }); } };
       c.querySelector('[data-run]').onclick = function () { openRun(site.id); };
       c.querySelectorAll('[data-tool]').forEach(function (b) { b.onclick = function () { tool = b.getAttribute('data-tool'); c.querySelectorAll('[data-tool]').forEach(function (x) { x.classList.toggle('on', x === b); }); }; });
-      c.querySelectorAll('[data-step]').forEach(function (b) { b.onclick = function () { var k = b.getAttribute('data-step'), dir = +b.getAttribute('data-dir'); if (k === 'cpu') setCpu(d.cpu + dir); else if (k === 'wall') d.dataWallSTR = Math.max(1, Math.min(10, NetModel.wallSTR(d) + dir)); save(); paint(); }; });
+      c.querySelectorAll('[data-step]').forEach(function (b) { b.onclick = function () { var k = b.getAttribute('data-step'), dir = +b.getAttribute('data-dir'); if (k === 'cpu') setCpu(d.cpu + dir); else if (k === 'wall') d.dataWallSTR = Math.max(1, Math.min(10, wallSTR(d) + dir)); save(); paint(); }; });
       c.querySelector('[data-gate="str"]').onclick = function () { (d.codeGates || []).forEach(function (g) { g.str = Math.min(10, (g.str || 2) + 1); }); save(); paint(); };
       c.querySelectorAll('[data-size]').forEach(function (b) { b.onclick = function () { var dir = b.getAttribute('data-size') === '+' ? 1 : -1; d.subgrid.w = Math.max(8, Math.min(20, (d.subgrid.w || 12) + dir)); d.subgrid.h = Math.max(8, Math.min(20, (d.subgrid.h || 12) + dir)); save(); paint(); }; });
       var view = c.querySelector('#net-ed-view'), inner = c.querySelector('#net-ed-inner'); pz = mountPanZoom(view, inner, { scale: 1, center: true });
@@ -3227,14 +3191,14 @@
       });
       document.addEventListener('mouseup', function () { painting = false; }, { once: true });
     }
-    function cellHv(cc) { if (cc.kind === 'ice') { var ic = iceOf(d, cc.ref); return hv(ic ? ('<b>☠ ' + esc(ic.kind) + (ic.blackIce ? ' — Black ICE' : '') + '</b><br>STR ' + ic.str + ' · ' + esc(ic.class) + (ic.mobile ? '<br>⟳ mobile — patrols' : '')) : 'ICE'); } if (cc.kind === 'file') { var f = (d.files || []).filter(function (z) { return z.id === cc.ref; })[0]; return hv('<b>☰ ' + esc((f && f.type) || 'File') + '</b>' + (f && f.storeRef ? '<br>↔ loot linked' : '')); } if (cc.kind === 'core') return hv('<b>▲ CPU / core</b><br>the system’s brain'); if (cc.kind === 'gate') return hv('<b>⊗ Code gate</b><br>a password wall'); if (cc.kind === 'wall') return hv('<b>█ Data wall</b>'); if (cc.kind === 'remote') return hv('<b>⊡ Remote</b><br>a device the fort controls'); if (cc.kind === 'node') return hv('<b>▢ Node</b>'); return ''; }
+    function cellHv(cc) { if (cc.kind === 'ice') { var ic = iceOf(d, cc.ref); return hv(ic ? ('<b>☠ ' + esc(ic.name) + (ic.blackIce ? ' — Black ICE' : '') + '</b><br>STR ' + ic.str + ' · ' + esc(ic.class) + (ic.mobile ? '<br>⟳ mobile — patrols' : '')) : 'ICE'); } if (cc.kind === 'file') { var f = (d.files || []).filter(function (z) { return z.id === cc.ref; })[0]; return hv('<b>☰ ' + esc((f && f.type) || 'File') + '</b>' + (f && f.storeRef ? '<br>↔ loot linked' : '')); } if (cc.kind === 'core') return hv('<b>▲ CPU / core</b><br>the system’s brain'); if (cc.kind === 'gate') return hv('<b>⊗ Code gate</b><br>a password wall'); if (cc.kind === 'wall') return hv('<b>█ Data wall</b>'); if (cc.kind === 'remote') return hv('<b>⊡ Remote</b><br>a device the fort controls'); if (cc.kind === 'node') return hv('<b>▢ Node</b>'); return ''; }
     function paintInsp() {
       var box = c.querySelector('#net-ed-cellinsp'); if (!box) return;
       if (!sel) { box.innerHTML = '<div class="net-ed-h">Cell</div><div class="net-fp-empty">Click a cell to inspect. Difficulty updates live from the whole build.</div>'; return; }
       var p = sel.split(','), x = +p[0], y = +p[1], cc = sgAt(d.subgrid, x, y);
       var body = '<div class="net-ed-h">Cell ' + x + ',' + y + '</div>';
       if (!cc) body += '<div class="net-fp-empty">Empty.</div>';
-      else if (cc.kind === 'ice') { var ic = iceOf(d, cc.ref); body += ic ? '<div class="net-fp-ice">☠ ' + esc(ic.kind) + (ic.blackIce ? ' — Black ICE' : '') + ' <span class="net-fp-str">STR ' + ic.str + '</span>' + (ic.mobile ? ' ⟳' : '') + '</div><button class="net-mini" data-clear>remove ICE</button>' : ''; }
+      else if (cc.kind === 'ice') { var ic = iceOf(d, cc.ref); body += ic ? '<div class="net-fp-ice">☠ ' + esc(ic.name) + (ic.blackIce ? ' — Black ICE' : '') + ' <span class="net-fp-str">STR ' + ic.str + '</span>' + (ic.mobile ? ' ⟳' : '') + '</div><button class="net-mini" data-clear>remove ICE</button>' : ''; }
       else if (cc.kind === 'file') { var f = (d.files || []).filter(function (z) { return z.id === cc.ref; })[0]; body += '<div class="net-fp-file"><span>☰ ' + esc((f && f.type) || 'File') + '</span>' + (f && f.storeRef ? '<span class="net-fp-loot">↔ ' + esc(f.name || 'loot') + '</span>' : (f ? '<button class="net-mini" data-linkf>link Store</button>' : '')) + '</div><button class="net-mini" data-clear>remove file</button>'; }
       else body += '<div class="net-fp-loc">' + esc(cc.kind) + '</div><button class="net-mini" data-clear>erase</button>';
       box.innerHTML = body;
@@ -3252,15 +3216,15 @@
   // CPU, ICE at the gates / around the core / on patrol, plus files and remotes.
   function autoSketch(d) {
     var sg = d.subgrid, W = sg.w || 12, H = sg.h || 12; sg.cells = [];
-    var cpu = Math.max(1, Math.min(7, d.cpu || 1)), cat = NetRefs.ice();
-    function pickIce(kind) { for (var i = 0; i < cat.length; i++) if (cat[i].kind === kind) return cat[i]; return cat[0]; }
+    var cpu = Math.max(1, Math.min(7, d.cpu || 1));
     var R = function (a, b) { return a + Math.floor(Math.random() * (b - a + 1)); };
     // components: keep authored ones (reset their positions), else generate a loadout
-    if (!(d.ice || []).length) { d.ice = []; var iceKinds = ['Watchdog', 'Bloodhound', 'Killer', 'Hellhound', 'Liche', 'Brainwipe', 'Glue', 'Stun', 'Zombie']; var nIce = Math.min(iceKinds.length, 3 + cpu); for (var q = 0; q < nIce; q++) d.ice.push(Object.assign({ id: uid('ice') }, pickIce(iceKinds[q]), { pos: null })); }
+    // from the shared catalogue (data/net-ice.json → NetModel.makeIceEntry).
+    if (!(d.ice || []).length) { d.ice = []; var iceKinds = ['Watchdog', 'Bloodhound', 'Killer VI', 'Hellhound', 'Liche', 'Brainwipe', 'Glue', 'Stun', 'Manticore', 'Dragon']; var nIce = Math.min(iceKinds.length, 3 + cpu); for (var q = 0; q < nIce; q++) d.ice.push(NetModel.makeIceEntry(iceByName(iceKinds[q]))); }
     else d.ice.forEach(function (i) { i.pos = null; });
     if (!(d.files || []).some(function (f) { return !f.hosted; })) { var ft = ['Black Ops', 'Grey Ops', 'Database', 'Financial', 'Business Records', 'Inter-Office']; var nF = 3 + Math.floor(cpu / 2); for (var fq = 0; fq < nF; fq++) d.files.push({ id: uid('file'), type: ft[fq % ft.length], mu: 1, pos: null }); }
     else d.files.forEach(function (f) { f.pos = null; });
-    if (!(d.remotes || []).length) d.remotes = [{ id: uid('rem'), kind: 'terminal', pos: null }, { id: uid('rem'), kind: 'camera', pos: null }];
+    if (!(d.remotes || []).length) d.remotes = [NetModel.makeRemoteEntry('terminal'), NetModel.makeRemoteEntry('camera')];
     else d.remotes.forEach(function (r) { r.pos = null; });
 
     var margin = 2, cx = Math.floor(W / 2), cy = Math.floor(H / 2), interior = {};
@@ -3307,161 +3271,384 @@
   function runBeat(run, text) { var beats = (run.beats || []).concat([{ ts: netClock(), text: text }]).slice(-30); return beats; }
   function mySheetId() { return (br().sess || {}).sheetId; }
 
+  /* VISION — raycast LOS (canon [CORE p.152]: you see everything within 20 cells
+     UNLESS a data wall blocks it). No persistent `scanned`: a line of sight computed
+     from runnerPos, walls project shadow. `remembered` accumulates cells once seen. */
+  var LOS_RADIUS = 20;
+  function isWallAt(sg, x, y) { var c = sgAt(sg, x, y); return !!(c && c.kind === 'wall'); }
+  function losVisible(sg, pos, radius) {
+    var vis = {}; if (!pos) return vis; var w = sg.w || 12, h = sg.h || 12, r = radius || LOS_RADIUS;
+    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
+      if (Math.max(Math.abs(x - pos.x), Math.abs(y - pos.y)) > r) continue;
+      // Bresenham from runner to target; blocked if a wall lies strictly between (the
+      // wall face itself stays visible — you see the wall, not what's behind it).
+      var x0 = pos.x, y0 = pos.y, x1 = x, y1 = y, adx = Math.abs(x1 - x0), ady = Math.abs(y1 - y0);
+      var sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1, err = adx - ady, cx = x0, cy = y0, blocked = false;
+      while (!(cx === x1 && cy === y1)) {
+        var e2 = 2 * err; if (e2 > -ady) { err -= ady; cx += sx; } if (e2 < adx) { err += adx; cy += sy; }
+        if (cx === x1 && cy === y1) break;
+        if (isWallAt(sg, cx, cy)) { blocked = true; break; }
+      }
+      if (!blocked) vis[x + ',' + y] = true;
+    }
+    return vis;
+  }
+  function rememberUnion(prev, vis) { var m = Object.assign({}, prev || {}); for (var k in vis) if (vis.hasOwnProperty(k)) m[k] = true; return m; }
+  // A jack-in cell: prefer a code gate on the perimeter, else the first gate, else a mid-edge cell.
+  function entryCell(sg) {
+    var cells = sgCells(sg), w = sg.w || 12, h = sg.h || 12, gates = cells.filter(function (c) { return c.kind === 'gate'; });
+    var edge = gates.filter(function (c) { return c.x === 0 || c.y === 0 || c.x === w - 1 || c.y === h - 1; });
+    if (edge.length) return { x: edge[0].x, y: edge[0].y };
+    if (gates.length) return { x: gates[0].x, y: gates[0].y };
+    // fall to a free mid-left cell
+    for (var y = (h >> 1); y < h; y++) for (var x = 0; x < w; x++) { if (!sgAt(sg, x, y) || sgAt(sg, x, y).kind !== 'wall') return { x: x, y: y }; }
+    return { x: 0, y: h >> 1 };
+  }
+
   // GM: start a run against a fort — pick the runner sheet, seed the shared state.
   function openRun(siteId) {
-    if (isPlayer()) { openRunBoard(); return; }
+    if (isPlayer()) { selfJackIn(siteId); return; }
     Store.resolve({ type: 'site', id: siteId }).then(function (hit) {
-      if (!hit) return; var site = hit.json, d = NetModel.ensure(site);
+      if (!hit) return; var site = hit.json, d = ensureDf(site);
       var sheets = playerSheets();
       if (!window.UI) { return; }
+      // Runner id = the canonical sheet key (rec.id == the player's session sheetId), so
+      // the runner's own board and MEAT token resolve. (rec.json.id is a different id.)
       var body = '<p class="dt-hint">Jack a runner into <b>' + esc(site.name) + '</b>. This opens the SYSOP console (you) and the run board (them). Table-first — you type every result.</p>' +
-        '<label class="rt-field"><span class="rt-field-l">Runner</span><select class="rt-input" id="run-who">' + (sheets.length ? sheets.map(function (r) { return '<option value="' + esc(r.json.id) + '">' + esc(Store.displayName ? Store.displayName(r) : r.json.id) + '</option>'; }).join('') : '<option value="">(no player sheets)</option>') + '</select></label>';
-      UI.modal({ title: 'Start a run', body: body, actions: [{ label: 'Cancel' }, { label: 'Jack in ▸', kind: 'primary', onClick: function (box) { var who = box.querySelector('#run-who').value; startRun(site, d, who); } }] });
+        '<label class="rt-field"><span class="rt-field-l">Runner</span><select class="rt-input" id="run-who">' + (sheets.length ? sheets.map(function (r) { return '<option value="' + esc(r.id) + '">' + esc(sheetLabelOf(r)) + '</option>'; }).join('') : '<option value="">(no player sheets)</option>') + '</select></label>';
+      UI.modal({ title: 'Start a run', body: body, actions: [{ label: 'Cancel' }, { label: 'Jack in ▸', kind: 'primary', onClick: function (box) { var who = box.querySelector('#run-who').value; sketchIfEmpty(site, d, function () { startRun(site, d, who); gotoRun(); }); } }] });
     }).catch(function () {});
   }
-  function startRun(site, d, runnerSheetId) {
+  // Self-jack-in (gate ~2957): a runner opens a standalone run on a reachable fort — no GM
+  // needed. The GM is notified (log + the shared run state their SYSOP picks up).
+  function selfJackIn(siteId) {
+    var sid = mySheetId(); if (!sid) { flashTool('no sheet on this session'); return; }
+    var existing = getRun(); if (existing && existing.status === 'active') { gotoRun(); return; }
+    Store.resolve({ type: 'site', id: siteId }).then(function (hit) {
+      if (!hit) return; var site = hit.json, d = ensureDf(site), pj = playerJson();
+      if (reachOfDeck(pj) <= 0) { flashTool('Jack in with a cyberdeck to run a fort.'); return; }
+      if (!isOnline(site) || !connectable(site, effectiveReach(pj))) { flashTool('Out of reach — a closer jack-in or a better rig gets you there.'); return; }
+      sketchIfEmpty(site, d, function () {
+        startRun(site, d, sid, { selfJack: true });
+        if (br().logSession) br().logSession('▸ ' + sheetLabelOf({ json: pj }) + ' self-jacks into ' + (site.name || 'a fort'));
+        gotoRun();
+      });
+    }).catch(function () {});
+  }
+  // A fort's terrain (subgrid cells) is only ever laid down by autoSketch. A fort the GM
+  // never hand-sketched has cells:[] → a blank run board. Sketch on first run (needs the ICE
+  // catalogue), persist so it's stable and the player's Store can pick it up. Never clobber a
+  // fort that already has cells (that would wipe a GM's hand-painted layout).
+  function sketchIfEmpty(site, d, cb) {
+    if (d.subgrid && d.subgrid.cells && d.subgrid.cells.length) { cb(); return; }
+    loadIceCat(function () { autoSketch(d); site.datafort = d; Store.put({ type: 'site', id: site.id }, site).catch(function () {}); cb(); });
+  }
+  // Focus the web section on the RUN surface (in-section, not an overlay). Target the tool
+  // that OWNS the browser for this role: a player's browser IS 'web-home' (renderHome →
+  // renderBrowser), the GM's is 'web-browse'. Opening the wrong one spawns a SECOND browser
+  // pane → two elements share id "web-stage", the run renders into the hidden one, and every
+  // click handler is dead. Each role has exactly one browser-owning tool, so this never dupes.
+  function gotoRun() {
+    var tool = isPlayer() ? 'web-home' : 'web-browse';
+    if (window.Shell && Shell.openTool) Shell.openTool(tool);
+    (function nav(tries) {
+      if (_tabs && document.getElementById('web-stage')) { navTo('/run'); return; }
+      if (tries <= 0) return; setTimeout(function () { nav(tries - 1); }, 40);
+    })(12);
+  }
+  function startRun(site, d, runnerSheetId, opts) {
+    opts = opts || {};
     var c = camp(); var rec = runnerSheetId && c && c.getSheet && c.getSheet(runnerSheetId); var sheet = rec && rec.json;
     var runnerActions = 1 + (sheet ? deckSpeed(sheet) : 0);
     var traceMax = Math.min(12, 4 + (d.codeGates || []).length + (d.ice || []).filter(function (i) { return i.trace; }).length);
+    var pos = entryCell(d.subgrid);
+    var runnerName = sheet ? (sheet.handle || sheet.name || 'runner') : 'runner';
+    var openLine = opts.selfJack ? (runnerName + ' jacks into ' + (site.name || 'the fort') + '.') : ('Run opened against ' + (site.name || 'fort') + '.');
     var run = {
-      id: uid('run'), hostId: site.id, hostName: site.name, runnerSheetId: runnerSheetId || '', runnerName: sheet ? (sheet.handle || sheet.name || 'runner') : 'runner',
-      round: 1, actionsLeft: { runner: runnerActions, fort: NetModel.fortActions(d) },
-      runnerPos: null, depth: { v: 0, max: 6 }, trace: { v: 0, max: traceMax },
-      reveal: {}, scanned: {}, beats: [{ ts: netClock(), text: 'Run opened against ' + (site.name || 'fort') + '.' }], status: 'active', dispatch: null
+      id: uid('run'), hostId: site.id, hostName: site.name, runnerSheetId: runnerSheetId || '', runnerName: runnerName,
+      mode: 'standalone', selfJack: !!opts.selfJack,
+      round: 1, actionsLeft: { runner: runnerActions, fort: NetModel.actsOf(d) },
+      runnerPos: pos, depth: { v: 0, max: 6 }, trace: { v: 0, max: traceMax, countdown: null },
+      aiBehavior: NetModel.intOf(d) >= 12 ? 'territorial' : '', autoPlay: false,
+      // The fort travels IN the run state so the runner sees it even when their Store
+      // hasn't synced the GM's (unpublished) datafort. The GM's plays update it live.
+      fort: d,
+      reveal: {}, remembered: rememberUnion({}, losVisible(d.subgrid, pos, LOS_RADIUS)),
+      beats: [{ ts: netClock(), text: openLine }], status: 'active', dispatch: null
     };
     setRun(run); setDecl(null);
-    if (br().logSession) br().logSession('▸ Netrun opened: ' + run.runnerName + ' → ' + (site.name || 'fort'));
-    openSysop();
+    if (br().logSession) br().logSession('▸ Netrun opened: ' + runnerName + ' → ' + (site.name || 'fort'));
   }
-  function endRun(status) { var run = getRun(); if (!run) return; setRun({ status: status || 'jacked-out' }); if (br().logSession) br().logSession('■ Netrun ' + (status || 'ended') + ' (' + (run.hostName || 'fort') + ')'); }
+  function endRun(status) { var run = getRun(); if (!run) return; _surfacedRunId = null; setRun({ status: status || 'jacked-out' }); if (br().logSession) br().logSession('■ Netrun ' + (status || 'ended') + ' (' + (run.hostName || 'fort') + ')'); }
 
-  function runOverlay(cls) { var ov = eln('div', 'net-run-overlay ' + (cls || '')); document.body.appendChild(ov); return ov; }
+  /* The run renders INSIDE the web section (web-stage, url '/run') — no overlay.
+     While shown, we subscribe to the overview so every SET STATE repaints live. */
+  var _runUnsub = null;
+  function clearRunLive() { if (_runUnsub) { try { _runUnsub(); } catch (e) {} _runUnsub = null; } }
+  function reRunStage() { var s = document.getElementById('web-stage'); if (s && _tabs && activeTab().url === '/run') renderRunSection(s); }
+  function bindRunLive() { clearRunLive(); var c = camp(); if (c && c.onOverview) _runUnsub = c.onOverview(reRunStage); }
+
+  // Dispatch the RUN surface by role: GM → SYSOP · the runner → player board · others → spectator.
+  function renderRunSection(stage) {
+    wireHover(); bindRunLive();
+    var run = getRun();
+    if (!run || run.status !== 'active') { renderRunEnded(stage, run); return; }
+    if (isPlayer()) {
+      if (run.runnerSheetId && run.runnerSheetId === mySheetId()) renderRunPlayer(stage, run);
+      else renderRunSpectator(stage, run);
+    } else renderSysop(stage, run);
+  }
+  function renderRunEnded(stage, run) {
+    clearRunLive();
+    var st = run && run.status ? run.status : 'none';
+    var label = st === 'flatlined' ? 'FLATLINED' : st === 'dumped' ? 'DUMPED' : st === 'jacked-out' ? 'JACKED OUT' : 'NO ACTIVE RUN';
+    stage.innerHTML = '<div class="net-run-end"><div class="net-run-end-t">' + esc(label) + '</div>' +
+      (run && run.hostName ? '<div class="net-run-end-s">' + esc(run.hostName) + '</div>' : '') +
+      '<button class="dt-btn" data-back>▦ Back to Cyberspace</button></div>';
+    var b = stage.querySelector('[data-back]'); if (b) b.onclick = function () { navTo('/home/map'); };
+  }
+  function renderRunSpectator(stage, run) {
+    stage.innerHTML = '<div class="net-run-end"><div class="net-run-end-t">RUN IN PROGRESS</div>' +
+      '<div class="net-run-end-s">' + esc(run.runnerName || 'A runner') + ' is deep in ' + esc(run.hostName || 'a fort') + '. Watch it on the shared screen (CAST).</div>' +
+      '<div class="net-beats">' + (run.beats || []).slice(-6).reverse().map(function (bt) { return '<div class="net-beat">' + esc(bt.text) + '</div>'; }).join('') + '</div></div>';
+  }
   function gaugeHtml(label, g, cls) { var v = (g && g.v) || 0, max = (g && g.max) || 6, pct = Math.min(100, Math.round(v / max * 100)); return '<div class="net-gauge ' + (cls || '') + '"><div class="net-gauge-l">' + esc(label) + ' <b>' + v + '/' + max + '</b></div><div class="net-gauge-bar"><span style="width:' + pct + '%"></span></div></div>'; }
+  // v1 standalone: initiative is runner + fort only (meat combatants merge is v2, §9).
   function initiativeList(run, d) {
-    var c = camp(), meat = [], combatActive = c && c.combatMeta && c.combatMeta() && c.combatMeta().active;
-    if (combatActive && c.allCombatants) meat = (c.allCombatants() || []).map(function (cb) { return { kind: 'meat', label: cb.name || 'combatant', init: cb.init || 0 }; });
+    var c = camp(), out = [];
     var runnerInit = 0; if (run.runnerSheetId && c && c.getSheet) { var s = c.getSheet(run.runnerSheetId); s = s && s.json; runnerInit = ((s && s.stats && (s.stats.REF || s.stats.ref)) || 0) + deckSpeed(s); }
     var fortInit = NetModel.intOf(d);
-    var out = meat.slice();
     for (var i = 0; i < (run.actionsLeft.runner || 0); i++) out.push({ kind: 'deck', label: run.runnerName + ' — action ' + (i + 1), init: runnerInit });
     for (var j = 0; j < (run.actionsLeft.fort || 0); j++) out.push({ kind: 'ice', label: (d.tier === 'black' ? 'BLACK ' : '') + 'fort — action ' + (j + 1), init: fortInit });
     out.sort(function (a, b) { return b.init - a.init; });
     return out;
   }
 
-  /* ⑦ SYSOP — the GM's console (the fort fully unmasked + tools + resolve). */
-  var _sysopOv = null;
-  function openSysop() {
-    if (_sysopOv) { _sysopOv.remove(); _sysopOv = null; }
-    var ov = runOverlay('net-sysop'); _sysopOv = ov; wireHover();
-    var selCell = null, moveIce = null, unsub = null;
-    function done() { if (unsub) { try { unsub(); } catch (e) {} } ov.remove(); _sysopOv = null; }
-    function rerender() {
-      var run = getRun(); if (!run) { done(); return; }
-      Store.resolve({ type: 'site', id: run.hostId }).then(function (hit) {
-        var d = hit ? NetModel.ensure(hit.json) : NetModel.defFort(1);
-        var decl = getDecl();
-        var init = initiativeList(run, d);
-        var prevOut = (ov.querySelector('#sy-out') || {}).value || '';
-        ov.innerHTML =
-          '<div class="net-run net-run-gm">' +
-            '<div class="net-run-top"><span class="net-run-t">SYSOP — ' + esc(run.hostName || 'fort') + '</span>' +
-              '<span class="net-run-rd">round ' + run.round + '</span>' +
-              '<span class="net-run-sp"></span>' +
-              '<button class="dt-btn" data-cast>Cast ⑥</button><button class="dt-btn" data-next>Next round ▸</button><button class="dt-btn" data-end>End run</button><button class="net-fp-x" data-close>✕</button></div>' +
-            '<div class="net-run-body">' +
-              '<div class="net-run-left"><div class="net-run-h">Initiative (unified)</div><ol class="net-init">' + init.map(function (e) { return '<li class="net-init-' + e.kind + '">' + esc(e.label) + ' <span class="net-init-i">' + e.init + '</span></li>'; }).join('') + '</ol>' +
-                '<div class="net-run-h">Toolbox</div><div class="net-tools">' +
-                  '<button class="net-mini" data-tool="scan">Reveal cell</button><button class="net-mini" data-tool="revice">Reveal ICE</button><button class="net-mini" data-tool="moveice">Move mobile ICE</button>' +
-                  '<button class="net-mini" data-tool="depth">＋Depth</button><button class="net-mini" data-tool="trace">＋Trace</button><button class="net-mini" data-tool="anb">Raise ANB</button><button class="net-mini net-danger" data-tool="dump">Dump runner</button>' +
-                '</div>' +
-                (run.trace.v >= run.trace.max ? '<button class="dt-btn net-dispatch" data-dispatch>⚑ Trace full — dispatch</button>' : '') +
-                (run.dispatch ? '<div class="net-dispatch-note">Dispatch: ' + esc(run.dispatch.force) + ' → ' + esc(run.dispatch.district) + '</div>' : '') +
-              '</div>' +
-              '<div class="net-run-mid"><div class="net-run-h">' + (moveIce ? 'Click the ICE’s new cell' : (selCell ? 'Cell ' + selCell : 'The fort (unmasked)')) + '</div>' + runGridHtml(run, d, false) + '</div>' +
-              '<div class="net-run-right">' +
-                gaugeHtml('DEPTH', run.depth, 'net-g-depth') + gaugeHtml('TRACE → body', run.trace, 'net-g-trace') +
-                '<div class="net-run-h">Resolve</div>' +
-                (decl ? '<div class="net-decl"><div class="net-decl-t">' + esc(declSentence(decl)) + '</div><input class="net-in" id="sy-out" placeholder="type the result…"><div class="net-decl-acts"><button class="net-mini" data-resolve>Resolve ▸</button><button class="net-mini" data-dismiss>dismiss</button></div></div>' : '<div class="net-fp-empty">No pending declaration. The runner declares from their board.</div>') +
-                '<div class="net-run-h">Beats</div><div class="net-beats">' + (run.beats || []).slice(-8).reverse().map(function (b) { return '<div class="net-beat">' + esc(b.text) + '</div>'; }).join('') + '</div>' +
-              '</div>' +
-            '</div>' +
-          '</div>';
-        // wiring
-        ov.querySelector('[data-close]').onclick = done;
-        ov.querySelector('[data-end]').onclick = function () { endRun('jacked-out'); done(); };
-        ov.querySelector('[data-cast]').onclick = function () { castRun(run, d); };
-        ov.querySelector('[data-next]').onclick = function () { nextRound(run, d); };
-        var disp = ov.querySelector('[data-dispatch]'); if (disp) disp.onclick = function () { doDispatch(run, d); };
-        ov.querySelectorAll('[data-tool]').forEach(function (b) { b.onclick = function () { var t = b.getAttribute('data-tool'); sysopTool(t); }; });
-        ov.querySelectorAll('[data-cell]').forEach(function (cell) { cell.onclick = function () { var key = cell.getAttribute('data-cell'); if (moveIce) { doMoveIce(run, d, moveIce, key); moveIce = null; } else { selCell = key; rerender(); } }; });
-        var rs = ov.querySelector('[data-resolve]'); if (rs) rs.onclick = function () { var out = ov.querySelector('#sy-out').value.trim(); resolveDecl(run, d, decl, out); };
-        var dm = ov.querySelector('[data-dismiss]'); if (dm) dm.onclick = function () { setDecl(null); };
-        var oi = ov.querySelector('#sy-out'); if (oi && prevOut) oi.value = prevOut;
-        function sysopTool(t) {
-          if (t === 'depth') { setRun({ depth: { v: Math.min(run.depth.max, run.depth.v + 1), max: run.depth.max }, beats: runBeat(run, 'Depth deepens.') }); return; }
-          if (t === 'trace') { var nv = Math.min(run.trace.max, run.trace.v + 1); setRun({ trace: { v: nv, max: run.trace.max }, beats: runBeat(run, 'Trace advances (' + nv + '/' + run.trace.max + ').') }); return; }
-          if (t === 'anb') { setRun({ beats: runBeat(run, '⚑ An All-Net Bulletin goes out.') }); raiseNetEvent('anb', run.hostName, siteRegionOf(d)); return; }
-          if (t === 'dump') { endRun('dumped'); setRun({ beats: runBeat(run, 'The runner is DUMPED.') }); return; }
-          if (!selCell) { flashTool('select a cell first'); return; }
-          var p = selCell.split(','), x = +p[0], y = +p[1], c = sgAt(d.subgrid, x, y);
-          if (t === 'scan') { var sc = Object.assign({}, run.scanned); sc[selCell] = true; setRun({ scanned: sc, beats: runBeat(run, 'Cell ' + selCell + ' scanned.') }); return; }
-          if (t === 'revice') { if (c && c.kind === 'ice') { var rv = Object.assign({}, run.reveal); rv[c.ref] = true; var ic = iceOf(d, c.ref); setRun({ reveal: rv, beats: runBeat(run, (ic ? ic.kind : 'ICE') + ' reveals itself.') }); } else flashTool('no ICE on that cell'); return; }
-          if (t === 'moveice') { if (c && c.kind === 'ice' && iceOf(d, c.ref) && iceOf(d, c.ref).mobile) { moveIce = c.ref; rerender(); } else flashTool('pick a mobile ICE (⟳)'); return; }
-        }
-      }).catch(function () {});
+  /* ⑦ SYSOP — the GM plays the fort (fully unmasked, nested piece menus). In-section. */
+  var _sysMoveIce = null, _sysSelIce = null;
+  var AI_BEHAVIORS = ['territorial', 'aggressive', 'trapper', 'hunter', 'defensive'];
+  function sysSuggest(behavior, ic) {
+    var mob = ic && ic.mobile;
+    switch (behavior) {
+      case 'aggressive': return 'attack the runner' + (mob ? ' — close in first' : '');
+      case 'hunter': return mob ? 'move toward the runner, then strike' : 'strike anything in reach';
+      case 'trapper': return 'hold dormant, wake when the runner is adjacent';
+      case 'defensive': return mob ? 'fall back to guard the core' : 'guard — attack only intruders on your node';
+      default: return mob ? 'patrol your territory, chase on contact' : 'hold your node, attack on contact';
     }
-    unsub = camp() && camp().onOverview ? camp().onOverview(function () { rerender(); }) : null;
-    rerender();
   }
+  function saveFort(run, d) { Store.resolve({ type: 'site', id: run.hostId }).then(function (h) { if (h) { h.json.datafort = d; Store.put(h.ref, h.json).catch(function () {}); } }); }
+  // Give a render the datafort to draw. run.fort (rides Yjs, always set at startRun) is
+  // ALREADY a datafort, so normalize as {datafort: run.fort} — NOT ensureDf(run.fort), which
+  // reads a missing .datafort and hands back an EMPTY fort (the "forts are empty" bug). When
+  // run.fort is present we render synchronously (no Store round-trip that could blank the board
+  // if the hub is slow); only a legacy run without a snapshot falls back to Store.resolve.
+  function withRunFort(run, cb) {
+    if (run.fort) { cb(ensureDf({ datafort: run.fort })); return; }
+    Store.resolve({ type: 'site', id: run.hostId }).then(function (hit) { cb(hit ? ensureDf(hit.json) : newDatafort(1)); }).catch(function () { cb(newDatafort(1)); });
+  }
+  function iceStateLabel(ic) { return ic.state === 'down' ? 'down' : ic.state === 'awake' ? 'awake' : 'dormant'; }
+  function renderSysop(stage, run) {
+    withRunFort(run, function (d) {
+      if (activeTab().url !== '/run') return;
+      var init = initiativeList(run, d), intv = NetModel.intOf(d), hasAI = intv >= 12;
+      var ices = (d.ice || []).slice().sort(function (a, b) { return (b.str || 0) - (a.str || 0); });
+      var beh = run.aiBehavior || (hasAI ? 'territorial' : '');
+      var traceFull = run.trace.v >= run.trace.max, cd = run.trace.countdown;
+      stage.innerHTML =
+        '<div class="net-run net-run-gm">' +
+          '<div class="net-run-top"><span class="net-run-t">SYSOP — ' + esc(run.hostName || 'fort') + '</span>' +
+            '<span class="net-run-rd">round ' + run.round + ' · ' + esc(NetModel.difficulty(d, { securityLevel: 2 }).band) + '</span>' +
+            '<span class="net-run-sp"></span>' +
+            '<button class="dt-btn" data-cast>Cast ⑥</button><button class="dt-btn" data-next>Next round ▸</button><button class="dt-btn net-danger" data-end>End run</button></div>' +
+          '<div class="net-run-body">' +
+            '<div class="net-run-mid"><div class="net-run-h">' + (_sysMoveIce ? 'Click the ICE’s new cell' : 'The fort — fully unmasked · dotted = what the runner sees') + '</div>' + runGridHtml(run, d, false) + '</div>' +
+            '<div class="net-run-right net-sysop-play">' +
+              '<div class="net-run-h">Play the fort</div>' +
+              (hasAI ? '<div class="net-ai"><span class="net-ai-l">◆ AI · INT ' + intv + '</span><select class="net-sel" id="sy-beh">' + AI_BEHAVIORS.map(function (b) { return '<option value="' + b + '"' + (b === beh ? ' selected' : '') + '>' + b + '</option>'; }).join('') + '</select></div>' : '<div class="net-ai net-ai-none">No AI (INT ' + intv + ' < 12) — you run the ICE.</div>') +
+              '<label class="net-auto"><input type="checkbox" id="sy-auto"' + (run.autoPlay ? ' checked' : '') + '> auto-play (algo follows behavior)</label>' +
+              '<div class="net-ice-list">' + (ices.length ? ices.map(function (ic) {
+                var open = _sysSelIce === ic.id;
+                return '<div class="net-icep' + (open ? ' on' : '') + '">' +
+                  '<button class="net-icep-h" data-ice="' + esc(ic.id) + '"><span class="net-icep-n">☠ ' + esc(ic.name) + (ic.blackIce ? ' ◼' : '') + '</span><span class="net-icep-m">S' + (ic.str || 0) + ' · ' + iceStateLabel(ic) + (ic.mobile ? ' · ⟳' : '') + (ic.pos ? ' · @' + ic.pos.x + ',' + ic.pos.y : '') + '</span></button>' +
+                  (open ? '<div class="net-icep-menu">' + (beh ? '<div class="net-icep-sug">suggest: ' + esc(sysSuggest(beh, ic)) + '</div>' : '') +
+                    '<div class="net-icep-acts">' + (ic.mobile ? '<button class="net-mini" data-ia="move" data-ice="' + esc(ic.id) + '">Move</button>' : '') +
+                    '<button class="net-mini" data-ia="attack" data-ice="' + esc(ic.id) + '">Attack</button>' +
+                    '<button class="net-mini" data-ia="wake" data-ice="' + esc(ic.id) + '">Wake</button>' +
+                    '<button class="net-mini" data-ia="hold" data-ice="' + esc(ic.id) + '">Hold</button>' +
+                    '<button class="net-mini" data-ia="rerez" data-ice="' + esc(ic.id) + '">Re-rez</button></div></div>' : '') +
+                  '</div>';
+              }).join('') : '<div class="net-fp-empty">No ICE placed. Sketch or edit the fort.</div>') + '</div>' +
+              '<div class="net-run-h">Initiative</div><ol class="net-init">' + init.map(function (e) { return '<li class="net-init-' + e.kind + '">' + esc(e.label) + ' <span class="net-init-i">' + e.init + '</span></li>'; }).join('') + '</ol>' +
+              gaugeHtml('DEPTH', run.depth, 'net-g-depth') +
+              '<div class="net-run-h">Beats</div><div class="net-beats">' + (run.beats || []).slice(-8).reverse().map(function (b) { return '<div class="net-beat">' + esc(b.text) + '</div>'; }).join('') + '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="net-run-strip">' +
+            '<span class="net-strip-depth">DEPTH <b>' + run.depth.v + '/' + run.depth.max + '</b> <button class="net-mini" data-dp="-1">−</button><button class="net-mini" data-dp="1">＋</button></span>' +
+            '<span class="net-strip-trace">TRACE → ' + esc(myTargetLabel(run)) + ' <b>' + Math.round(run.trace.v / run.trace.max * 100) + '%</b> <button class="net-mini" data-tr="-1">−</button><button class="net-mini" data-tr="1">＋</button></span>' +
+            (traceFull && cd == null ? '<span class="net-strip-cd">FULL — raid in <input class="net-in net-in-n" id="sy-cd" value="3" size="2"> rounds <button class="net-mini" data-armcd>Arm</button></span>' : '') +
+            (cd != null ? '<span class="net-strip-cd">raid in <b>' + cd + '</b> round' + (cd === 1 ? '' : 's') + ' <button class="net-mini" data-cancelcd>cancel</button> <button class="dt-btn net-dispatch" data-dispatch>⚑ Dispatch now</button></span>' : '') +
+            (run.dispatch ? '<span class="net-dispatch-note">Dispatch: ' + esc(run.dispatch.force) + ' → ' + esc(run.dispatch.district) + '</span>' : '') +
+          '</div>' +
+        '</div>';
+      // wiring
+      stage.querySelector('[data-end]').onclick = function () { endRun('jacked-out'); };
+      stage.querySelector('[data-cast]').onclick = function () { castRun(run, d); };
+      stage.querySelector('[data-next]').onclick = function () { nextRound(run, d); };
+      var beh2 = stage.querySelector('#sy-beh'); if (beh2) beh2.onchange = function () { setRun({ aiBehavior: beh2.value, beats: runBeat(run, 'AI shifts to ' + beh2.value + '.') }); };
+      var au = stage.querySelector('#sy-auto'); if (au) au.onchange = function () { setRun({ autoPlay: au.checked }); };
+      stage.querySelectorAll('[data-ice]').forEach(function (b) { if (b.hasAttribute('data-ia')) return; b.onclick = function () { var id = b.getAttribute('data-ice'); _sysSelIce = (_sysSelIce === id ? null : id); _sysMoveIce = null; reRunStage(); }; });
+      stage.querySelectorAll('[data-ia]').forEach(function (b) { b.onclick = function () { sysIceAct(run, d, b.getAttribute('data-ice'), b.getAttribute('data-ia')); }; });
+      stage.querySelectorAll('[data-cell]').forEach(function (cell) { cell.onclick = function () { var key = cell.getAttribute('data-cell'); if (_sysMoveIce) { doMoveIce(run, d, _sysMoveIce, key); _sysMoveIce = null; } }; });
+      stage.querySelectorAll('[data-dp]').forEach(function (b) { b.onclick = function () { var nv = Math.max(0, Math.min(run.depth.max, run.depth.v + (+b.getAttribute('data-dp')))); setRun({ depth: { v: nv, max: run.depth.max }, beats: runBeat(run, 'Depth ' + (nv > run.depth.v ? 'deepens' : 'lifts') + ' (' + nv + '/' + run.depth.max + ').') }); }; });
+      stage.querySelectorAll('[data-tr]').forEach(function (b) { b.onclick = function () { var nv = Math.max(0, Math.min(run.trace.max, run.trace.v + (+b.getAttribute('data-tr')))); var tp = Object.assign({}, run.trace, { v: nv }); if (nv < run.trace.max) tp.countdown = null; setRun({ trace: tp, beats: runBeat(run, 'Trace ' + (nv > run.trace.v ? 'advances' : 'eases') + ' (' + nv + '/' + run.trace.max + ').') }); }; });
+      var arm = stage.querySelector('[data-armcd]'); if (arm) arm.onclick = function () { var n = Math.max(1, parseInt(stage.querySelector('#sy-cd').value, 10) || 3); setRun({ trace: Object.assign({}, run.trace, { countdown: n }), beats: runBeat(run, 'Full trace — the owner musters. Raid in ' + n + ' rounds.') }); };
+      var cc = stage.querySelector('[data-cancelcd]'); if (cc) cc.onclick = function () { setRun({ trace: Object.assign({}, run.trace, { countdown: null }), beats: runBeat(run, 'The raid is called off.') }); };
+      var disp = stage.querySelector('[data-dispatch]'); if (disp) disp.onclick = function () { doDispatch(run, d); };
+    });
+  }
+  // Spend one fort action (1 + ½CPU budget) — clamped; keeps the initiative roster honest.
+  function fortSpend(run) { return { runner: run.actionsLeft.runner, fort: Math.max(0, (run.actionsLeft.fort || 0) - 1) }; }
+  function sysIceAct(run, d, iceId, act) {
+    var ic = iceOf(d, iceId); if (!ic) return;
+    if (act === 'move') { if (!ic.mobile) { flashTool('that ICE is not mobile (⟳)'); return; } _sysMoveIce = iceId; reRunStage(); return; }
+    if (act === 'attack') { ic.state = 'awake'; saveFort(run, d); setRun({ fort: d, actionsLeft: fortSpend(run), beats: runBeat(run, ic.name + ' strikes the runner — apply the hit at the table.') }); return; }
+    if (act === 'wake') { ic.state = 'awake'; saveFort(run, d); setRun({ fort: d, beats: runBeat(run, ic.name + ' wakes.') }); return; }   // posture — free
+    if (act === 'hold') { ic.state = 'dormant'; saveFort(run, d); setRun({ fort: d, beats: runBeat(run, ic.name + ' holds, dormant.') }); return; }   // posture — free
+    if (act === 'rerez') { ic.state = 'awake'; saveFort(run, d); setRun({ fort: d, actionsLeft: fortSpend(run), beats: runBeat(run, ic.name + ' is re-rezzed.') }); return; }
+  }
+  // The runner's physical district — named in the TRACE (jeopardy of the body).
+  function myTargetLabel(run) { var t = run.runnerSheetId && netTokens()[run.runnerSheetId]; return t ? (t + ' ' + districtName(t)) : 'your body'; }
   var _flashT2 = null;
   function flashTool(msg) { var old = document.getElementById('net-flash'); if (old) old.remove(); var el = eln('div', 'net-flash'); el.id = 'net-flash'; el.textContent = msg; document.body.appendChild(el); clearTimeout(_flashT2); _flashT2 = setTimeout(function () { el.remove(); }, 1500); }
-  function nextRound(run, d) { var c = camp(); var runnerActions = 1; if (run.runnerSheetId && c && c.getSheet) { var s = c.getSheet(run.runnerSheetId); runnerActions = 1 + deckSpeed(s && s.json); } setRun({ round: run.round + 1, actionsLeft: { runner: runnerActions, fort: NetModel.fortActions(d) }, beats: runBeat(run, 'Round ' + (run.round + 1) + '.') }); if (c && c.combatMeta && c.combatMeta() && c.combatMeta().active && c.setCombatMeta) { var m = c.combatMeta(); c.setCombatMeta(Object.assign({}, m, { round: (m.round || 1) + 1 })); } }
-  function doMoveIce(run, d, iceId, key) { var ic = iceOf(d, iceId); if (!ic) return; var p = key.split(','), x = +p[0], y = +p[1]; if (ic.pos) sgSet(d.subgrid, ic.pos.x, ic.pos.y, 'empty'); ic.pos = { x: x, y: y }; sgSet(d.subgrid, x, y, 'ice', ic.id); Store.resolve({ type: 'site', id: run.hostId }).then(function (h) { if (h) { h.json.datafort = d; Store.put(h.ref, h.json).catch(function () {}); } }); setRun({ beats: runBeat(run, ic.kind + ' prowls to ' + key + '.') }); }
-  function resolveDecl(run, d, decl, out) { var runnerLeft = Math.max(0, (run.actionsLeft.runner || 1) - 1); var patch = { actionsLeft: { runner: runnerLeft, fort: run.actionsLeft.fort }, beats: runBeat(run, declSentence(decl) + (out ? ' → ' + out : ' → resolved.')) }; if (decl && decl.verb === 'move' && decl.cell) { var p = decl.cell.split(','); patch.runnerPos = { x: +p[0], y: +p[1] }; var sc = Object.assign({}, run.scanned); sc[decl.cell] = true; patch.scanned = sc; } setRun(patch); setDecl(null); }
+  function nextRound(run, d) {
+    var c = camp(); var runnerActions = 1; if (run.runnerSheetId && c && c.getSheet) { var s = c.getSheet(run.runnerSheetId); runnerActions = 1 + deckSpeed(s && s.json); }
+    var beats = runBeat(run, 'Round ' + (run.round + 1) + '.');
+    var patch = { round: run.round + 1, actionsLeft: { runner: runnerActions, fort: NetModel.actsOf(d) } };
+    var cd = run.trace.countdown;   // raid countdown ticks down each round; 0 → the owner raids
+    if (cd != null) {
+      cd = cd - 1;
+      patch.trace = Object.assign({}, run.trace, { countdown: Math.max(0, cd) });
+      if (cd <= 0) { beats = (beats || []).concat([{ ts: netClock(), text: 'The raid lands — they hit the body now.' }]).slice(-30); }
+      else beats = (beats || []).concat([{ ts: netClock(), text: 'Raid in ' + cd + ' round' + (cd === 1 ? '' : 's') + '.' }]).slice(-30);
+    }
+    patch.beats = beats;
+    setRun(patch);
+    if (cd != null && cd <= 0) doDispatch(Object.assign({}, run, patch), d);
+    if (c && c.combatMeta && c.combatMeta() && c.combatMeta().active && c.setCombatMeta) { var m = c.combatMeta(); c.setCombatMeta(Object.assign({}, m, { round: (m.round || 1) + 1 })); }
+  }
+  function doMoveIce(run, d, iceId, key) { var ic = iceOf(d, iceId); if (!ic) return; var p = key.split(','), x = +p[0], y = +p[1]; if (ic.pos) sgSet(d.subgrid, ic.pos.x, ic.pos.y, 'empty'); ic.pos = { x: x, y: y }; sgSet(d.subgrid, x, y, 'ice', ic.id); saveFort(run, d); setRun({ fort: d, actionsLeft: fortSpend(run), beats: runBeat(run, ic.name + ' prowls to ' + key + '.') }); }
   function doDispatch(run, d) { var token = (run.runnerSheetId && netTokens()[run.runnerSheetId]) || '—'; var sug = NetCast.dispatchSuggestion({ datafort: d, tier: d.tier }, token); setRun({ dispatch: sug, beats: runBeat(run, 'DISPATCH suggested: ' + sug.force + ' → ' + sug.district) }); if (br().logSession) br().logSession('⚑ Dispatch: ' + sug.force + ' at ' + sug.district + ' — GM adjudicates.'); if (window.UI) UI.modal({ title: 'Dispatch — trace full', body: '<p>The fort’s owner sends <b>' + esc(sug.force) + '</b> to the runner’s physical position (<b>' + esc(sug.district) + '</b>).</p><p class="dt-hint">You adjudicate and narrate the scene — open combat in the combat section when they arrive.</p>', actions: [{ label: 'OK', kind: 'primary' }] }); }
   function siteRegionOf(d) { return ''; }
   function raiseNetEvent(type, subject, region) { var c = camp(); if (!c || !c.setOverview) return; var o = c.getOverview() || {}; var ev = (o.netEvents || []).concat([{ id: uid('nev'), type: type, subject: subject, region: region, when: netClock(), public: true }]).slice(-80); c.setOverview({ netEvents: ev }); }
 
-  /* ⑤ RUN board — the player's working view (masked by reveal/scan). */
-  var _runBoardOv = null, _runBoardSel = null, _runBoardProg = null;
-  function openRunBoard() {
-    if (_runBoardOv) return;
-    var ov = runOverlay('net-board'); _runBoardOv = ov; wireHover(); var unsub = null;
-    function done() { if (unsub) { try { unsub(); } catch (e) {} } ov.remove(); _runBoardOv = null; _runBoardSel = null; _runBoardProg = null; }
-    function rerender() {
-      var run = getRun();
-      if (!run || run.status !== 'active' || run.runnerSheetId !== mySheetId()) { done(); return; }
-      Store.resolve({ type: 'site', id: run.hostId }).then(function (hit) {
-        var d = hit ? NetModel.ensure(hit.json) : NetModel.defFort(1);
-        var sheet = (camp() && camp().getSheet && camp().getSheet(run.runnerSheetId) || {}).json || {};
-        var progs = runnerPrograms(sheet), decl = getDecl();
-        ov.innerHTML =
-          '<div class="net-run net-run-pl">' +
-            '<div class="net-run-top"><span class="net-run-t">RUN — ' + esc(run.hostName || 'target') + '</span><span class="net-run-rd">round ' + run.round + ' · ' + (run.actionsLeft.runner || 0) + ' action(s)</span><span class="net-run-sp"></span><button class="net-fp-x" data-close title="Jack out view">✕</button></div>' +
-            '<div class="net-run-body">' +
-              '<div class="net-run-left"><div class="net-run-h">Software</div>' + progs.map(function (p, i) { return '<button class="net-prog' + (_runBoardProg === i ? ' on' : '') + '" data-prog="' + i + '" title="' + esc(p.effect || '') + '"><span class="net-prog-n">' + esc(p.name) + '</span><span class="net-prog-m">' + esc((p.kw || []).join(' ')) + ' · STR ' + (p.str || 0) + ' · ' + (p.mu || 0) + 'MU</span></button>'; }).join('') + '</div>' +
-              '<div class="net-run-mid"><div class="net-run-h">' + (_runBoardSel ? 'Cell ' + _runBoardSel : 'The grid — scan reveals it') + '</div>' + runGridHtml(run, d, true) + '</div>' +
-              '<div class="net-run-right">' + gaugeHtml('DEPTH', run.depth, 'net-g-depth') + gaugeHtml('TRACE → body', run.trace, 'net-g-trace') +
-                '<div class="net-run-h">Declare</div>' + (decl ? '<div class="net-decl"><div class="net-decl-t">' + esc(declSentence(decl)) + '</div><div class="net-fp-diffl">waiting for the sysop…</div></div>' : declPad()) +
-                '<div class="net-run-h">Beats</div><div class="net-beats">' + (run.beats || []).slice(-8).reverse().map(function (b) { return '<div class="net-beat">' + esc(b.text) + '</div>'; }).join('') + '</div>' +
-              '</div>' +
-            '</div>' +
-          '</div>';
-        ov.querySelector('[data-close]').onclick = done;
-        ov.querySelectorAll('[data-prog]').forEach(function (b) { b.onclick = function () { _runBoardProg = +b.getAttribute('data-prog'); rerender(); }; });
-        ov.querySelectorAll('[data-cell]').forEach(function (cell) { cell.onclick = function () { _runBoardSel = cell.getAttribute('data-cell'); rerender(); }; });
-        var mv = ov.querySelector('[data-decl-move]'); if (mv) mv.onclick = function () { if (!_runBoardSel) return flashTool('pick a cell'); setDecl({ by: run.runnerSheetId, verb: 'move', cell: _runBoardSel, ts: Date.now() }); };
-        var dp = ov.querySelector('[data-decl-deploy]'); if (dp) dp.onclick = function () { if (_runBoardProg == null) return flashTool('pick a program'); if (!_runBoardSel) return flashTool('pick a target cell'); var p = progs[_runBoardProg]; setDecl({ by: run.runnerSheetId, verb: 'deploy', program: p.name, kw: p.kw, cell: _runBoardSel, ts: Date.now() }); };
-        var rd = ov.querySelector('[data-decl-read]'); if (rd) rd.onclick = function () { if (!_runBoardSel) return flashTool('pick a cell'); setDecl({ by: run.runnerSheetId, verb: 'read', cell: _runBoardSel, ts: Date.now() }); };
-        var jo = ov.querySelector('[data-decl-jackout]'); if (jo) jo.onclick = function () { setDecl({ by: run.runnerSheetId, verb: 'jackout', ts: Date.now() }); };
-        function declPad() { return '<div class="net-declpad"><button class="net-mini" data-decl-deploy>Deploy program → cell</button><button class="net-mini" data-decl-move>Move to cell (5)</button><button class="net-mini" data-decl-read>Read file</button><button class="net-mini" data-decl-jackout>Jack out</button></div>'; }
-      }).catch(function () {});
-    }
-    unsub = camp() && camp().onOverview ? camp().onOverview(function () { rerender(); }) : null;
-    rerender();
+  /* ⑤ RUN board — the runner's POV. Self-resolve: pick action + type your roll →
+     it APPLIES immediately (no GM round-trip). Vision = raycast LOS (runGridHtml). */
+  var _runBoardSel = null, _runBoardProg = null, _runAct = null, _runRoll = '';
+  var RUN_ACTS = [['move', 'Move (5)'], ['deploy', 'Deploy'], ['read', 'Read'], ['scan', 'Scan'], ['jackout', 'Jack out']];
+  function hasDetection(progs) { return (progs || []).some(function (p) { return /detect/i.test(((p.kw || []).join(' ')) + ' ' + (p.class || '') + ' ' + (p.name || '') + ' ' + (p.effect || '')); }); }
+  function moveLegal(from, x, y, max) { if (!from) return true; var dx = x - from.x, dy = y - from.y; if (dx === 0 && dy === 0) return false; if (!(dx === 0 || dy === 0 || Math.abs(dx) === Math.abs(dy))) return false; return Math.max(Math.abs(dx), Math.abs(dy)) <= max; }
+  function pathClearOfWalls(sg, from, x, y) { if (!from) return !isWallAt(sg, x, y); var x0 = from.x, y0 = from.y, adx = Math.abs(x - x0), ady = Math.abs(y - y0), sx = x0 < x ? 1 : -1, sy = y0 < y ? 1 : -1, err = adx - ady, cx = x0, cy = y0; while (!(cx === x && cy === y)) { var e2 = 2 * err; if (e2 > -ady) { err -= ady; cx += sx; } if (e2 < adx) { err += adx; cy += sy; } if (isWallAt(sg, cx, cy)) return false; } return true; }
+  function vgaugeHtml(label, g, opts) {
+    opts = opts || {}; var v = (g && g.v) || 0, max = (g && g.max) || 6, pct = Math.min(100, Math.round(v / max * 100));
+    return '<div class="net-vg net-vg-' + label.toLowerCase() + '"><div class="net-vg-l">' + esc(label) + '</div>' +
+      '<div class="net-vg-bar"><span style="height:' + pct + '%"></span>' + (opts.pct ? '<b class="net-vg-p">' + pct + '%</b>' : '') + '</div>' +
+      (opts.foot ? '<div class="net-vg-foot">' + opts.foot + '</div>' : '') + '</div>';
   }
-  function declSentence(decl) { if (!decl) return ''; var who = ''; if (decl.verb === 'deploy') return 'Deploy ' + (decl.program || 'program') + ' on ' + (decl.cell || '?'); if (decl.verb === 'move') return 'Move to ' + (decl.cell || '?'); if (decl.verb === 'read') return 'Read the file at ' + (decl.cell || '?'); if (decl.verb === 'jackout') return 'Attempt to jack out'; return decl.verb || 'action'; }
+  function progGlyph(p) {
+    var s = ((p.class || '') + ' ' + ((p.kw || []).join(' ')) + ' ' + (p.name || '')).toLowerCase();
+    if (/detect|watchdog|monitor|trace|track|alarm/.test(s)) return '⊚';
+    if (/stealth|evasion|invis|cloak|hide|mask/.test(s)) return '◐';
+    if (/wall|breach|intrus|hammer|crack|gate|break|decrypt|jack/.test(s)) return '◇';
+    if (/data|file|util|copy|read|base/.test(s)) return '≡';
+    if (/attack|kill|anti|combat|black|virus|worm|demon/.test(s)) return '✦';
+    return '▸';
+  }
+  function traceStatusPhrase(pct) { return pct >= 100 ? 'they’re at your door' : pct >= 70 ? 'they’re closing' : pct >= 35 ? 'they’re onto you' : 'you’re a ghost'; }
+  function deckStatsSafe(sheet) { try { return NetModel.deckStats(sheet && sheet.netrunner) || {}; } catch (e) { return {}; } }
+  function renderRunPlayer(stage, run) {
+    withRunFort(run, function (d) {
+      if (activeTab().url !== '/run') return;
+      var sheet = (camp() && camp().getSheet && camp().getSheet(run.runnerSheetId) || {}).json || {};
+      var progs = runnerPrograms(sheet), left = run.actionsLeft.runner || 0, canAct = left > 0;
+      var intv = (sheet.stats && (sheet.stats.INT || sheet.stats.int)) || 0, ds = deckStatsSafe(sheet);
+      var tracePct = Math.min(100, Math.round(run.trace.v / run.trace.max * 100));
+      var needsSel = _runAct === 'move' || _runAct === 'deploy' || _runAct === 'read';
+      stage.innerHTML =
+        '<div class="net-run net-run-pl">' +
+          '<div class="net-run-top net-inv"><span class="net-run-t">RUN ▸ ' + esc((run.hostName || 'target').toUpperCase()) + '</span>' +
+            '<span class="net-run-sp"></span><span class="net-run-rd">round ' + run.round + ' · ' + left + ' action' + (left === 1 ? '' : 's') + ' left</span>' +
+            '<span class="net-run-sp"></span><span class="net-run-body-l">● your body: ' + esc(myTargetLabel(run)) + ' — ' + esc(traceStatusPhrase(tracePct)) + '</span></div>' +
+          '<div class="net-run-stage">' +
+            '<div class="net-run-left net-a-soft"><div class="net-run-h">Software</div>' +
+              (progs.length ? progs.map(function (p, i) { return '<button class="net-prog' + (_runBoardProg === i ? ' on' : '') + '" data-prog="' + i + '" title="' + esc(p.effect || '') + '"><span class="net-prog-g">' + progGlyph(p) + '</span><span class="net-prog-n">' + esc(p.name) + '</span><span class="net-prog-s">S' + (p.str || 0) + '</span></button>'; }).join('') : '<div class="net-fp-empty">No programs loaded.</div>') +
+              '<div class="net-mu">MU ' + (ds.loadedMu || 0) + ' / ' + (ds.memoryMU || 0) + '</div>' +
+              '<div class="net-run-h net-body-h">Body</div><div class="net-body-tally">◈ INT ' + intv + '</div>' +
+              '<div class="net-body-note">a black-ICE hit hits YOU, not the deck.</div></div>' +
+            '<div class="net-pov">' +
+              vgaugeHtml('DEPTH', run.depth, {}) +
+              '<div class="net-run-gridwrap"><div class="net-pov-cap">raycast — you see 20. walls block. the fort runs past your sight.</div>' + runGridHtml(run, d, true) + '<div class="net-pov-count">' + run.depth.v + '/' + run.depth.max + '</div></div>' +
+              vgaugeHtml('TRACE', run.trace, { pct: true, foot: '→ a line coming<br>for your body' }) + '</div>' +
+            '<div class="net-run-right net-a-log"><div class="net-run-h">Log</div>' +
+              '<div class="net-beats">' + (run.beats || []).slice(-14).reverse().map(function (b, i) { return '<div class="net-beat' + (i === 0 ? ' net-beat-top' : '') + '">' + (i === 0 ? '' : '▸ ') + esc(b.text) + '</div>'; }).join('') + '</div>' +
+              '<div class="net-log-foot">newest on top · your run, narrated.</div></div>' +
+            '<div class="net-run-turn' + (canAct ? '' : ' net-turn-off') + '"><span class="net-turn-l">Your turn</span>' +
+              '<div class="net-turn-act' + (_runAct ? '' : ' net-turn-act-empty') + '">' + (_runAct ? esc(actLabel(_runAct, progs)) + (needsSel && !_runBoardSel ? ' — pick a cell' : '') : 'pick an action ▸') + '</div>' +
+              '<span class="net-turn-roll-l">you rolled</span><input class="net-turn-in" id="rp-roll" value="' + esc(_runRoll) + '">' +
+              '<button class="net-turn-go" data-resolve' + (canAct && _runAct ? '' : ' disabled') + '>▸ Resolve — it’s done</button>' +
+              '<div class="net-turn-alt">or ' + RUN_ACTS.map(function (a) { return '<button class="net-alt' + (_runAct === a[0] ? ' on' : '') + '" data-act="' + a[0] + '">' + a[1] + '</button>'; }).join(' · ') + ' — you play, you enter the die, it lands.</div></div>' +
+          '</div>' +
+        '</div>';
+      stage.querySelectorAll('[data-prog]').forEach(function (b) { b.onclick = function () { _runBoardProg = +b.getAttribute('data-prog'); reRunStage(); }; });
+      stage.querySelectorAll('[data-cell]').forEach(function (cell) { cell.onclick = function () { _runBoardSel = cell.getAttribute('data-cell'); reRunStage(); }; });
+      stage.querySelectorAll('[data-act]').forEach(function (b) { b.onclick = function () { _runAct = b.getAttribute('data-act'); reRunStage(); }; });
+      var ri = stage.querySelector('#rp-roll'); if (ri) { ri.oninput = function () { _runRoll = ri.value; }; ri.onkeydown = function (e) { if (e.key === 'Enter') applyRunnerAction(run, d, progs); }; }
+      var rg = stage.querySelector('[data-resolve]'); if (rg) rg.onclick = function () { applyRunnerAction(run, d, progs); };
+    });
+  }
+  function actLabel(act, progs) {
+    var prog = _runBoardProg != null ? progs[_runBoardProg] : null;
+    if (act === 'move') return 'Move to ' + (_runBoardSel || 'a cell') + ' — up to 5, straight';
+    if (act === 'deploy') return 'Deploy ' + (prog ? progGlyph(prog) + ' ' + prog.name : 'a program') + ' → ' + (_runBoardSel || 'a cell');
+    if (act === 'read') return 'Read the file at ' + (_runBoardSel || 'a cell');
+    if (act === 'scan') return 'Scan (Detection) — reveal cloaked ICE in sight';
+    if (act === 'jackout') return 'Jack out — leave the fort';
+    return act;
+  }
+  function applyRunnerAction(run, d, progs) {
+    var sg = d.subgrid, sel = _runBoardSel, prog = _runBoardProg != null ? progs[_runBoardProg] : null;
+    var roll = (_runRoll || '').trim(), rt = roll ? ' · rolled ' + roll : '';
+    // Jack out is the escape valve — always allowed, even at 0 actions.
+    if (_runAct === 'jackout') { setRun({ beats: runBeat(run, 'Jacks out' + rt + '.') }); endRun('jacked-out'); _runAct = null; _runRoll = ''; return; }
+    if (!_runAct) { flashTool('choose an action'); return; }
+    if ((run.actionsLeft.runner || 0) <= 0) { flashTool('no actions left — the sysop advances the round'); return; }
+    var patch = { actionsLeft: { runner: (run.actionsLeft.runner - 1), fort: run.actionsLeft.fort } };
+    if (_runAct === 'move') {
+      if (!sel) return flashTool('pick a destination cell');
+      var mp = sel.split(','), mx = +mp[0], my = +mp[1];
+      if (!moveLegal(run.runnerPos, mx, my, 5)) return flashTool('move is up to 5 cells in a straight line');
+      if (!pathClearOfWalls(sg, run.runnerPos, mx, my)) return flashTool('a data wall blocks that path');
+      patch.runnerPos = { x: mx, y: my };
+      patch.remembered = rememberUnion(run.remembered, losVisible(sg, { x: mx, y: my }, LOS_RADIUS));
+      patch.beats = runBeat(run, 'Moved to ' + mx + ',' + my + '.');
+    } else if (_runAct === 'deploy') {
+      if (prog == null) return flashTool('pick a program from Software');
+      if (!sel) return flashTool('pick a target cell');
+      patch.beats = runBeat(run, 'Deploy ' + prog.name + ' → ' + sel + rt + '.');
+    } else if (_runAct === 'read') {
+      if (!sel) return flashTool('pick a cell');
+      var rp = sel.split(','), rc = sgAt(sg, +rp[0], +rp[1]);
+      if (!rc || rc.kind !== 'file') return flashTool('no file on that cell');
+      patch.beats = runBeat(run, 'Read the file at ' + sel + rt + '.');
+    } else if (_runAct === 'scan') {
+      if (!hasDetection(progs)) return flashTool('no Detection program loaded');
+      var vis = losVisible(sg, run.runnerPos, LOS_RADIUS), rv = Object.assign({}, run.reveal || {}), found = 0;
+      (d.ice || []).forEach(function (ic) { if (ic.pos && vis[ic.pos.x + ',' + ic.pos.y]) { rv[ic.id] = true; found++; } });
+      patch.reveal = rv; patch.beats = runBeat(run, 'Scan sweeps — ' + found + ' ICE picked out' + rt + '.');
+    } else return flashTool('choose an action');
+    _runRoll = ''; setRun(patch);
+  }
 
   /* ⑥ CAST — a stripped view pushed to the shared screen (two gauges + last beat). */
   function castRun(run, d) {
@@ -3471,29 +3658,67 @@
     if (br().logSession) br().logSession('⑥ Cast the run to the table.');
   }
 
-  // The player's board auto-opens when the GM jacks them in (called from ensureRuntime).
+  // The player's run auto-surfaces (flips the web section to /run) when the GM jacks
+  // them in — once per run. Called from ensureRuntime's overview subscription.
+  var _surfacedRunId = null;
   function maybeOpenPlayerRun() {
     if (!isPlayer()) return; var run = getRun();
-    if (run && run.status === 'active' && run.runnerSheetId === mySheetId()) { if (!_runBoardOv) openRunBoard(); }
-    else if (_runBoardOv && (!run || run.status !== 'active')) { /* board self-closes on rerender */ }
+    if (run && run.status === 'active' && run.runnerSheetId === mySheetId()) {
+      if (_surfacedRunId !== run.id) { _surfacedRunId = run.id; gotoRun(); }
+    } else _surfacedRunId = null;
+  }
+  // GM side: a run going active (esp. a player self-jack) flips the GM to the SYSOP once,
+  // and — if the GM later navigates away mid-run — a persistent, clickable banner stays up.
+  var _gmSurfacedRunId = null, _gmRunBanner = null;
+  function onRunTab() { return !!(_tabs && activeTab && activeTab().url === '/run' && document.getElementById('web-stage')); }
+  function maybeSurfaceGmRun() {
+    if (isPlayer()) return; var run = getRun(), active = run && run.status === 'active';
+    if (active) { if (_gmSurfacedRunId !== run.id) { _gmSurfacedRunId = run.id; if (!onRunTab()) gotoRun(); } }
+    else _gmSurfacedRunId = null;
+    refreshGmRunBanner();
+  }
+  function refreshGmRunBanner() {
+    if (isPlayer()) { if (_gmRunBanner) { _gmRunBanner.remove(); _gmRunBanner = null; } return; }
+    var run = getRun(), show = run && run.status === 'active' && !onRunTab();
+    if (!show) { if (_gmRunBanner) { _gmRunBanner.remove(); _gmRunBanner = null; } return; }
+    if (!_gmRunBanner) { _gmRunBanner = eln('button', 'net-gm-runbar'); document.body.appendChild(_gmRunBanner); _gmRunBanner.onclick = function () { gotoRun(); }; }
+    _gmRunBanner.innerHTML = '▸ RUN — ' + esc(run.runnerName || 'runner') + ' in ' + esc(run.hostName || 'a fort') + ' · open SYSOP ▸';
   }
 
-  // Shared run-grid renderer. masked=true → player fog: unscanned cells are dim,
-  // ICE identity hidden until revealed. (Flat dim wash, not a gradient — charter.)
+  // Shared run-grid renderer.
+  //   masked=true  (player) → raycast LOS: cells in sight = live; once-seen = remembered
+  //                            (pale); never seen = fog. Walls project shadow.
+  //   masked=false (GM/SYSOP) → the whole fort, plus a `los` marker on what the runner sees.
   function runGridHtml(run, d, masked) {
-    var sg = d.subgrid, w = sg.w || 12, h = sg.h || 12, idx = sgLabelIndex(sg), scanned = run.scanned || {}, reveal = run.reveal || {}, pos = run.runnerPos, cells = '';
+    var sg = d.subgrid, w = sg.w || 12, h = sg.h || 12, idx = sgLabelIndex(sg), reveal = run.reveal || {}, pos = run.runnerPos, cells = '';
+    var vis = losVisible(sg, pos, LOS_RADIUS), remembered = run.remembered || {};
     for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
-      var c = sgAt(sg, x, y), key = x + ',' + y, isPos = pos && pos.x === x && pos.y === y, seen = !masked || scanned[key], cls = 'net-rg-c', inner = '', hvx = '';
-      if (!seen) { cls += ' net-rg-fog'; hvx = hv('unscanned — the sysop reveals it'); }
-      else if (c) {
-        var ident = true;
-        if (c.kind === 'ice') { ident = !masked || reveal[c.ref]; var ic = iceOf(d, c.ref); cls += ' net-rg-ice' + (ident && ic && ic.blackIce ? ' net-rg-black' : ''); inner = cellInnerHtml('ice', idx[key], { ident: ident }); hvx = hv(ident && ic ? ('<b>☠ ' + esc(ic.kind) + (ic.blackIce ? ' — Black ICE' : '') + ' · S' + ic.str + '</b><br>' + esc(ic.class) + (ic.mobile ? '<br>⟳ mobile — patrols, gives chase' : '')) : '<b>☠ ICE</b><br>unidentified'); }
-        else { cls += ' net-rg-' + c.kind; inner = cellInnerHtml(c.kind, idx[key], {}); hvx = hv(c.kind === 'core' ? '<b>▲ CPU / core</b><br>Black Ops — the prize' : c.kind === 'node' ? '<b>▢ Node ' + (idx[key] || '') + '</b>' : c.kind === 'gate' ? '<b>⊗ Code gate</b>' : c.kind === 'file' ? '<b>☰ File</b>' : c.kind === 'wall' ? '<b>█ Data wall</b>' : c.kind === 'remote' ? '<b>⊡ Remote</b>' : ''); }
+      var c = sgAt(sg, x, y), key = x + ',' + y, isPos = pos && pos.x === x && pos.y === y, cls = 'net-rg-c', inner = '', hvx = '';
+      var inSight = !!vis[key], mem = !inSight && !!remembered[key];
+      if (masked && !inSight && !mem) { cls += ' net-rg-fog'; cells += '<button class="' + cls + '" data-cell="' + key + '"></button>'; continue; }
+      if (masked && mem) cls += ' net-rg-mem';                 // remembered — you know what was here, not what's here now
+      if (!masked && inSight) cls += ' net-rg-los';            // GM: dotted contour of the runner's sight
+      if (c) {
+        if (c.kind === 'ice') {
+          var ic = iceOf(d, c.ref);
+          var cloaked = ic && (ic.cloaked || ic.hidden);       // cloaked ICE stays invisible until scanned
+          var ident = !masked || reveal[c.ref];
+          if (masked && cloaked && !reveal[c.ref] && !mem) { /* invisible: render as empty in-sight cell */ }
+          else {
+            cls += ' net-rg-ice' + (ident && ic && ic.blackIce ? ' net-rg-black' : '') + (!masked && ic && ic.state === 'awake' ? ' net-rg-awake' : '');
+            inner = cellInnerHtml('ice', idx[key], { ident: ident });
+            hvx = hv(ident && ic ? ('<b>☠ ' + esc(ic.name) + (ic.blackIce ? ' — Black ICE' : '') + ' · S' + ic.str + '</b><br>' + esc(ic.class) + (ic.mobile ? '<br>⟳ mobile — patrols, gives chase' : '') + (!masked ? '<br>state: ' + iceStateLabel(ic) : '')) : '<b>☠ ICE</b><br>unidentified — scan to ID');
+          }
+        } else {
+          cls += ' net-rg-' + c.kind; inner = cellInnerHtml(c.kind, idx[key], {});
+          hvx = hv(c.kind === 'core' ? '<b>▲ CPU / core</b><br>Black Ops — the prize' : c.kind === 'node' ? '<b>▢ Node ' + (idx[key] || '') + '</b>' : c.kind === 'gate' ? '<b>⊗ Code gate</b>' : c.kind === 'file' ? '<b>☰ File</b>' : c.kind === 'wall' ? '<b>█ Data wall</b>' : c.kind === 'remote' ? '<b>⊡ Remote</b>' : '');
+        }
       }
       if (isPos) { cls += ' net-rg-pos'; inner += '<span class="net-rg-run">◉</span>'; }
       cells += '<button class="' + cls + '" data-cell="' + key + '"' + hvx + '>' + inner + '</button>';
     }
-    return '<div class="net-grid-field" style="--gf-cx:32px;--gf-cy:32px;--gf-px:96px;--gf-py:96px"><div class="net-rg" style="grid-template-columns:repeat(' + w + ',1fr)">' + cells + '</div></div>';
+    // --gf-* (fade pitch/reach) set per role in CSS so the extension aligns with the cell size.
+    return '<div class="net-grid-field net-run-field"><div class="net-rg" style="grid-template-columns:repeat(' + w + ',1fr)">' + cells + '</div></div>';
   }
 
   window.WebSection = {
@@ -3501,4 +3726,9 @@
     renderSite: renderSite, renderSiteResolved: renderSiteResolved, blockRegistry: blockRegistry, themeCss: themeCss, blankSite: blankSite,
     renderAtlas: renderAtlas, openFortEditor: openFortEditor, newAutonomousFort: newAutonomousFort,
   };
+
+  // Wire the runtime (run auto-surface, delivery settling) as soon as a session is live —
+  // NOT lazily on first Net render. Otherwise a player sitting on their sheet when the GM
+  // jacks them in never gets surfaced into the run. Poll until the camp is ready after join.
+  if (window.App && App.on) App.on('campaign', function () { var t = 0; (function poll() { ensureRuntime(); if (!_runtime && t++ < 25) setTimeout(poll, 300); })(); });
 })();
