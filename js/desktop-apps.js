@@ -128,7 +128,7 @@
         var ad = adStrip(sdk); if (ad) head.appendChild(ad);
         b.appendChild(head);
         var list = sdk.el('div', 'dt-list dt-scroll-y');
-        var apps = sdk.availableApps().sort(function (a, c) { return (a.category || '').localeCompare(c.category || '') || a.name.localeCompare(c.name); });
+        var apps = sdk.availableApps().filter(function (a) { return !(a.gmOnly && sdk.isPlayer); }).sort(function (a, c) { return (a.category || '').localeCompare(c.category || '') || a.name.localeCompare(c.name); });
         var blocked = 0;
         if (!apps.length) list.appendChild(sdk.el('div', 'dt-pad dt-muted', 'Nothing else available for this OS.'));
         apps.forEach(function (a) {
